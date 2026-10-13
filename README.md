@@ -1,33 +1,132 @@
-# steam-sdk-rs
+# steamworks
 
-Steam SDK 的 Rust 集成工作仓。本仓聚合上游 [Noxime/steamworks-rs](https://github.com/Noxime/steamworks-rs) 的修复分支与本地分析文档。
+Rust bindings to the [Steamworks SDK](https://partner.steamgames.com/doc/sdk), forked from
+[Noxime/steamworks-rs](https://github.com/Noxime/steamworks-rs) and developed independently.
 
-## 结构
+Single repository: the bindings, the generated `steamworks-sys` FFI crate, the examples and
+the design notes all live here (no submodules).
 
-- `steamworks-rs/` — 代码子模块（submodule），追踪上游 + 本地修复分支
-- `docs/` — 缺陷深挖分析、CI 本地证据、上游 PR 草稿
+## Layout
 
-## 修复分支（在子模块内）
+| Path | Contents |
+| --- | --- |
+| `src/` | the safe bindings |
+| `steamworks-sys/` | bindgen-generated FFI, one bindings file per platform |
+| `examples/` | runnable examples, including `stream_events.rs` |
+| `docs/` | design rationale and defect analysis; start with `docs/SuperSteam-Design.md` |
 
-| 分支 | 主题 |
-|------|------|
-| `fix/call-result-handler-self-deadlock` | CallResult handler 自身死锁 |
-| `fix/call-result-size-cap` | CallResult 结果大小上限 |
-| `fix/callback-dispatch-reentrancy` | 回调分发重入 |
-| `fix/callback-handle-drop-deadlock` | 回调 handle drop 死锁 |
-| `fix/callback-multi-registration` | 回调重复注册覆盖 |
-| `fix/cstring-nul-panic` | CString 空字节 panic |
-| `fix/null-guard-unavailable` | 不可用符号的 null guard |
-| `fix/test-tiering` | 测试分层 |
-| `fix/ugc-builder-result` | UGC builder 结果处理 |
-| `test/offline-accessor-coverage` | 离线访问器覆盖率 |
-| `integration/stack8` | 八项修复集成堆栈 |
-| `wip/callback-stream` | CallbackStream 原型 |
+## Additions over upstream
 
-## 使用
+| Feature | What it does |
+| --- | --- |
+| `Inventory` | Wraps `ISteamInventory`, which upstream never bound: item queries, consumption, exchange, trade, item drops, prices and purchases. Results are RAII-guarded — `InventoryResult` destroys the Steam handle on drop. Entry point `client.inventory()`. |
+| `Http` | Wraps `ISteamHTTP`, also unbound upstream. Request building is a fallible chain (`header`, `query_param`, `raw_body`, `cookies`, timeouts); request and cookie-container handles are released on drop. Entry point `client.http()`, or `client.http().get(url, cb)` for a one-shot fetch. |
+| `SafeUgcUpdate` | Panic-free UGC update builder. Invalid paths and interior nul bytes become `SafeUgcError` instead of `unwrap()` panics. Entry point `client.ugc().safe_item_update(app_id, file_id)`. |
+| `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. |
+
+`SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
+them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this
+crate's generated binding for the first carries no priority argument and the second reports no
+byte count, so neither is wrapped here rather than wrapped wrongly.
+
+## Usage
+
+```toml
+[dependencies]
+steamworks = { git = "https://github.com/bfxh/steam-sdk-rs" }
+```
+
+| Crate  | SDK   | MSRV   |
+| ------ | ----- | ------ |
+| git    | 1.64  | 1.80.0 |
+| 0.13.0 | 1.64  | 1.80.0 |
+| 0.12.0 | 1.62  | 1.80.0 |
+
+The MSRV holds for the default feature set. The optional `image` feature pulls transitive
+dependencies that need a newer cargo than 1.80.0 ships, so CI checks `--all-features` on stable
+only.
+
+```rust,no_run
+use steamworks::{Client, FriendFlags, PersonaStateChange};
+
+fn main() {
+    let client = Client::init().unwrap();
+
+    let _cb = client.register_callback(|p: PersonaStateChange| {
+        println!("Got callback: {p:?}");
+    });
+
+    let friends = client.friends();
+    for f in friends.get_friends(FriendFlags::IMMEDIATE) {
+        println!("Friend: {:?} - {}({:?})", f.id(), f.name(), f.state());
+        friends.request_user_information(f.id(), true);
+    }
+
+    for _ in 0..50 {
+        client.run_callbacks();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+```
+
+Fetching a URL through the new HTTP wrapper, without leaving the callback model:
+
+```rust,no_run
+use steamworks::{Client, HttpMethod};
+
+fn main() {
+    let client = Client::init().unwrap();
+    client
+        .http()
+        .request(HttpMethod::Get, "https://example.com/data.json")
+        .and_then(|req| req.header("Accept", "application/json"))
+        .and_then(|req| req.send(|result| match result {
+            Ok(response) => println!("{} bytes", response.body().unwrap().len()),
+            Err(e) => println!("request failed: {e}"),
+        }))
+        .unwrap();
+
+    loop {
+        client.run_callbacks();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+```
+
+## Features
+
+- `serde` — serialization for the ID and result types
+- `futures` — `CallbackStream`
+- `image` — icon/image data via the `image` crate
+- `raw-bindings` — re-export `steamworks_sys` for calls this crate does not wrap
+
+## Development
 
 ```bash
-git clone --recursive https://github.com/bfxh/steam-sdk-rs.git
-cd steamworks-rs
-cargo build
+cargo build --all-features
+cargo test --lib --all-features
+cargo clippy --all-targets --all-features
+cargo fmt --all -- --check
 ```
+
+Tests that need a live Steam client are marked `#[ignore]`, so `cargo test` is green on a machine
+without Steam; run them with `cargo test -- --ignored`.
+
+Advisory checks, reported but non-blocking in CI:
+
+```bash
+cargo +nightly udeps --all-targets --all-features
+cargo geiger --all-features
+cargo audit
+```
+
+## License
+
+Dual-licensed under [Apache](./LICENSE-APACHE) and [MIT](./LICENSE-MIT), except for the files in
+`steamworks-sys/lib/steam/`.
+
+## Troubleshooting
+
+Errors such as `STATUS_DLL_NOT_FOUND` or `Image not found` mean the Steamworks SDK redistributable
+libraries are missing where the OS can find them — usually next to your game binary. They are in the
+SDK zip under `lib\steam\redistributable_bin`.

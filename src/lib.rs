@@ -28,6 +28,7 @@ pub use crate::callback::*;
 pub use crate::callback_stream::*;
 pub use crate::error::*;
 pub use crate::friends::*;
+pub use crate::http::*;
 pub use crate::input::*;
 pub use crate::inventory::*;
 pub use crate::matchmaking::*;
@@ -50,6 +51,7 @@ mod app;
 mod callback_stream;
 mod error;
 mod friends;
+mod http;
 mod input;
 mod inventory;
 mod matchmaking;
@@ -523,6 +525,18 @@ impl Client {
             debug_assert!(!inv.is_null());
             Inventory {
                 inv,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam HTTP interface
+    pub fn http(&self) -> Http {
+        unsafe {
+            let http = sys::SteamAPI_SteamHTTP_v003();
+            debug_assert!(!http.is_null());
+            Http {
+                http,
                 _inner: self.inner.clone(),
             }
         }
