@@ -1,0 +1,5 @@
+wt-*/
+repro/
+_wip-backup-*/
+*.txt
+__pycache__/
