@@ -572,6 +572,21 @@ impl Server {
         }
     }
 
+    /// Returns an accessor to the game server stats interface
+    ///
+    /// Unlike [`Server::http`] this is a distinct Steam interface: it reads and
+    /// writes stats of users who played on this server.
+    pub fn stats(&self) -> GameServerStats {
+        unsafe {
+            let gs = sys::SteamAPI_SteamGameServerStats_v001();
+            debug_assert!(!gs.is_null());
+            GameServerStats {
+                gs,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
     /// Returns an accessor to the steam utils interface
     pub fn utils(&self) -> Utils {
         unsafe {

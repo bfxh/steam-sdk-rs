@@ -24,6 +24,7 @@ the design notes all live here (no submodules).
 | `SafeUgcUpdate` | Panic-free UGC update builder. Invalid paths and interior nul bytes become `SafeUgcError` instead of `unwrap()` panics. Entry point `client.ugc().safe_item_update(app_id, file_id)`. |
 | `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. |
 | `ParentalSettings` | Wraps `ISteamParentalSettings` so a game can honour family view restrictions instead of offering gated content anyway. Both the "list membership" and "effective state" Steam answers are exposed separately. Entry point `client.parental_settings()`. |
+| `GameServerStats` | Wraps `ISteamGameServerStats`: per-user stat/achievement read-write for dedicated servers, with the store/load round trip and the `StatsUnloaded` signal that tells you to re-request. Entry point `server.stats()`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this
