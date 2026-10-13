@@ -29,6 +29,7 @@ pub use crate::callback_stream::*;
 pub use crate::error::*;
 pub use crate::friends::*;
 pub use crate::input::*;
+pub use crate::inventory::*;
 pub use crate::matchmaking::*;
 pub use crate::matchmaking_servers::*;
 pub use crate::networking::*;
@@ -50,6 +51,7 @@ mod callback_stream;
 mod error;
 mod friends;
 mod input;
+mod inventory;
 mod matchmaking;
 mod matchmaking_servers;
 mod networking;
@@ -60,11 +62,11 @@ pub mod networking_types;
 pub mod networking_utils;
 mod remote_play;
 mod remote_storage;
+mod safe_ugc;
 pub mod screenshots;
 mod server;
 pub mod timeline;
 mod ugc;
-mod safe_ugc;
 mod user;
 mod user_stats;
 mod utils;
@@ -510,6 +512,18 @@ impl Client {
             UGC {
                 ugc,
                 inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam inventory interface
+    pub fn inventory(&self) -> Inventory {
+        unsafe {
+            let inv = sys::SteamAPI_SteamInventory_v003();
+            debug_assert!(!inv.is_null());
+            Inventory {
+                inv,
+                _inner: self.inner.clone(),
             }
         }
     }

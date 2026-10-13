@@ -49,7 +49,11 @@ impl fmt::Display for SafeUgcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SafeUgcError::InvalidPath(p) => {
-                write!(f, "path does not exist or is not accessible: {}", p.display())
+                write!(
+                    f,
+                    "path does not exist or is not accessible: {}",
+                    p.display()
+                )
             }
             SafeUgcError::InteriorNul(field) => {
                 write!(f, "value for `{field}` contains an interior nul byte")
@@ -125,10 +129,7 @@ impl SafeUgcUpdate {
     }
 
     /// 设置可见性。纯枚举映射，无失败路径。
-    pub fn visibility(
-        self,
-        visibility: remote_storage::PublishedFileVisibility,
-    ) -> Self {
+    pub fn visibility(self, visibility: remote_storage::PublishedFileVisibility) -> Self {
         Self {
             inner: self.inner.visibility(visibility),
         }
@@ -149,11 +150,7 @@ impl SafeUgcUpdate {
     }
 
     /// 添加键值标签。键或值含空字节时返回 `Err`。
-    pub fn add_key_value_tag(
-        self,
-        key: &str,
-        value: &str,
-    ) -> Result<Self, SafeUgcError> {
+    pub fn add_key_value_tag(self, key: &str, value: &str) -> Result<Self, SafeUgcError> {
         Self::check_cstr("key_value_tag.key", key)?;
         Self::check_cstr("key_value_tag.value", value)?;
         Ok(Self {
