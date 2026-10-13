@@ -800,6 +800,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[ignore = "requires a running Steam client"]
     fn basic_test() {
         let client = Client::init().unwrap();
 
