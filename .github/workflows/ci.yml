@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  # 质量门禁：fmt / clippy / check / doc / test
+  # 成功即绿。clippy 关闭 -D warnings，等 CI 实测确认没有新增真实问题再收紧。
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        toolchain: [stable, "1.80.0"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt, clippy
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        if: runner.os == 'linux'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}-${{ steps.toolchain.outputs.cachekey }}
+
+      - name: fmt
+        if: runner.os != 'windows'
+        run: cargo fmt --all -- --check
+
+      - name: clippy (no -D warnings)
+        run: cargo clippy --all-targets --all-features --message-format short
+
+      - name: check (all targets, all features)
+        run: cargo check --all-targets --all-features
+
+      - name: doc (all features)
+        run: cargo doc --no-deps --all-features --document-private-items
+
+      - name: test (all features)
+        run: cargo test --lib --all-features
+
+  # 静态质检：unsafe 边界、死依赖、依赖漏洞（非阻塞提示，不挡 PR）
+  quality-extra:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        toolchain: [nightly]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+
+      - name: udeps (dead dependencies)
+        run: cargo +nightly udeps --all-targets --all-features || true
+
+      - name: geiger (unsafe code counter)
+        run: cargo geiger --all-features || true
+
+      - name: audit (vulnerability scan)
+        run: cargo audit || true

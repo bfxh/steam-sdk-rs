@@ -1,0 +1,53 @@
+[package]
+name = "steamworks"
+version = "0.13.1"
+authors = ["Thinkofname"]
+description = "Provides rust friendly bindings to the steamworks sdk"
+license = "MIT / Apache-2.0"
+repository = "https://github.com/bfxh/steam-sdk-rs"
+documentation = "https://docs.rs/steamworks"
+keywords = ["steam", "gamedev"]
+categories = ["games"]
+edition = "2021"
+rust-version = "1.80.0"
+
+[features]
+default = []
+raw-bindings = []
+image = ["dep:image"]
+serde = ["dep:serde", "bitflags/serde"]
+# 可选的 futures::Stream 适配层（callback_stream）。不引入任何具体
+# async 运行时，只依赖 futures 的 Stream/Waker 抽象。
+futures = ["dep:futures"]
+
+[workspace]
+members = [
+    "./steamworks-sys",
+    "examples/chat-example",
+    "examples/workshop",
+    "examples/lobby",
+    "examples/networking-messages",
+    "examples/networking-sockets",
+    "examples/game-server",
+]
+
+[dependencies]
+steamworks-sys = { path = "./steamworks-sys", version = "0.13.0" }
+thiserror = "2.0"
+bitflags = "2.9"
+serde = { version = "1.0", features = ["derive"], optional = true }
+pastey = "0.2.3"
+image = { version = "0.25.1", optional = true, default-features = false }
+futures = { version = "0.3", optional = true, default-features = false, features = ["std"] }
+
+[dev-dependencies]
+serial_test = "3.2"
+# 仅示例使用：executor（block_on）不需要进入默认依赖图
+futures = { version = "0.3", features = ["executor"] }
+
+# stream_events 引用 `steamworks::CallbackStream`，而它只在 `futures` feature 下导出；
+# 不声明 required-features 的话，默认特性图的 `cargo build --examples` / `cargo test`
+# 会在该示例上 E0432 编译失败。
+[[example]]
+name = "stream_events"
+required-features = ["futures"]
