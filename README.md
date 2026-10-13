@@ -25,6 +25,8 @@ the design notes all live here (no submodules).
 | `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. |
 | `ParentalSettings` | Wraps `ISteamParentalSettings` so a game can honour family view restrictions instead of offering gated content anyway. Both the "list membership" and "effective state" Steam answers are exposed separately. Entry point `client.parental_settings()`. |
 | `GameServerStats` | Wraps `ISteamGameServerStats`: per-user stat/achievement read-write for dedicated servers, with the store/load round trip and the `StatsUnloaded` signal that tells you to re-request. Entry point `server.stats()`. |
+| `Music` | Wraps `ISteamMusic` — the user's own Steam music client. Volume is clamped into Steam's [0, 1] range, and an unrecognised playback state reports `Undefined` instead of guessing. Entry point `client.music()`. |
+| `Video` | Wraps `ISteamVideo`: broadcast state with viewer count, store-page opening, and Open Graph metadata reads that fail loudly when the caller's buffer is too small instead of returning truncated XML. Entry point `client.video()`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this

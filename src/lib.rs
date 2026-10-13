@@ -33,6 +33,7 @@ pub use crate::input::*;
 pub use crate::inventory::*;
 pub use crate::matchmaking::*;
 pub use crate::matchmaking_servers::*;
+pub use crate::music::*;
 pub use crate::networking::*;
 pub use crate::parental::*;
 pub use crate::remote_play::*;
@@ -45,6 +46,7 @@ pub use crate::ugc::*;
 pub use crate::user::*;
 pub use crate::user_stats::*;
 pub use crate::utils::*;
+pub use crate::video::*;
 
 #[macro_use]
 mod callback;
@@ -58,6 +60,7 @@ mod input;
 mod inventory;
 mod matchmaking;
 mod matchmaking_servers;
+mod music;
 mod networking;
 pub mod networking_messages;
 pub mod networking_sockets;
@@ -76,6 +79,7 @@ mod ugc;
 mod user;
 mod user_stats;
 mod utils;
+mod video;
 
 /// Alias for [`Result<T, SteamError>`](SteamError)
 pub type SteamResult<T = ()> = Result<T, SteamError>;
@@ -553,6 +557,30 @@ impl Client {
             debug_assert!(!ps.is_null());
             ParentalSettings {
                 ps,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam music interface
+    pub fn music(&self) -> Music {
+        unsafe {
+            let music = sys::SteamAPI_SteamMusic_v001();
+            debug_assert!(!music.is_null());
+            Music {
+                music,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam video interface
+    pub fn video(&self) -> Video {
+        unsafe {
+            let video = sys::SteamAPI_SteamVideo_v007();
+            debug_assert!(!video.is_null());
+            Video {
+                video,
                 _inner: self.inner.clone(),
             }
         }
