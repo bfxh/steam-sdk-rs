@@ -34,6 +34,7 @@ pub use crate::inventory::*;
 pub use crate::matchmaking::*;
 pub use crate::matchmaking_servers::*;
 pub use crate::networking::*;
+pub use crate::parental::*;
 pub use crate::remote_play::*;
 pub use crate::remote_storage::*;
 pub use crate::safe_ugc::*;
@@ -62,6 +63,7 @@ pub mod networking_sockets;
 mod networking_sockets_callback;
 pub mod networking_types;
 pub mod networking_utils;
+mod parental;
 mod remote_play;
 mod remote_storage;
 mod safe_ugc;
@@ -537,6 +539,18 @@ impl Client {
             debug_assert!(!http.is_null());
             Http {
                 http,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam parental settings interface
+    pub fn parental_settings(&self) -> ParentalSettings {
+        unsafe {
+            let ps = sys::SteamAPI_SteamParentalSettings_v001();
+            debug_assert!(!ps.is_null());
+            ParentalSettings {
+                ps,
                 _inner: self.inner.clone(),
             }
         }

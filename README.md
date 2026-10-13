@@ -23,6 +23,7 @@ the design notes all live here (no submodules).
 | `Http` | Wraps `ISteamHTTP`, also unbound upstream. Request building is a fallible chain (`header`, `query_param`, `raw_body`, `cookies`, timeouts); request and cookie-container handles are released on drop. Entry point `client.http()`, or `client.http().get(url, cb)` for a one-shot fetch. |
 | `SafeUgcUpdate` | Panic-free UGC update builder. Invalid paths and interior nul bytes become `SafeUgcError` instead of `unwrap()` panics. Entry point `client.ugc().safe_item_update(app_id, file_id)`. |
 | `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. |
+| `ParentalSettings` | Wraps `ISteamParentalSettings` so a game can honour family view restrictions instead of offering gated content anyway. Both the "list membership" and "effective state" Steam answers are exposed separately. Entry point `client.parental_settings()`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this
