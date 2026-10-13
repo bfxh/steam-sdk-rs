@@ -542,6 +542,36 @@ impl Server {
         }
     }
 
+    /// Returns an accessor to the game server HTTP interface
+    ///
+    /// Steam hands back the same `ISteamHTTP` interface a client uses, so the
+    /// request/cookie wrappers here are identical to [`crate::Client::http`].
+    pub fn http(&self) -> Http {
+        unsafe {
+            let http = sys::SteamAPI_SteamGameServerHTTP_v003();
+            debug_assert!(!http.is_null());
+            Http {
+                http,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the game server inventory interface
+    ///
+    /// As with [`Server::http`], Steam returns the same `ISteamInventory`
+    /// interface, so [`crate::Inventory`] applies unchanged.
+    pub fn inventory(&self) -> Inventory {
+        unsafe {
+            let inv = sys::SteamAPI_SteamGameServerInventory_v003();
+            debug_assert!(!inv.is_null());
+            Inventory {
+                inv,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
     /// Returns an accessor to the steam utils interface
     pub fn utils(&self) -> Utils {
         unsafe {
