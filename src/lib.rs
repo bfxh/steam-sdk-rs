@@ -36,6 +36,7 @@ pub use crate::matchmaking_servers::*;
 pub use crate::music::*;
 pub use crate::networking::*;
 pub use crate::parental::*;
+pub use crate::parties::*;
 pub use crate::remote_play::*;
 pub use crate::remote_storage::*;
 pub use crate::safe_ugc::*;
@@ -68,6 +69,7 @@ mod networking_sockets_callback;
 pub mod networking_types;
 pub mod networking_utils;
 mod parental;
+mod parties;
 mod remote_play;
 mod remote_storage;
 mod safe_ugc;
@@ -581,6 +583,18 @@ impl Client {
             debug_assert!(!video.is_null());
             Video {
                 video,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam parties interface
+    pub fn parties(&self) -> Parties {
+        unsafe {
+            let parties = sys::SteamAPI_SteamParties_v002();
+            debug_assert!(!parties.is_null());
+            Parties {
+                parties,
                 _inner: self.inner.clone(),
             }
         }
