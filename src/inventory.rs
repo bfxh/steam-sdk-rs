@@ -70,11 +70,11 @@ pub struct ItemDetail {
 
 /// Tests `item_flags` against a Steam `ESteamItemFlags` constant.
 ///
-/// Widens to `i32` rather than narrowing the flag: the item's flag field is
-/// only 16 bits, so casting the constant down would silently truncate it if
-/// Steam ever assigns a value above `u16::MAX`.
+/// Both sides widen to `u32` because bindgen emits the flag's inner type as
+/// `c_int` on Windows but `c_uint` on Linux/macOS; writing either one
+/// explicitly fails to compile on the other half of the platforms.
 fn has_flag(item_flags: u16, flag: sys::ESteamItemFlags) -> bool {
-    i32::from(item_flags) & flag.0 != 0
+    u32::from(item_flags) & (flag.0 as u32) != 0
 }
 
 impl ItemDetail {

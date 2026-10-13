@@ -605,6 +605,7 @@ impl Server {
 
 #[test]
 #[serial]
+#[ignore = "requires a Steam client installation to initialize the server interface"]
 fn test() {
     let (server, single) = Server::init(
         [127, 0, 0, 1].into(),

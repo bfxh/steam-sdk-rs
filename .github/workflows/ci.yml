@@ -15,6 +15,10 @@ permissions:
 jobs:
   # 质量门禁：fmt / clippy / check / doc / test
   # 成功即绿。clippy 关闭 -D warnings，等 CI 实测确认没有新增真实问题再收紧。
+  #
+  # `image` 特征的传递依赖（moxcms / pxfm）要求比 1.80.0 更新的 cargo，
+  # 连 manifest 都解析不了，所以 MSRV 作业只校验默认特征集；
+  # --all-features 由 stable 作业覆盖。
   quality:
     strategy:
       fail-fast: false
@@ -22,6 +26,8 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         toolchain: [stable, "1.80.0"]
     runs-on: ${{ matrix.os }}
+    env:
+      FEATURES: ${{ matrix.toolchain == 'stable' && '--all-features' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,16 +52,20 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy (no -D warnings)
-        run: cargo clippy --all-targets --all-features --message-format short
+        run: cargo clippy --all-targets $FEATURES --message-format short
 
-      - name: check (all targets, all features)
-        run: cargo check --all-targets --all-features
+      - name: check (all targets)
+        run: cargo check --all-targets $FEATURES
 
-      - name: doc (all features)
-        run: cargo doc --no-deps --all-features --document-private-items
+      - name: doc
+        run: cargo doc --no-deps $FEATURES --document-private-items
 
-      - name: test (all features)
-        run: cargo test --lib --all-features
+      - name: test (lib)
+        run: cargo test --lib $FEATURES
+
+      - name: test (doc)
+        if: matrix.toolchain == 'stable'
+        run: cargo test --doc $FEATURES
 
   # 静态质检：unsafe 边界、死依赖、依赖漏洞（非阻塞提示，不挡 PR）
   quality-extra:
