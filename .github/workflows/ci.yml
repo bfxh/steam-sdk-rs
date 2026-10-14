@@ -19,6 +19,10 @@ jobs:
   # `image` 特征的传递依赖（moxcms / pxfm）要求比 1.80.0 更新的 cargo，
   # 连 manifest 都解析不了，所以 MSRV 作业只校验默认特征集；
   # --all-features 由 stable 作业覆盖。
+  #
+  # 所有构建步骤都带 --locked：Cargo.lock 已入库，任何依赖版本漂移
+  # （包括悄悄换一个不兼容 MSRV 的小版本）都会在这里判红，而不是
+  # 等到下一次有人重新解析时才在某个平台上炸开。
   quality:
     strategy:
       fail-fast: false
@@ -52,20 +56,20 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy (no -D warnings)
-        run: cargo clippy --all-targets $FEATURES --message-format short
+        run: cargo clippy --locked --all-targets $FEATURES --message-format short
 
       - name: check (all targets)
-        run: cargo check --all-targets $FEATURES
+        run: cargo check --locked --all-targets $FEATURES
 
       - name: doc
-        run: cargo doc --no-deps $FEATURES --document-private-items
+        run: cargo doc --locked --no-deps $FEATURES --document-private-items
 
       - name: test (lib)
-        run: cargo test --lib $FEATURES
+        run: cargo test --locked --lib $FEATURES
 
       - name: test (doc)
         if: matrix.toolchain == 'stable'
-        run: cargo test --doc $FEATURES
+        run: cargo test --locked --doc $FEATURES
 
   # 静态质检：unsafe 边界、死依赖、依赖漏洞（非阻塞提示，不挡 PR）
   quality-extra:
