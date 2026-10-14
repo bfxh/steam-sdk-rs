@@ -173,6 +173,40 @@ plus the callbacks the wrapper can deliver.
 
 ### Added — CI and release automation
 
+- Four new strictness gates, each one step with one verdict (`scripts/ci/`, so the
+  failure names the gate instead of a mega-step that can half-run):
+  - `module sizes stay under their registered ceilings` and
+    `no type grows into a god object` measure every `.rs` file's line count and every
+    type's inherent `pub fn` count, then compare against baselines recorded from the
+    measured tree. The comparison is **strict in both directions**: one unit of growth
+    is red, and so is a shrink -- a ceiling looser than reality would let the next
+    batch grow back into the same shape, so the number has to be re-put on purpose.
+    Controls: three added lines (`friends.rs 1501 -> 1504`) and one added method
+    (`UGC 28 -> 29`) each turned the gate red, both restored by byte-compare.
+  - `MSRV has a single source` refuses any drift between `Cargo.toml`,
+    `steamworks-sys/Cargo.toml` and the version the matrix actually runs (control:
+    asking it to check `1.99.0` exits 1).
+  - `test floors (a run that tested nothing is not green)` reads the number of tests
+    that *reached* the runner. `cargo test` with a filter that matches nothing still
+    exits 0 and prints `test result: ok. 0 passed`, which is how a green job can prove
+    nothing; the gate refuses a zero run and a run below the registered floor
+    (lib 102, doc 16 -- measured, not guessed). Control: raising the floor by one turned
+    it red with the count printed.
+  - `feature matrix` builds each optional feature alone (`raw-bindings`, `serde`,
+    `image`, `futures`) plus the feature-free build, because `--all-features` hides a
+    feature whose own `cfg` block rotted -- and the first person to hit that is a user
+    who only enabled one feature. All five pass; the job runs as its own gate.
+- The first draft of `test_floor.sh` invoked `"${args[@]}"` without the `cargo` word,
+  so bash ran the `test` builtin with cargo's arguments and the gate "passed" while
+  running nothing. Caught by running the positive case locally rather than trusting the
+  exit code; recorded here because it is the exact failure mode the gate exists to catch.
+- `src/ugc.rs` (2714 lines) is split into `src/ugc/mod.rs` (the `UGC` accessor),
+  `src/ugc/types.rs` (the value types and their Steam-side mappings) and
+  `src/ugc/ugc_tests.rs` (the measurement guards). Public paths are unchanged --
+  `crate::ugc::*` still re-exports everything, so no caller sees a difference. This is
+  what makes the size ceiling a real number rather than a frozen complaint; `friends.rs`
+  and the rest of `ugc/mod.rs` are next under the same rule.
+
 - `Cargo.lock` is committed and every build step runs `--locked`, so dependency drift fails the
   gate instead of silently changing the graph (`477870d`).
 - `examples` job compiles the example crates on all three OSes (`845b430`). They are separate
