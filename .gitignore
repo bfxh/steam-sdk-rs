@@ -3,5 +3,9 @@ wt-*/
 repro/
 _wip-backup-*/
 *.txt
+# Exception: the CI gate baselines have to be in the repository. `*.txt` swallowed them,
+# so the gates passed on the machine that wrote them and failed on every fresh checkout
+# (six quality jobs red with FileNotFoundError, measured 2026-10-14).
+!scripts/ci/baselines/*.txt
 *.log
 __pycache__/

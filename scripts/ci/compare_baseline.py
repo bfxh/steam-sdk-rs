@@ -17,7 +17,15 @@ import sys
 
 def load(path):
     records = {}
-    with open(path, encoding="utf-8") as handle:
+    try:
+        handle = open(path, encoding="utf-8")
+    except FileNotFoundError:
+        print(f"::error:: baseline {path} is missing from this checkout. Either it was never "
+              f"committed or a gitignore rule excluded it -- check with "
+              f"`git check-ignore -v {path}`. A gate whose inputs are not in the repository "
+              f"only exists on the machine that wrote it.")
+        sys.exit(1)
+    with handle:
         for number, line in enumerate(handle, 1):
             line = line.strip()
             if not line or line.startswith("#"):
