@@ -732,7 +732,13 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 ② `FilterText` 与 `ISteamTextFiltering` 的关系要判之前先查绑定 —— 我最初按"已被取代"想跳过它，
 是 `grep -c SteamAPI_ISteamTextFiltering = 0` 把这条想当然否掉的。
 
-`ISteamFriends` 同日补**聊天簇**（53→63，方法级尺复算后剩 15 个未调，全部登记在 6.1d 末）：
+`ISteamFriends` 同日补**聊天簇**（53→63；复算尺剩 15 个未调：好友分组 5
+`GetFriendsGroupCount`/`IDByIndex`/`Name`/`MembersCount`/`MembersList`、来源服务器 3
+`IsUserInSource`/`GetFriendCountFromSource`/`GetFriendFromSourceByIndex`、跟随列表 1
+`EnumerateFollowingList`、历史昵称 1 `GetFriendPersonaNameHistory`、装备外观 4
+`RequestEquippedProfileItems`/`BHasEquippedProfileItem`/`GetProfileItemPropertyString`/`Uint`、
+协议注册 1 `RegisterProtocolInOverlayBrowser`。**这 15 个只列了清单、还没逐个判据**，
+留给下一轮按 6.1d 的写法补）：
 `friend_message` / `reply_to_friend_message`（把 `set_listen_for_friends_messages` 那扇门补齐 ——
 上一轮我只交了"打开拦截"，文档明写"打开后 Steam 不再自己显示消息"却没有任何接收入口，
 等于我亲手留了一个会把玩家消息吞掉的半门）、`send_clan_chat_message` / `clan_chat_message`、
@@ -749,7 +755,39 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法走 lossy（不 panic）。
 ③ 发送侧内嵌 NUL 判 `Err(SteamError::InvalidParameter)`，与 Steam 自己的拒绝 `Ok(false)` 分两级。
 
-### 6.1e `CallbackResult` 的流式债（2026-10-14 新发现，已由门钉住）
+### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
+
+分母先修正：`windows_bindings.rs` 里 `SteamAPI_ISteamUGC_*` 有 99 个名字、`src/` 调到 60 个，
+但对着 `isteamugc.h` 逐个核过，这 99 不是 99 件不同的事：
+
+- `CreateQueryAllUGCRequestPage` 与 `CreateQueryAllUGCRequestCursor` 是 C++ 同名
+  `CreateQueryAllUGCRequest` 的**两个重载**，靠 `STEAM_FLAT_NAME` 才有两个平面名 —— 都真、都该封；
+  本页只封了 Page 那一支。
+- `GetQueryFirstUGCKeyValueTag` 与已封的 `GetQueryUGCKeyValueTag`（按索引取一对 KV）也是同一
+  `STEAM_FLAT_NAME` 现象下的**两个重载**（前者按 key 取第一个 value），不是重复。
+- `RequestUGCDetails` 头文件原文写 `// DEPRECATED - Use CreateQueryUGCDetailsRequest call above instead!`
+  ⇒ **登记为不补**，理由来自头文件而非推测。
+- 其余 36 个在头文件里都找不到 `Deprecated` 字样，属现役面。
+
+按"要不要新回调类型"分四批，避免一批里混着同步 getter 和异步答案：
+
+| 批次 | 内容 | 方法 |
+|---|---|---|
+| 2a 查询侧 | `ugc_tag_count`/`ugc_tag`/`ugc_tag_display_name`、`additional_preview*`（含 `EItemPreviewType` 映射，本仓目前**没有**这个枚举的任何封装）、`first_key_value_tag`、`supported_game_version*`、`add_required_tag_group`、`set_return_playtime_stats`、两个时间区间、`query_all_with_cursor` | 13 |
+| 2b 更新侧 | `AddItemPreviewFile/Video`、`UpdateItemPreviewFile/Video`、`RemoveItemPreview`、`SetRequiredGameVersions`、`SetAdminQuery`（"admin queries return hidden items"，只是给句柄置位，不假称客户端有权限） | 7 |
+| 2c 本地缓存/数组出参 | `GetNumDownloadedItems`、`GetDownloadedItems`、`MarkDownloadedItemAsUnused`、`SetItemsDisabledLocally`、`SetSubscriptionsLoadOrder`、`GetUserContentDescriptorPreferences` | 6 |
+| 2d 异步答案 | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus`（+`ShowWorkshopEULA`） | 10 |
+
+2d 有一条**必须先定的形状问题**：`GetAppDependencies` 的头文件原文是
+"note that whatever callback you register for `GetAppDependenciesResult_t` may be called multiple
+times until all app dependencies have been returned" —— 一个分页流，而本仓的
+`register_call_result` 是 `FnOnce`（一次答案、一条 handle）。要么把它做成 `FnMut`+终止条件，
+要么给它单独一个"流到 empty/结束为止"的收拢 API。**不要把多次答案伪装成一次**，
+所以 2d 排最后，先交 2a-2c 的同步面。
+
+
+
+### 6.1f `CallbackResult` 的流式债（2026-10-14 新发现，已由门钉住）
 
 复算方法级缺口时顺手扫了一遍 `impl_callback!`，量出一个此前没登记的面：
 `CallbackResult` 的文档自称"all possible callback results"，而 `CallbackStream` 只认这个 sum type。
