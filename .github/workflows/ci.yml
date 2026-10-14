@@ -51,8 +51,11 @@ jobs:
         with:
           key: ${{ matrix.os }}-${{ steps.toolchain.outputs.cachekey }}
 
+      # 以前这一步在 Windows 上是跳过的：本机 core.autocrlf=true 会把签出的
+      # .rs 变成 CRLF，rustfmt 于是报出满屏假差异。.gitattributes 已把自己写的
+      # 源码钉成 eol=lf（Valve 的 46 个 SDK 头文件保持 -text 原样），所以现在
+      # 三个平台都能跑同一条检查。
       - name: fmt
-        if: runner.os != 'windows'
         run: cargo fmt --all -- --check
 
       - name: clippy (no -D warnings)

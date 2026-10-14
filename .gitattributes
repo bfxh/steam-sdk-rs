@@ -1,0 +1,19 @@
+# 只管自己写的文本：钉住 LF，这样三个平台签出的源码字节才可比。
+# 没有用 `* text=auto`，因为随仓的 46 个 Valve SDK 头文件在索引里本来就是
+# CRLF（`git ls-files --eol` 实测 i/crlf=46，全部在 steamworks-sys/lib/ 下）；
+# 全局 text 会把它们一次性重规范成 LF，产生一个和任何真实改动无关的 46 文件差异。
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.lock text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# 上游 SDK 的头与预编译运行时原样保存，绝不做行尾转换。
+steamworks-sys/lib/** -text
+*.dll binary
+*.lib binary
+*.so binary
+*.dylib binary
+*.a binary
