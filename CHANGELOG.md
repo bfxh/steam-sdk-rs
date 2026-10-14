@@ -276,6 +276,14 @@ plus the callbacks the wrapper can deliver.
   findings came from writing the sibling reader
   (`UGC::user_content_descriptor_preferences`) and reading what it had to be careful
   about.
+- The four gates above shipped broken the first time: `.gitignore`'s `*.txt` rule excluded
+  `scripts/ci/baselines/`, so every fresh checkout was missing the ceilings and all six
+  `quality` jobs died with `FileNotFoundError` (run `cc348a8`), while the same gates were
+  green on the machine that wrote them. A gate whose inputs are not in the repository
+  constrains nobody. Fixed by excepting the baselines from `*.txt`, pinning them to LF, and
+  making a missing baseline report which of the two causes applies instead of raising a
+  traceback. The verification that was missing the first time is now the rule: run the gates
+  from a clean `git clone`, and run the missing-input path deliberately.
 - Doc comments: `src/networking.rs` had a malformed intra-doc link (`[../networking_sockets]`)
   and still claimed the `ISteamNetworkingSockets` wrapper was "unfinished" — it is not. Six other
   doc comments carried redundant explicit link targets. Rustdoc now runs with `-D warnings` in
