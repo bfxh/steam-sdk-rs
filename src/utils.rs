@@ -302,6 +302,212 @@ impl Utils {
             )
         }
     }
+
+    /// Seconds the current application has been active, for debugging.
+    pub fn seconds_since_app_active(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUtils_GetSecondsSinceAppActive(self.utils) }
+    }
+
+    /// Seconds the computer has been active, for debugging.
+    pub fn seconds_since_computer_active(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUtils_GetSecondsSinceComputerActive(self.utils) }
+    }
+
+    /// Steam IPC calls made since the last time this was called.
+    ///
+    /// Every call costs at least a thread context switch, so this is a way to
+    /// see how much overlay traffic a frame generates.
+    pub fn ipc_call_count(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUtils_GetIPCCallCount(self.utils) }
+    }
+
+    /// Battery state of the machine Steam is running on.
+    ///
+    /// Steam reports "on AC power" with the sentinel value 255 rather than a
+    /// percentage, so that case maps to [`BatteryPower::OnAcPower`] instead of
+    /// leaking a 255% reading.
+    pub fn battery_power(&self) -> BatteryPower {
+        battery_power_from_raw(unsafe {
+            sys::SteamAPI_ISteamUtils_GetCurrentBatteryPower(self.utils)
+        })
+    }
+
+    /// Whether the overlay still has something to present.
+    ///
+    /// When this is true the game should keep presenting frames; a game that
+    /// blocks without presenting will stall the overlay.
+    pub fn overlay_needs_present(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_BOverlayNeedsPresent(self.utils) }
+    }
+
+    /// Whether Steam is running inside a VR session.
+    pub fn is_steam_running_in_vr(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_IsSteamRunningInVR(self.utils) }
+    }
+
+    /// Whether the game is running from a Steam China launcher.
+    pub fn is_steam_china_launcher(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_IsSteamChinaLauncher(self.utils) }
+    }
+
+    /// Length in bytes of the text the user entered in the last gamepad text
+    /// input dialog, which is what
+    /// [`Utils::get_entered_gamepad_text_input`] then reads.
+    pub fn entered_gamepad_text_length(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUtils_GetEnteredGamepadTextLength(self.utils) }
+    }
+
+    /// Closes an open Big Picture text input dialog.
+    ///
+    /// Returns whether a dialog was actually dismissed.
+    pub fn dismiss_gamepad_text_input(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_DismissGamepadTextInput(self.utils) }
+    }
+
+    /// Closes an open floating gamepad text input dialog.
+    ///
+    /// Returns whether a dialog was actually dismissed.
+    pub fn dismiss_floating_gamepad_text_input(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_DismissFloatingGamepadTextInput(self.utils) }
+    }
+
+    /// Offsets where overlay notifications appear, from the position set with
+    /// [`Utils::set_overlay_notification_position`].
+    ///
+    /// This is per-game, and does nothing when called outside a game context.
+    pub fn set_overlay_notification_inset(&self, horizontal: i32, vertical: i32) {
+        unsafe {
+            sys::SteamAPI_ISteamUtils_SetOverlayNotificationInset(self.utils, horizontal, vertical)
+        }
+    }
+
+    /// Whether the host PC streams the game's output to the headset, rather
+    /// than running a desktop VR session.
+    pub fn is_vr_headset_streaming_enabled(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUtils_IsVRHeadsetStreamingEnabled(self.utils) }
+    }
+
+    /// Turns in-headset streaming on or off.
+    pub fn set_vr_headset_streaming_enabled(&self, enabled: bool) {
+        unsafe {
+            sys::SteamAPI_ISteamUtils_SetVRHeadsetStreamingEnabled(self.utils, enabled);
+        }
+    }
+
+    /// What Steam believes the machine's IPv6 connectivity to the internet is
+    /// over `protocol`.
+    ///
+    /// Note what this does *not* say: it does not tell you whether the Steam
+    /// client itself reached Steam over IPv6, and a game that needs a real
+    /// answer about a specific host should probe it rather than trust this.
+    pub fn ipv6_connectivity_state(&self, protocol: IPv6ConnectivityProtocol) -> IPv6Connectivity {
+        ipv6_state_from_raw(unsafe {
+            sys::SteamAPI_ISteamUtils_GetIPv6ConnectivityState(self.utils, protocol.into())
+        })
+    }
+}
+
+/// Which transport to ask about with [`Utils::ipv6_connectivity_state`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IPv6ConnectivityProtocol {
+    Http,
+    Udp,
+}
+
+impl From<IPv6ConnectivityProtocol> for sys::ESteamIPv6ConnectivityProtocol {
+    fn from(protocol: IPv6ConnectivityProtocol) -> Self {
+        match protocol {
+            IPv6ConnectivityProtocol::Http => {
+                sys::ESteamIPv6ConnectivityProtocol::k_ESteamIPv6ConnectivityProtocol_HTTP
+            }
+            IPv6ConnectivityProtocol::Udp => {
+                sys::ESteamIPv6ConnectivityProtocol::k_ESteamIPv6ConnectivityProtocol_UDP
+            }
+        }
+    }
+}
+
+/// Steam's belief about IPv6 reachability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IPv6Connectivity {
+    Unknown,
+    Good,
+    Bad,
+}
+
+fn ipv6_state_from_raw(raw: sys::ESteamIPv6ConnectivityState) -> IPv6Connectivity {
+    match raw {
+        sys::ESteamIPv6ConnectivityState::k_ESteamIPv6ConnectivityState_Good => {
+            IPv6Connectivity::Good
+        }
+        sys::ESteamIPv6ConnectivityState::k_ESteamIPv6ConnectivityState_Bad => {
+            IPv6Connectivity::Bad
+        }
+        // The binding is `#[non_exhaustive]`, and Steam's own Unknown answer
+        // has to survive as Unknown rather than being read as Good or Bad.
+        _ => IPv6Connectivity::Unknown,
+    }
+}
+
+/// Battery state as Steam reports it, with the "on AC power" sentinel resolved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BatteryPower {
+    /// Plugged in; Steam reports this as the sentinel 255 rather than a percentage.
+    OnAcPower,
+    /// Percentage remaining, 0-100 as Steam reports it.
+    Percent(u8),
+}
+
+/// The FFI reports battery percent as a `u8` and uses 255 for "plugged in";
+/// without this split a caller reading `Percent` would see 255%.
+pub(crate) fn battery_power_from_raw(raw: u8) -> BatteryPower {
+    match raw {
+        255 => BatteryPower::OnAcPower,
+        percent => BatteryPower::Percent(percent),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ac_power_sentinel_is_not_reported_as_255_percent() {
+        assert_eq!(battery_power_from_raw(255), BatteryPower::OnAcPower);
+        assert_eq!(battery_power_from_raw(0), BatteryPower::Percent(0));
+        assert_eq!(battery_power_from_raw(100), BatteryPower::Percent(100));
+        // Anything under the sentinel stays a percentage, untouched.
+        for raw in [1u8, 42, 100, 254] {
+            assert_eq!(battery_power_from_raw(raw), BatteryPower::Percent(raw));
+        }
+    }
+
+    #[test]
+    fn ipv6_protocols_map_onto_distinct_steam_variants() {
+        use sys::ESteamIPv6ConnectivityProtocol as S;
+        let mapped = [
+            S::from(IPv6ConnectivityProtocol::Http),
+            S::from(IPv6ConnectivityProtocol::Udp),
+        ];
+        assert_ne!(mapped[0], mapped[1]);
+    }
+
+    #[test]
+    fn ipv6_unknown_stays_unknown() {
+        use sys::ESteamIPv6ConnectivityState as S;
+        assert_eq!(
+            ipv6_state_from_raw(S::k_ESteamIPv6ConnectivityState_Unknown),
+            IPv6Connectivity::Unknown
+        );
+        assert_eq!(
+            ipv6_state_from_raw(S::k_ESteamIPv6ConnectivityState_Good),
+            IPv6Connectivity::Good
+        );
+        assert_eq!(
+            ipv6_state_from_raw(S::k_ESteamIPv6ConnectivityState_Bad),
+            IPv6Connectivity::Bad
+        );
+    }
 }
 
 pub(crate) struct SteamParamStringArray(Vec<*mut c_char>);

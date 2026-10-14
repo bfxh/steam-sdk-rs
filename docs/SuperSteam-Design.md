@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | 27 | ISteamUtils | 37 | 16 |
+| ISteamFriends | 78 | 27 | ISteamUtils | 37 | **16 → 30** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | 16 |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -675,6 +675,24 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 `UpdatePublishedFile*`、`UGCDownload`、`GetCachedUGC*`、`Enumerate*`、投票类）——它们的替代者是
 `ISteamUGC`（已封 60 个方法），**照搬过来会把同一件事实现两遍**，所以不列为待补。
 `ISteamInput`（48−18）与 `ISteamTimeline`（18−4）是下一批候选。
+
+### 6.1d 补口的取舍登记（2026-10-14，避免"没写"被误读成"漏了"）
+
+`ISteamUtils` 补到 30/37 之后，剩下 7 个**逐个对着 `isteamutils.h` 判过**，不是漏项：
+
+| 未封方法 | 判据（读头文件原文，不靠猜） |
+|---|---|
+| `GetAPICallFailureReason` | 参数是裸 `SteamAPICall_t`；本仓的回调派发链已经把失败映射成 `SteamError`，**开放裸句柄只加不安全面、不加新能力** |
+| `CheckFileSignature` | DRM 向、异步且有独立回调结构，游戏侧极少用 |
+| `GetConnectedUniverse` | 客户端连的是哪个 universe（public/beta…），诊断类 |
+| `SetGameLauncherMode` | 头文件写明是给"没有手柄支持的启动器"用（Steam Input 转键鼠），不是游戏态 |
+| `StartVRDashboard` | 头文件："ask SteamUI to create and render its OpenVR dashboard"，属客户端工具 |
+| `InitFilterText` / `FilterText` | **真待补**：本绑定里搜不到 `SteamAPI_ISteamTextFiltering_*`（计数 0），所以这对是老文本过滤的**唯一通路**；要补得处理 `CSteamID` 入参 + 输出缓冲与截断语义，列为下一块 |
+
+同理两条硬事实登记在此免得反复重查：
+① 本 SDK 的 `isteamutils.h` 里两处 `Deprecated` 都是 `STEAM_PRIVATE_API`（`GetCSERIPPort`、`RunFrame`），**不在公开面**，所以不存在"漏封退役方法"；
+② `FilterText` 与 `ISteamTextFiltering` 的关系要判之前先查绑定 —— 我最初按"已被取代"想跳过它，
+是 `grep -c SteamAPI_ISteamTextFiltering = 0` 把这条想当然否掉的。
 
 
 ---
