@@ -176,3 +176,36 @@ fn a_tag_group_with_an_interior_nul_is_refused_as_a_whole() {
     let empty: [&str; 0] = [];
     assert_eq!(tag_group_strings(&empty).map(|v| v.len()), Ok(0));
 }
+
+#[test]
+fn an_unnamed_workshop_file_type_reads_as_unknown_instead_of_panicking() {
+    // Both of these are declared by today's headers and were named by neither the mapping nor
+    // the enum, so they used to reach `unreachable!()` while reading an item.
+    assert_eq!(
+        FileType::from(sys::EWorkshopFileType::k_EWorkshopFileTypeMax),
+        FileType::Unknown
+    );
+    // `First` shares 0 with `Community`, so it must keep mapping to the named type.
+    assert_eq!(
+        FileType::from(sys::EWorkshopFileType::k_EWorkshopFileTypeFirst),
+        FileType::Community
+    );
+    // Every named type still round-trips, so the new arm did not swallow them.
+    for named in [
+        FileType::Community,
+        FileType::Video,
+        FileType::Clip,
+        FileType::GameManagedItem,
+    ] {
+        let there: sys::EWorkshopFileType = named.into();
+        assert_eq!(FileType::from(there), named);
+    }
+}
+
+#[test]
+fn writing_unknown_back_sends_steams_own_unset_value() {
+    // Refusal by deferral: Steam gets its own out-of-range sentinel and rejects the call,
+    // instead of the wrapper quietly asking for a Community item (0 is also `First`).
+    let there: sys::EWorkshopFileType = FileType::Unknown.into();
+    assert_eq!(there, sys::EWorkshopFileType::k_EWorkshopFileTypeMax);
+}

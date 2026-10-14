@@ -1,1 +1,1 @@
-114  # lib tests reached with --all-features (99 passed + 15 ignored), measured 2026-10-15 with the chat-flag mapper tests
+116  # lib tests reached with --all-features (101 passed + 15 ignored), measured 2026-10-15 with the file-type fallback tests

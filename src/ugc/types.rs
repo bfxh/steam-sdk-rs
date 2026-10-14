@@ -171,6 +171,17 @@ pub enum FileType {
     SteamVideo,
     GameManagedItem,
     Clip,
+
+    /// A Workshop file type this binding does not name.
+    ///
+    /// Reachable today, not hypothetically: `k_EWorkshopFileTypeMax` (17) is declared by the
+    /// vendored headers and named by neither this enum nor the mapping above, so a Steam answer
+    /// using it landed in `unreachable!()` -- a panic inside the caller while reading an item.
+    /// `k_EWorkshopFileTypeFirst` is not a separate case: it shares 0 with `Community`.
+    ///
+    /// Writing it back sends `k_EWorkshopFileTypeFirst`, which Steam does not accept as a real
+    /// type, so `create_item` fails with Steam's own error instead of this wrapper inventing one.
+    Unknown,
 }
 
 impl Into<sys::EWorkshopFileType> for FileType {
@@ -199,6 +210,11 @@ impl Into<sys::EWorkshopFileType> for FileType {
             FileType::SteamVideo => sys::EWorkshopFileType::k_EWorkshopFileTypeSteamVideo,
             FileType::GameManagedItem => sys::EWorkshopFileType::k_EWorkshopFileTypeGameManagedItem,
             FileType::Clip => sys::EWorkshopFileType::k_EWorkshopFileTypeClip,
+            // Sending a read-only `Unknown` back is refused by deferring: this passes Steam's
+            // own out-of-range sentinel, so `create_item` fails at Steam. The tempting
+            // alternative -- `k_EWorkshopFileTypeFirst`, which shares 0 with `Community` --
+            // would silently create an item of the wrong type.
+            FileType::Unknown => sys::EWorkshopFileType::k_EWorkshopFileTypeMax,
         }
     }
 }
@@ -228,7 +244,7 @@ impl From<sys::EWorkshopFileType> for FileType {
             sys::EWorkshopFileType::k_EWorkshopFileTypeSteamVideo => FileType::SteamVideo,
             sys::EWorkshopFileType::k_EWorkshopFileTypeGameManagedItem => FileType::GameManagedItem,
             sys::EWorkshopFileType::k_EWorkshopFileTypeClip => FileType::Clip,
-            _ => unreachable!(),
+            _ => FileType::Unknown,
         }
     }
 }
