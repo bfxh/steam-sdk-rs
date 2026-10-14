@@ -31,7 +31,8 @@ steamworks/src/networking.rs
 steamworks/src/networking_messages.rs
 steamworks/src/networking_sockets.rs
 steamworks/src/networking_sockets_callback.rs
-steamworks/src/networking_types.rs
+steamworks/src/networking_types/config.rs
+steamworks/src/networking_types/mod.rs
 steamworks/src/networking_utils.rs
 steamworks/src/parental.rs
 steamworks/src/parties.rs

@@ -1475,17 +1475,17 @@ let ptr = unsafe { sys::SteamAPI_SteamFriends_v018() };
 let ptr = NonNull::new(ptr).ok_or(SteamError::NotInitialized)?;  // release 同样生效
 ```
 
-`src/lib.rs:352-472` 与 `src/server.rs` 共 **23 处** `debug_assert!(!x.is_null())` 全部属于此类。
+`src/lib.rs:496-776` 与 `src/server.rs` 共 **33 处** `debug_assert!(!x.is_null())` 全部属于此类。
 
-**计数更正**：我此前写的「61 处」是错的。精确统计：
+**计数更正**：本行此前写的是「61 处、其中 23 处 null 检查、lib.rs 17、server.rs 6」，那是拆文件之前的旧尺。按当前源码逐行重测（`grep -c debug_assert src/**/*.rs` 加 `grep -c "debug_assert.*null"`）：
 
 | 类别 | 数量 | 位置 |
 |------|------|------|
-| 全部 `debug_assert` | 61 | lib.rs 17、ugc.rs 32、server.rs 6、networking_types.rs 4、networking_sockets.rs 2 |
-| **其中 null 指针检查** | **23** | **lib.rs 17、server.rs 6** |
-| 其他断言（如 `debug_assert!(ok)` 检查 Steam API 返回值） | 38 | 主要在 ugc.rs |
+| 全部 `debug_*assert` | 74 处，其中**活代码 73**（server.rs 有 1 处在 `/* TODO: Buggy currently? */` 注释块里） | lib.rs 24、ugc 35（query 31 + results 2 + mod 2）、server.rs 9（活 8）、networking_types/mod.rs 4、networking_sockets.rs 2 |
+| **其中 null 指针检查** | **33 处，活代码 32** | **lib.rs 24、server.rs 9（活 8，被注释的那处是同一个 `apps()` 块）** |
+| 其他断言（如 `debug_assert!(ok)` 检查 Steam API 返回值） | 41（74-33，活代码口径同样 41） | 主要在 ugc/query.rs |
 
-这 23 处与接口获取点对应：`src/lib.rs` 有 **17 个** `SteamAPI_Steam*()` 调用（17 处 null 检查——15 个单指针 getter + `remote_storage` 校验两个指针，即 16 个 getter 产 17 处检查，`timeline` 用 `disabled` 标记不产 `debug_assert`），`src/server.rs` 有 6 个（6 处检查）。**即全部接口获取点都用了 debug 级守卫**，无一例外（timeline 是唯一例外，且用的是更安全的运行时判空）。
+lib.rs 的 24 处守卫每一处都紧贴一行接口指针获取（`let x = sys::SteamAPI_Steam*_vNNN();` 下一行即 `debug_assert!(!x.is_null());`），server.rs 活着的 8 处同理。**接口获取点全部有 debug 级守卫**，唯一例外是 `timeline`（`src/lib.rs:739-745`）：它不产 `debug_assert`，而是把空指针存成 `disabled: timeline.is_null()`，运行时判空——这是更安全的写法，不是漏掉的守卫。
 
 > **计数订正（defect-07 深挖时发现）**：此处原写「15 个调用（17 处检查）」，数字自相矛盾——窄正则漏了 `networking_messages`/`networking_sockets`/`networking_utils` 三个用 `_SteamAPI_` 中缀命名的访问器。实际 lib.rs 有 17 个 getter、16 个走 `debug_assert`、`remote_storage` 双指针，合计 17 处。
 

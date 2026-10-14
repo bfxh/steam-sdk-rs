@@ -204,8 +204,26 @@ plus the callbacks the wrapper can deliver.
   `src/ugc/types.rs` (the value types and their Steam-side mappings) and
   `src/ugc/ugc_tests.rs` (the measurement guards). Public paths are unchanged --
   `crate::ugc::*` still re-exports everything, so no caller sees a difference. This is
-  what makes the size ceiling a real number rather than a frozen complaint; `friends.rs`
-  and the rest of `ugc/mod.rs` are next under the same rule.
+  what makes the size ceiling a real number rather than a frozen complaint.
+- The same rule then cut `src/ugc/mod.rs` further into `query.rs` (487), `results.rs` (473),
+  `update.rs` (371) and `read.rs` (142), and split the chat cluster out of `src/friends.rs`
+  into `src/friends/chat.rs` (216), leaving `friends/mod.rs` at 1299 (`0654e78`).
+- `src/networking_types.rs` (2271) is split into `src/networking_types/mod.rs` (1733) and
+  `src/networking_types/config.rs` (551) -- the config dictionary, its two `bitflags` sets and
+  the `NetworkingConfigValue` -> Steam-enum mapping. The cut is along *definitions*, not callers:
+  `mod.rs` still names those types 22 times through the re-export, which is fine -- the point was
+  to move the 500-line enum and its mapping impl out of the file everybody has to scroll through,
+  not to pretend the two halves are unrelated. Public paths are unchanged for the same reason as
+  above.
+- Each of those cuts is checked by two rulers with different jobs: `module_sizes.py` re-measures
+  every file, so the baseline has to be re-recorded by hand for the shrink to be a deliberate
+  act rather than a silent side effect, and `type_surface.py` must report the *same* registered
+  totals (79 keys, 777 inherent methods) -- that one is the evidence that no method moved,
+  changed owner, or vanished during the cut. The size gate going red first is the point: an
+  unregistered new file (`config.rs=551`, `mod.rs=1733`) and a stale key
+  (`src/networking_types.rs`) were both named before anything was recorded.
+  Three files are still above 1300 lines -- `networking_types/mod.rs` (1733), `lib.rs` (1355) and
+  `networking_sockets.rs` (1314) -- and are next under the same rule.
 
 - `Cargo.lock` is committed and every build step runs `--locked`, so dependency drift fails the
   gate instead of silently changing the graph (`477870d`).
