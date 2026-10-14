@@ -105,7 +105,8 @@ jobs:
 
       - run: cargo check --locked --workspace --all-targets
 
-  # 静态质检：unsafe 边界、死依赖、依赖漏洞（非阻塞提示，不挡 PR）
+  # 静态质检：unsafe 边界、死依赖、依赖漏洞。
+  # 工具必须装上（装不上就判红），但**发现内容**只作提示、不挡 PR。
   quality-extra:
     strategy:
       fail-fast: false
@@ -125,6 +126,13 @@ jobs:
         with:
           toolchain: nightly
           components: rustfmt, clippy
+
+      - name: Install advisory tools
+        run: |
+          # 装工具本身失败要让作业判红。以前这里只有 `|| true`，而 runner 上根本没装
+          # 这三个子命令，于是三条"质检"从第一次运行起就是空转的绿：
+          # `error: no such command: geiger` 被吞掉了。
+          cargo install cargo-udeps cargo-geiger cargo-audit --locked
 
       - name: udeps (dead dependencies)
         run: cargo +nightly udeps --all-targets --all-features || true
