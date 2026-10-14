@@ -23,3 +23,4 @@ steamworks-sys/lib/** -text
 # python line ending turns a working gate into "bad interpreter" or a silent parse miss.
 *.sh text eol=lf
 *.py text eol=lf
+scripts/ci/baselines/*.txt text eol=lf
