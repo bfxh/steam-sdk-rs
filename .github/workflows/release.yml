@@ -114,8 +114,10 @@ jobs:
         run: |
           # --no-verify 跳过重新构建与编译期校验；本仓由 quality CI 负责编译正确性，
           # 这里只要产物（.crate）本身完整、清单干净。
-          cargo package --list -p steamworks
-          cargo package --list -p steamworks-sys
+          # 清单不是打印出来给人肉眼看的：与登记过的清单对不上就不出发布物。
+          # 少了 LICENSE 是授权洞，混进本机痕迹文件是把开发垃圾发给用户。
+          python3 scripts/ci/package_inventory.py > "$RUNNER_TEMP/inventory.txt"
+          python3 scripts/ci/compare_paths.py scripts/ci/baselines/package_inventory.txt "$RUNNER_TEMP/inventory.txt"
           cargo package --no-verify --allow-dirty -p steamworks
           cargo package --no-verify --allow-dirty -p steamworks-sys
 

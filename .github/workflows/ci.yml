@@ -179,6 +179,29 @@ jobs:
   # 随仓的 Valve SDK 文本文件（45 个头 + steam_api.json）被改动不会让任何测试变红：
   # 绑定是生成后入库的，头文件被动过只会在下次重生成时显形，而那等于悄悄换了
   # "这个 wrapper 是在封谁"。清单把改动/新增/删除都变成指名判红。
+  # 发布物里到底有什么：仓库里有不该进 .crate 的东西（工作流、设计笔记、
+  # 本机跑示例留下的 steam_appid.txt），也有绝不该少的东西（两份 LICENSE）。
+  # 只有 `cargo package --list` 能回答"用户实际收到什么"，所以清单进门。
+  packaging:
+    name: packaging inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: package inventory matches what was reviewed
+        run: |
+          set -uo pipefail
+          python3 scripts/ci/package_inventory.py > "$RUNNER_TEMP/inventory.txt"
+          python3 scripts/ci/compare_paths.py scripts/ci/baselines/package_inventory.txt "$RUNNER_TEMP/inventory.txt"
+
   vendored:
     name: vendored SDK manifest
     runs-on: ubuntu-latest

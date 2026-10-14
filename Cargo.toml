@@ -11,7 +11,14 @@ categories = ["games"]
 edition = "2021"
 rust-version = "1.80.0"
 # 发布物只带库本体：缺陷取证文档与 CI 配置不进 .crate。
-exclude = ["docs/", ".github/"]
+exclude = [
+  # 文档与工作流不是 crate 内容。
+  "docs/",
+  ".github/",
+  # 本地跑示例时让 Steam 认出库的 app id（`cargo run --example ...`）。
+  # 它被 git 跟踪是开发便利，打进 .crate 就是把一次本机运行的痕迹发给用户。
+  "steam_appid.txt",
+]
 
 [features]
 default = []
