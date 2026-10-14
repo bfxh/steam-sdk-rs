@@ -219,6 +219,91 @@ impl Friends {
             sys::SteamAPI_ISteamFriends_ClearRichPresence(self.friends);
         }
     }
+
+    /// The local player's own persona state, as Steam currently sees it.
+    pub fn persona_state(&self) -> FriendState {
+        unsafe { persona_state_from(sys::SteamAPI_ISteamFriends_GetPersonaState(self.friends)) }
+    }
+
+    /// How the local player relates to `friend` (friend, blocked, ignored, ...).
+    pub fn friend_relationship(&self, friend: SteamId) -> FriendRelationship {
+        unsafe {
+            relationship_from(sys::SteamAPI_ISteamFriends_GetFriendRelationship(
+                self.friends,
+                friend.raw(),
+            ))
+        }
+    }
+
+    /// The friend's Steam level.
+    pub fn friend_steam_level(&self, friend: SteamId) -> i32 {
+        unsafe { sys::SteamAPI_ISteamFriends_GetFriendSteamLevel(self.friends, friend.raw()) }
+    }
+
+    /// The key names present in a friend's rich presence, for use with
+    /// The key names present in a friend's rich presence; feed them to
+    /// [`Friend::rich_presence`] to read the values back.
+    ///
+    /// Steam owns the strings it returns here, so each one is copied out before
+    /// the next query; a null entry is skipped rather than pushed empty.
+    pub fn rich_presence_keys(&self, friend: SteamId) -> Vec<String> {
+        let count = unsafe {
+            sys::SteamAPI_ISteamFriends_GetFriendRichPresenceKeyCount(self.friends, friend.raw())
+        };
+        if count <= 0 {
+            return Vec::new();
+        }
+        let mut keys = Vec::with_capacity(count as usize);
+        for index in 0..count {
+            let raw = unsafe {
+                sys::SteamAPI_ISteamFriends_GetFriendRichPresenceKeyByIndex(
+                    self.friends,
+                    friend.raw(),
+                    index,
+                )
+            };
+            if raw.is_null() {
+                continue;
+            }
+            let key = unsafe { CStr::from_ptr(raw) };
+            keys.push(key.to_string_lossy().into_owned());
+        }
+        keys
+    }
+
+    /// Tells Steam the player is speaking in in-game voice, so the overlay does
+    /// not duck game audio twice.
+    pub fn set_in_game_voice_speaking(&self, user: SteamId, speaking: bool) {
+        unsafe {
+            sys::SteamAPI_ISteamFriends_SetInGameVoiceSpeaking(self.friends, user.raw(), speaking)
+        }
+    }
+
+    /// Chats holding unread priority messages (group chats and the like).
+    pub fn unread_priority_chat_count(&self) -> i32 {
+        unsafe { sys::SteamAPI_ISteamFriends_GetNumChatsWithUnreadPriorityMessages(self.friends) }
+    }
+
+    /// Intercepts friend messages so the game can render them; while enabled,
+    /// Steam does not show them itself.
+    ///
+    /// The return value is Steam's acceptance. This wrapper does not yet expose
+    /// the incoming-message callback or `ReplyToFriendMessage`, so turning this
+    /// on without a plan to answer messages would swallow them -- Steam stops
+    /// showing them itself.
+    pub fn set_listen_for_friends_messages(&self, intercept: bool) -> bool {
+        unsafe { sys::SteamAPI_ISteamFriends_SetListenForFriendsMessages(self.friends, intercept) }
+    }
+
+    /// Opens the overlay's Remote Play Together invite dialog for a lobby.
+    pub fn open_remote_play_together_invite_dialog(&self, lobby: SteamId) {
+        unsafe {
+            sys::SteamAPI_ISteamFriends_ActivateGameOverlayRemotePlayTogetherInviteDialog(
+                self.friends,
+                lobby.raw(),
+            )
+        }
+    }
 }
 
 /// Information about a friend's current state in a game
@@ -351,18 +436,10 @@ impl Friend {
 
     pub fn state(&self) -> FriendState {
         unsafe {
-            let state = sys::SteamAPI_ISteamFriends_GetFriendPersonaState(self.friends, self.id.0);
-            match state {
-                sys::EPersonaState::k_EPersonaStateOffline => FriendState::Offline,
-                sys::EPersonaState::k_EPersonaStateOnline => FriendState::Online,
-                sys::EPersonaState::k_EPersonaStateInvisible => FriendState::Invisible,
-                sys::EPersonaState::k_EPersonaStateBusy => FriendState::Busy,
-                sys::EPersonaState::k_EPersonaStateAway => FriendState::Away,
-                sys::EPersonaState::k_EPersonaStateSnooze => FriendState::Snooze,
-                sys::EPersonaState::k_EPersonaStateLookingToPlay => FriendState::LookingToPlay,
-                sys::EPersonaState::k_EPersonaStateLookingToTrade => FriendState::LookingToTrade,
-                _ => unreachable!(),
-            }
+            persona_state_from(sys::SteamAPI_ISteamFriends_GetFriendPersonaState(
+                self.friends,
+                self.id.0,
+            ))
         }
     }
 
@@ -504,8 +581,155 @@ impl Friend {
     }
 }
 
+/// Maps Steam's persona-state answer.
+///
+/// `k_EPersonaStateMax` is a real answer for a state this binding does not name
+/// -- the previous code reached `unreachable!()` on it, which panicked.
+fn persona_state_from(state: sys::EPersonaState) -> FriendState {
+    match state {
+        sys::EPersonaState::k_EPersonaStateOffline => FriendState::Offline,
+        sys::EPersonaState::k_EPersonaStateOnline => FriendState::Online,
+        sys::EPersonaState::k_EPersonaStateInvisible => FriendState::Invisible,
+        sys::EPersonaState::k_EPersonaStateBusy => FriendState::Busy,
+        sys::EPersonaState::k_EPersonaStateAway => FriendState::Away,
+        sys::EPersonaState::k_EPersonaStateSnooze => FriendState::Snooze,
+        sys::EPersonaState::k_EPersonaStateLookingToPlay => FriendState::LookingToPlay,
+        sys::EPersonaState::k_EPersonaStateLookingToTrade => FriendState::LookingToTrade,
+        _ => FriendState::Unknown,
+    }
+}
+
+/// How the local player relates to another user.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FriendRelationship {
+    /// Not friends, and no request pending.
+    None,
+    Blocked,
+    /// They asked to be friends; a reply is owed.
+    RequestRecipient,
+    Friend,
+    /// We asked to be friends; waiting on their reply.
+    RequestInitiator,
+    Ignored,
+    /// Ignored, but still a friend.
+    IgnoredFriend,
+    /// A relationship value this binding does not name.
+    Unknown,
+}
+
+fn relationship_from(relationship: sys::EFriendRelationship) -> FriendRelationship {
+    match relationship {
+        sys::EFriendRelationship::k_EFriendRelationshipNone => FriendRelationship::None,
+        sys::EFriendRelationship::k_EFriendRelationshipBlocked => FriendRelationship::Blocked,
+        sys::EFriendRelationship::k_EFriendRelationshipRequestRecipient => {
+            FriendRelationship::RequestRecipient
+        }
+        sys::EFriendRelationship::k_EFriendRelationshipFriend => FriendRelationship::Friend,
+        sys::EFriendRelationship::k_EFriendRelationshipRequestInitiator => {
+            FriendRelationship::RequestInitiator
+        }
+        sys::EFriendRelationship::k_EFriendRelationshipIgnored => FriendRelationship::Ignored,
+        sys::EFriendRelationship::k_EFriendRelationshipIgnoredFriend => {
+            FriendRelationship::IgnoredFriend
+        }
+        // Includes `k_EFriendRelationshipSuggested_DEPRECATED` (Valve retired it)
+        // and `k_EFriendRelationshipMax`, so neither can panic the caller.
+        _ => FriendRelationship::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod state_mapping_tests {
+    use super::*;
+
+    #[test]
+    fn unknown_persona_state_is_not_a_panic() {
+        // The previous mapping ended in `unreachable!()`, and Steam does answer
+        // with the sentinel for states this binding does not name.
+        assert_eq!(
+            persona_state_from(sys::EPersonaState::k_EPersonaStateMax),
+            FriendState::Unknown
+        );
+        let named = [
+            (
+                sys::EPersonaState::k_EPersonaStateOffline,
+                FriendState::Offline,
+            ),
+            (
+                sys::EPersonaState::k_EPersonaStateOnline,
+                FriendState::Online,
+            ),
+            (
+                sys::EPersonaState::k_EPersonaStateInvisible,
+                FriendState::Invisible,
+            ),
+            (sys::EPersonaState::k_EPersonaStateBusy, FriendState::Busy),
+            (sys::EPersonaState::k_EPersonaStateAway, FriendState::Away),
+            (
+                sys::EPersonaState::k_EPersonaStateSnooze,
+                FriendState::Snooze,
+            ),
+            (
+                sys::EPersonaState::k_EPersonaStateLookingToPlay,
+                FriendState::LookingToPlay,
+            ),
+            (
+                sys::EPersonaState::k_EPersonaStateLookingToTrade,
+                FriendState::LookingToTrade,
+            ),
+        ];
+        let mut seen = vec![];
+        for (raw, expected) in named {
+            assert_eq!(persona_state_from(raw), expected);
+            seen.push(persona_state_from(raw));
+        }
+        // Distinct Steam states must not collapse into one game-visible state.
+        for i in 0..seen.len() {
+            for j in (i + 1)..seen.len() {
+                assert_ne!(seen[i], seen[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn relationships_map_onto_distinct_values_and_the_retired_one_is_unknown() {
+        use sys::EFriendRelationship as R;
+        let mapped: Vec<FriendRelationship> = [
+            R::k_EFriendRelationshipNone,
+            R::k_EFriendRelationshipBlocked,
+            R::k_EFriendRelationshipRequestRecipient,
+            R::k_EFriendRelationshipFriend,
+            R::k_EFriendRelationshipRequestInitiator,
+            R::k_EFriendRelationshipIgnored,
+            R::k_EFriendRelationshipIgnoredFriend,
+        ]
+        .iter()
+        .map(|raw| relationship_from(*raw))
+        .collect();
+        assert_eq!(mapped[0], FriendRelationship::None);
+        assert_eq!(mapped[3], FriendRelationship::Friend);
+        for i in 0..mapped.len() {
+            for j in (i + 1)..mapped.len() {
+                assert_ne!(mapped[i], mapped[j]);
+            }
+        }
+        assert_eq!(
+            relationship_from(R::k_EFriendRelationshipSuggested_DEPRECATED),
+            FriendRelationship::Unknown,
+            "a retired Valve value must not masquerade as a live relationship"
+        );
+        assert_eq!(
+            relationship_from(R::k_EFriendRelationshipMax),
+            FriendRelationship::Unknown
+        );
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FriendState {
+    /// Steam answered with a state this binding does not name (including its
+    /// `k_EPersonaStateMax` sentinel) rather than one of the known values below.
+    Unknown,
     Offline,
     Online,
     Invisible,

@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | 27 | ISteamUtils | 37 | **16 → 32** |
+| ISteamFriends | 78 | **27 → 36** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -695,6 +695,16 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 不能按 Steamworks 的版本常识直接推。输出侧按头文件要求分配 `strlen(input)+1`，
 回读时截到第一个 NUL（不依赖 Steam 一定补终止符），负数返回按失败处理而不是"改了 0 个字符"。
 
+`ISteamFriends` 2026-10-14 补到 **36/78**（本地状态面）：`persona_state`、`friend_relationship`、
+`friend_steam_level`、`rich_presence_keys`、`set_in_game_voice_speaking`、`unread_priority_chat_count`、
+`set_listen_for_friends_messages`、`open_remote_play_together_invite_dialog`。
+**顺带修掉一个可触发的 panic**：`Friend::state()` 原先以 `_ => unreachable!()` 收尾，而
+`EPersonaState` 有 `k_EPersonaStateMax = 8`（Steam 对"这份绑定叫不出名字的状态"就这么回），
+所以那不是不可达。现在映射抽成 `persona_state_from`，未知名落到**新增的 `FriendState::Unknown`**；
+`FriendRelationship` 同理把 `Suggested_DEPRECATED` 与 `Max` 落到 `Unknown` 而不是伪装成活关系。
+⚠ 对下游这是**给公共枚举加变体**（严格说破坏穷尽 match），故 CHANGELOG 单列披露。
+另外两个我一度列入本批、查证后剔除：`IsFollowing` 与 `GetFollowerCount` **返回 `SteamAPICall_t`（异步）**，
+不是 bool/int —— 归入"异步待补"，与 `GetClanActivityCounts` 等同批处理。
 `ISteamApps` 一行 2026-10-14 补到 **29/33**：DLC（数量、逐项列表含 `available` 归属位、安装/卸载、下载进度）、
 家庭共享借用位、`timed_trial`（**Steam 的 bool 才决定"是不是试用"，秒数 0 仍然是试用**，映射抽成
 `timed_trial_from` 以便钉住）、最早购买时间（0 → `None`）、`mark_content_corrupt`、

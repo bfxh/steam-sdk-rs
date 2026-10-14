@@ -94,6 +94,11 @@ plus the callbacks the wrapper can deliver.
   `sha1_hex()` (40 lowercase hex characters). The remaining four are registered with reasons in
   `docs/SuperSteam-Design.md`: two legacy proof-of-purchase key calls, `SetDlcContext`, and the
   array-out-parameter `GetInstalledDepots`.
+- `ISteamFriends` local-state surface, from 27 to 36 of its 78 functions: `persona_state`,
+  `friend_relationship`, `friend_steam_level`, `rich_presence_keys` (the key names behind
+  `Friend::rich_presence`), `set_in_game_voice_speaking`, `unread_priority_chat_count`,
+  `set_listen_for_friends_messages`, and `open_remote_play_together_invite_dialog`.
+
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 
@@ -154,6 +159,13 @@ plus the callbacks the wrapper can deliver.
 
 ### Changed
 
+
+- `FriendState` gained an `Unknown` variant, and the new `FriendRelationship` enum has one too.
+  Adding a variant to a public enum breaks callers who `match` it exhaustively, so this is called
+  out rather than buried: the alternative was keeping `Friend::state()`'s `unreachable!()`, which
+  is reachable in practice -- `EPersonaState::k_EPersonaStateMax` is Steam's answer for a state the
+  binding does not name, and `EFriendRelationship` carries both `Max` and Valve's retired
+  `Suggested_DEPRECATED`. Panicking on a documented enum value is the worse defect.
 - The Steam-dependent tests are `#[ignore]`d (14 of them today), so CI is green without a client
   (`26974e7` marked the first 11). They still run on demand via `cargo test -- --ignored`.
 - The MSRV (1.80.0) jobs build the default feature set only; `--all-features` is covered by the
