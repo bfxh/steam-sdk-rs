@@ -385,7 +385,7 @@ impl Apps {
 
 /// A string argument reaching Steam as a C string: an interior nul is a bad
 /// argument, not a panic.
-fn c_string_arg(value: &str) -> Result<CString, SteamError> {
+pub(crate) fn c_string_arg(value: &str) -> Result<CString, SteamError> {
     CString::new(value).map_err(|_| SteamError::InvalidParameter)
 }
 

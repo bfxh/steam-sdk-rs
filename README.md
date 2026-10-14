@@ -23,7 +23,7 @@ the design notes all live here (no submodules).
 | `Inventory` | Wraps `ISteamInventory`, which upstream never bound: item queries, consumption, exchange, trade, item drops, prices and purchases. Results are RAII-guarded — `InventoryResult` destroys the Steam handle on drop. Entry point `client.inventory()`. |
 | `Http` | Wraps `ISteamHTTP`, also unbound upstream. Request building is a fallible chain (`header`, `query_param`, `raw_body`, `cookies`, timeouts); request and cookie-container handles are released on drop. Entry point `client.http()`, or `client.http().get(url, cb)` for a one-shot fetch. |
 | `SafeUgcUpdate` | Panic-free UGC update builder. Invalid paths and interior nul bytes become `SafeUgcError` instead of `unwrap()` panics. Entry point `client.ugc().safe_item_update(app_id, file_id)`. |
-| `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. |
+| `CallbackStream` (`futures` feature) | Exposes the main-loop + `process_callbacks` model as a `futures::Stream`. Runtime-agnostic: depends only on the `Stream`/`Waker` traits, not tokio or any specific executor. The stream yields `CallbackResult`, which covers the callbacks with a variant; the families still missing one are listed by module in `docs/SuperSteam-Design.md` and stay reachable through `register_callback`. |
 | `ParentalSettings` | Wraps `ISteamParentalSettings` so a game can honour family view restrictions instead of offering gated content anyway. Both the "list membership" and "effective state" Steam answers are exposed separately. Entry point `client.parental_settings()`. |
 | `GameServerStats` | Wraps `ISteamGameServerStats`: per-user stat/achievement read-write for dedicated servers, with the store/load round trip and the `StatsUnloaded` signal that tells you to re-request. Entry point `server.stats()`. |
 | `Music` | Wraps `ISteamMusic` — the user's own Steam music client. Volume is clamped into Steam's [0, 1] range, and an unrecognised playback state reports `Undefined` instead of guessing. Entry point `client.music()`. |
@@ -38,6 +38,14 @@ the design notes all live here (no submodules).
 | `Friends` additions | `persona_state`, `friend_relationship`, `friend_steam_level`, `rich_presence_keys`, `set_in_game_voice_speaking`, `unread_priority_chat_count`, `set_listen_for_friends_messages`, the Remote Play Together invite dialog, and the clan surface: `clans`, `clan_name`/`clan_tag` (`None` while Steam has not cached them, which is not "unnamed"), `clan_owner`, `clan_officer_count`/`clan_officers`, `is_clan_public`, `is_clan_official_game_group`, `clan_chat_member_count`, `is_clan_chat_admin`. The async follow-ups are wrapped too:
 `request_clan_officer_list`, `download_clan_activity_counts` + `clan_activity`, `follower_count`,
 `is_following`, and `request_friend_rich_presence` with its `FriendRichPresenceUpdate` callback.
+The chat surface is wrapped too, so `set_listen_for_friends_messages` is no longer a one-way door:
+`friend_message` / `reply_to_friend_message`, `send_clan_chat_message` / `clan_chat_message`,
+`join_clan_chat_room` / `leave_clan_chat_room` / `clan_chat_members`, the overlay window trio
+`is`/`open`/`close_clan_chat_window_in_steam`, and the `FriendChatMessageReceived`,
+`ClanChatMessageReceived` and `UnreadChatMessagesChanged` callbacks. Receive buffers are clamped
+into `int` range and report `possibly_truncated` instead of quietly shortening a message; a chat
+entry type this binding cannot name stays `Invalid` rather than wrapping into a neighbouring
+variant.
 `Friend::state()` no longer panics on a state Steam reports that this binding cannot name -- it yields the new `FriendState::Unknown`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing

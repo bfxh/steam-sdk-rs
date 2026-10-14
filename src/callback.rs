@@ -8,16 +8,26 @@ use crate::sys;
 
 use std::sync::{Arc, Weak};
 
-/// A sum type over all possible callback results
+/// A sum type over the callback results the stream can deliver.
+///
+/// Not every callback the crate defines has a variant here yet: the remaining
+/// families are listed, by module, in the `CALLBACKS_NOT_IN_STREAM` debt list in
+/// this file's test module, and `every_callback_is_streamable_or_listed_as_debt`
+/// keeps that list from growing. Every callback is reachable through
+/// `register_callback` regardless.
 #[derive(Debug)]
 pub enum CallbackResult {
     AuthSessionTicketResponse(AuthSessionTicketResponse),
+    ClanChatMessageReceived(ClanChatMessageReceived),
     DownloadItemResult(DownloadItemResult),
     FloatingGamepadTextInputDismissed(FloatingGamepadTextInputDismissed),
+    FriendChatMessageReceived(FriendChatMessageReceived),
+    FriendRichPresenceUpdate(FriendRichPresenceUpdate),
     GameLobbyJoinRequested(GameLobbyJoinRequested),
     GameOverlayActivated(GameOverlayActivated),
     GamepadTextInputDismissed(GamepadTextInputDismissed),
     GameRichPresenceJoinRequested(GameRichPresenceJoinRequested),
+    GlobalStatsReceived(GlobalStatsReceived),
     LobbyChatMsg(LobbyChatMsg),
     LobbyChatUpdate(LobbyChatUpdate),
     LobbyCreated(LobbyCreated),
@@ -38,7 +48,10 @@ pub enum CallbackResult {
     SteamServerConnectFailure(SteamServerConnectFailure),
     SteamServersConnected(SteamServersConnected),
     SteamServersDisconnected(SteamServersDisconnected),
+    TimelineEventRecordingExists(TimelineEventRecordingExists),
+    TimelineGamePhaseRecordingExists(TimelineGamePhaseRecordingExists),
     TicketForWebApiResponse(TicketForWebApiResponse),
+    UnreadChatMessagesChanged(UnreadChatMessagesChanged),
     UserAchievementStored(UserAchievementStored),
     UserAchievementIconFetched(UserAchievementIconFetched),
     UserStatsReceived(UserStatsReceived),
@@ -60,12 +73,21 @@ impl CallbackResult {
             AuthSessionTicketResponse::ID => {
                 Self::AuthSessionTicketResponse(AuthSessionTicketResponse::from_raw(data))
             }
+            ClanChatMessageReceived::ID => {
+                Self::ClanChatMessageReceived(ClanChatMessageReceived::from_raw(data))
+            }
             DownloadItemResult::ID => Self::DownloadItemResult(DownloadItemResult::from_raw(data)),
             FloatingGamepadTextInputDismissed::ID => Self::FloatingGamepadTextInputDismissed(
                 FloatingGamepadTextInputDismissed::from_raw(data),
             ),
             GameLobbyJoinRequested::ID => {
                 Self::GameLobbyJoinRequested(GameLobbyJoinRequested::from_raw(data))
+            }
+            FriendChatMessageReceived::ID => {
+                Self::FriendChatMessageReceived(FriendChatMessageReceived::from_raw(data))
+            }
+            FriendRichPresenceUpdate::ID => {
+                Self::FriendRichPresenceUpdate(FriendRichPresenceUpdate::from_raw(data))
             }
             GameOverlayActivated::ID => {
                 Self::GameOverlayActivated(GameOverlayActivated::from_raw(data))
@@ -75,6 +97,9 @@ impl CallbackResult {
             }
             GameRichPresenceJoinRequested::ID => {
                 Self::GameRichPresenceJoinRequested(GameRichPresenceJoinRequested::from_raw(data))
+            }
+            GlobalStatsReceived::ID => {
+                Self::GlobalStatsReceived(GlobalStatsReceived::from_raw(data))
             }
             LobbyChatMsg::ID => Self::LobbyChatMsg(LobbyChatMsg::from_raw(data)),
             LobbyChatUpdate::ID => Self::LobbyChatUpdate(LobbyChatUpdate::from_raw(data)),
@@ -117,8 +142,17 @@ impl CallbackResult {
             SteamServersDisconnected::ID => {
                 Self::SteamServersDisconnected(SteamServersDisconnected::from_raw(data))
             }
+            TimelineEventRecordingExists::ID => {
+                Self::TimelineEventRecordingExists(TimelineEventRecordingExists::from_raw(data))
+            }
+            TimelineGamePhaseRecordingExists::ID => Self::TimelineGamePhaseRecordingExists(
+                TimelineGamePhaseRecordingExists::from_raw(data),
+            ),
             TicketForWebApiResponse::ID => {
                 Self::TicketForWebApiResponse(TicketForWebApiResponse::from_raw(data))
+            }
+            UnreadChatMessagesChanged::ID => {
+                Self::UnreadChatMessagesChanged(UnreadChatMessagesChanged::from_raw(data))
             }
             UserAchievementStored::ID => {
                 Self::UserAchievementStored(UserAchievementStored::from_raw(data))
@@ -226,4 +260,243 @@ pub(crate) unsafe fn register_call_result<C, F>(
             f(&value, failed)
         }),
     );
+}
+
+#[cfg(test)]
+mod stream_coverage {
+    use super::*;
+
+    /// Callback families `CallbackResult` has never carried. They are still
+    /// reachable through `register_callback`; only the stream is missing them.
+    ///
+    /// This list may only shrink. `every_callback_is_streamable_or_listed_as_debt`
+    /// fails on any callback that is defined but neither streamed nor listed here,
+    /// so a new callback cannot quietly widen the gap the doc claims is closed.
+    const CALLBACKS_NOT_IN_STREAM: &[&str] = &[
+        // ugc.rs
+        "DeleteItemResult",
+        // inventory.rs
+        "InventoryDefinitionUpdate",
+        "InventoryFullUpdate",
+        "InventoryResultReady",
+        // parties.rs
+        "ActiveBeaconsUpdated",
+        "AvailableBeaconLocationsUpdated",
+        "PartyReservationNotification",
+        // server_stats.rs
+        "GameServerStatsReceived",
+        "GameServerStatsStored",
+        "GameServerStatsUnloaded",
+        // html_surface.rs
+        "HtmlBrowserReady",
+        "HtmlCanGoBackAndForward",
+        "HtmlCloseBrowser",
+        "HtmlFileOpenDialog",
+        "HtmlFinishedRequest",
+        "HtmlJsAlert",
+        "HtmlJsConfirm",
+        "HtmlLinkAtPosition",
+        "HtmlNewWindow",
+        "HtmlStartRequest",
+        "HtmlTitleChanged",
+        "HtmlUrlChanged",
+        // music.rs
+        "MusicPlaybackStatusChanged",
+        "MusicVolumeChanged",
+    ];
+
+    /// The `Name` out of every `impl_callback!(cb: X_t => Name { .. })` call.
+    fn defined_callbacks() -> Vec<String> {
+        let mut out = Vec::new();
+        for path in source_files() {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for line in text.lines() {
+                // The macro's own documentation shows a `=> Name` example; it is
+                // not a callback definition.
+                if line.trim_start().starts_with("//") {
+                    continue;
+                }
+                let Some(at) = line.find("impl_callback!(") else {
+                    continue;
+                };
+                let rest = &line[at + "impl_callback!".len()..];
+                let Some(arrow) = rest.find("=> ") else {
+                    continue;
+                };
+                let name = rest[arrow + 3..]
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect::<String>();
+                if !name.is_empty() {
+                    out.push(name);
+                }
+            }
+        }
+        out
+    }
+
+    /// The variant names inside `pub enum CallbackResult { .. }`.
+    fn streamed_callbacks() -> Vec<String> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/callback.rs");
+        let text = std::fs::read_to_string(path).unwrap();
+        let mut out = Vec::new();
+        let mut inside = false;
+        for line in text.lines() {
+            if !inside {
+                inside = line.trim() == "pub enum CallbackResult {";
+                continue;
+            }
+            if line.trim() == "}" {
+                break;
+            }
+            let name = line
+                .trim()
+                .split('(')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if !name.is_empty() {
+                out.push(name);
+            }
+        }
+        out
+    }
+
+    fn source_files() -> Vec<std::path::PathBuf> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut out = Vec::new();
+        let mut stack = vec![root];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                    out.push(path);
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_two_parsers_see_the_whole_crate() {
+        // Without these floors an empty parse would make both coverage tests
+        // below pass by looking at nothing.
+        let defined = defined_callbacks();
+        let streamed = streamed_callbacks();
+        assert!(
+            defined.len() >= 60,
+            "only parsed {} callback definitions -- the matcher is broken",
+            defined.len()
+        );
+        assert!(
+            streamed.len() >= 38,
+            "only parsed {} CallbackResult variants -- the matcher is broken",
+            streamed.len()
+        );
+    }
+
+    #[test]
+    fn every_callback_is_streamable_or_listed_as_debt() {
+        let streamed = streamed_callbacks();
+        let mut unlisted = Vec::new();
+        for name in defined_callbacks() {
+            if !streamed.contains(&name) && !CALLBACKS_NOT_IN_STREAM.contains(&name.as_str()) {
+                unlisted.push(name);
+            }
+        }
+        assert!(
+            unlisted.is_empty(),
+            "callbacks the stream cannot deliver and nobody registered: {unlisted:?} -- \
+             add a CallbackResult variant or a line in CALLBACKS_NOT_IN_STREAM with the reason"
+        );
+    }
+
+    #[test]
+    fn debt_entries_point_at_callbacks_that_are_still_unstreamed() {
+        let defined = defined_callbacks();
+        let streamed = streamed_callbacks();
+        for name in CALLBACKS_NOT_IN_STREAM {
+            assert!(
+                defined.iter().any(|defined| defined == name),
+                "{name} is listed as debt but no longer a callback -- drop the list entry"
+            );
+            assert!(
+                !streamed.iter().any(|variant| variant == name),
+                "{name} is streamed now; the debt list entry is stale"
+            );
+        }
+    }
+
+    #[test]
+    fn chat_callbacks_reach_the_stream() {
+        // The receive path only exists for stream users if these IDs decode.
+        // A variant added without its `from_raw` arm would compile and stay silent.
+        let friend = sys::GameConnectedFriendChatMsg_t_k_iCallback as i32;
+        let clan = sys::GameConnectedClanChatMsg_t_k_iCallback as i32;
+        let unread = sys::UnreadChatMessagesChanged_t_k_iCallback as i32;
+        let rich = sys::FriendRichPresenceUpdate_t_k_iCallback as i32;
+        for id in [friend, clan, unread, rich] {
+            let payload = [0u8; 64];
+            let decoded = unsafe { CallbackResult::from_raw(id, payload.as_ptr() as *mut c_void) };
+            assert!(
+                decoded.is_some(),
+                "callback id {id} is not dispatched by CallbackResult::from_raw"
+            );
+        }
+        // Distinct IDs: two callbacks sharing one would make one of the arms
+        // unreachable and its events would be delivered as the other type.
+        let ids = [friend, clan, unread, rich];
+        for i in 0..ids.len() {
+            for j in (i + 1)..ids.len() {
+                assert_ne!(ids[i], ids[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn stream_decodes_chat_payloads_field_by_field() {
+        // Locks the field mapping of the two chat announcements: reading the
+        // wrong member would still compile, and a stream user could not tell.
+        let mut clan = sys::GameConnectedClanChatMsg_t {
+            m_steamIDClanChat: steam_id(111),
+            m_steamIDUser: steam_id(222),
+            m_iMessageID: 7,
+        };
+        let raw = (&mut clan as *mut sys::GameConnectedClanChatMsg_t).cast::<c_void>();
+        match unsafe { CallbackResult::from_raw(ClanChatMessageReceived::ID, raw) } {
+            Some(CallbackResult::ClanChatMessageReceived(ev)) => {
+                assert_eq!(ev.clan_chat, SteamId::from_raw(111));
+                assert_eq!(ev.sender, SteamId::from_raw(222));
+                assert_eq!(ev.message_id, 7);
+            }
+            other => panic!("clan chat announcement decoded as {other:?}"),
+        }
+
+        let mut friend = sys::GameConnectedFriendChatMsg_t {
+            m_steamIDUser: steam_id(333),
+            m_iMessageID: 9,
+        };
+        let raw = (&mut friend as *mut sys::GameConnectedFriendChatMsg_t).cast::<c_void>();
+        match unsafe { CallbackResult::from_raw(FriendChatMessageReceived::ID, raw) } {
+            Some(CallbackResult::FriendChatMessageReceived(ev)) => {
+                assert_eq!(ev.sender, SteamId::from_raw(333));
+                assert_eq!(ev.message_id, 9);
+            }
+            other => panic!("friend chat announcement decoded as {other:?}"),
+        }
+    }
+
+    fn steam_id(raw: u64) -> sys::CSteamID {
+        sys::CSteamID {
+            m_steamid: sys::CSteamID_SteamID_t { m_unAll64Bits: raw },
+        }
+    }
 }

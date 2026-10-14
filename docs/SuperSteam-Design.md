@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | **27 → 53** | ISteamUtils | 37 | **16 → 32** |
+| ISteamFriends | 78 | **27 → 63** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -731,6 +731,47 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 ① 本 SDK 的 `isteamutils.h` 里两处 `Deprecated` 都是 `STEAM_PRIVATE_API`（`GetCSERIPPort`、`RunFrame`），**不在公开面**，所以不存在"漏封退役方法"；
 ② `FilterText` 与 `ISteamTextFiltering` 的关系要判之前先查绑定 —— 我最初按"已被取代"想跳过它，
 是 `grep -c SteamAPI_ISteamTextFiltering = 0` 把这条想当然否掉的。
+
+`ISteamFriends` 同日补**聊天簇**（53→63，方法级尺复算后剩 15 个未调，全部登记在 6.1d 末）：
+`friend_message` / `reply_to_friend_message`（把 `set_listen_for_friends_messages` 那扇门补齐 ——
+上一轮我只交了"打开拦截"，文档明写"打开后 Steam 不再自己显示消息"却没有任何接收入口，
+等于我亲手留了一个会把玩家消息吞掉的半门）、`send_clan_chat_message` / `clan_chat_message`、
+`join_clan_chat_room`（`register_call_result` + `ClanChatRoomJoined`）/ `leave_clan_chat_room` /
+`clan_chat_members`、覆盖窗三件套 `is/open/close_clan_chat_window_in_steam`，
+回调 `FriendChatMessageReceived` / `ClanChatMessageReceived` / `UnreadChatMessagesChanged`。
+三条口径：
+① `EChatEntryType` **不物化成 sys 枚举**——Windows 绑它是 `repr(i32)`、其余平台 `repr(u32)`，
+且两边都 `#[non_exhaustive]`，所以 out 参数用 4 字节裸 `i32` 接住再映射；
+映射函数 `chat_entry_type_from` 用 `u8::try_from` 而不是 `as u8`，
+变异对照：改成 `raw as u8` 后 257 会伪装成 `ChatMsg`，测试判红。
+② 接收缓冲长度经 `chat_buffer_len` 夹到 `[1, MAX_CHAT_MESSAGE_BYTES]`，
+这样 `capacity as i32` 是无损转换（变异：去掉夹取，`usize::MAX` 那条断言判红）；
+Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法走 lossy（不 panic）。
+③ 发送侧内嵌 NUL 判 `Err(SteamError::InvalidParameter)`，与 Steam 自己的拒绝 `Ok(false)` 分两级。
+
+### 6.1e `CallbackResult` 的流式债（2026-10-14 新发现，已由门钉住）
+
+复算方法级缺口时顺手扫了一遍 `impl_callback!`，量出一个此前没登记的面：
+`CallbackResult` 的文档自称"all possible callback results"，而 `CallbackStream` 只认这个 sum type。
+按**递归**扫 `src/**/*.rs`（先前用 `src/*.rs` 的宽口径漏了 `src/user_stats/stat_callback.rs` 这种子目录文件）：
+本轮动手**前**是 66 个回调定义对 38 个 enum 变体 ⇒ **28 类事件对流式用户不可见**（`register_callback` 路径仍可收）；
+动手**后**是 69（新增 3 个聊天回调）对 45 变体 ⇒ 缺 **24** 类。
+
+本轮把与聊天/Timeline/统计答题同族的 7 个接进 stream：
+`FriendChatMessageReceived`、`ClanChatMessageReceived`、`UnreadChatMessagesChanged`、
+`FriendRichPresenceUpdate`、`TimelineEventRecordingExists`、`TimelineGamePhaseRecordingExists`、
+`GlobalStatsReceived`。剩下 **24 个**按模块登记在 `callback.rs` 的 `CALLBACKS_NOT_IN_STREAM`
+（ugc 1、inventory 3、parties 3、server_stats 3、html_surface 12、music 2），
+不编造理由，只写归属模块。
+
+两道门把它钉成"只能变短"的债：
+`every_callback_is_streamable_or_listed_as_debt`（新回调既没变体又没登记 ⇒ 判红）、
+`debt_entries_point_at_callbacks_that_are_still_unstreamed`（债目指向的名字若已不存在或已被接进 stream ⇒ 判红），
+外加 `the_two_parsers_see_the_whole_crate` 的地板断言（解析器空转就判红，防"违规数 0 = 没在看"）。
+变异对照：把 `ClanChatMessageReceived::ID` 那条 `from_raw` 分支删掉 → 交付门判红；
+把一个债目改名 → 债目门判红；临时放一个没有任何接线的新 `impl_callback!` → 覆盖门判红。
+`CallbackResult` 的文档同时改成"sum type over the callback results the stream can deliver"，
+并指向债表 —— 先让声明配得上事实，再用门防止事实倒退。
 
 
 ---

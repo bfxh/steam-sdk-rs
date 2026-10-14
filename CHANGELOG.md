@@ -108,8 +108,27 @@ plus the callbacks the wrapper can deliver.
   `download_clan_activity_counts` (Steam returns only a success flag, so the numbers are read back
   with `clan_activity`, whose `None` means "not cached" rather than "no activity"),
   `follower_count` and `is_following` -- both return `SteamAPICall_t`, not the bool/int the header
-  names suggest. Still open here: the chat-message read/reply pair, friend groups,
-  `EnumerateFollowingList`, profile items and persona-name history.
+  names suggest. Still open here: friend groups, `EnumerateFollowingList`, profile items and
+  persona-name history.
+- `ISteamFriends` chat surface, from 53 to 63 of its 78 functions (`master`, this release):
+  `friend_message` / `reply_to_friend_message`, `send_clan_chat_message` / `clan_chat_message`,
+  `join_clan_chat_room` (async, answers as `ClanChatRoomJoined` carrying Steam's own
+  `ChatRoomEnterResponse` -- a refused join arrives as `Ok` with the reason, because that is what
+  Steam actually says), `leave_clan_chat_room`, `clan_chat_members`, and the overlay window trio
+  `is_clan_chat_window_open_in_steam` / `open_clan_chat_window_in_steam` /
+  `close_clan_chat_window_in_steam`, with the `FriendChatMessageReceived`,
+  `ClanChatMessageReceived` and `UnreadChatMessagesChanged` callbacks.
+  This closes a door this repo had left half-open: `set_listen_for_friends_messages` shipped in the
+  previous batch with a doc saying Steam stops showing messages while it is on, and no way to receive
+  or answer them. Three measurements behind those choices: the `EChatEntryType` out-parameter is read as a plain
+  32-bit integer (the generated enum is `#[repr(i32)]` on Windows and `#[repr(u32)]` elsewhere, and
+  both are `#[non_exhaustive]`, so a code this binding cannot name must not be materialised as one
+  of its variants) and mapped without wrapping, so `257` is `Invalid` rather than `ChatMsg`;
+  a receive buffer is clamped into `[1, MAX_CHAT_MESSAGE_BYTES]` so the `int` length argument can
+  never be handed a wrapped-negative value, and a full buffer is reported as `possibly_truncated`
+  instead of silently shortened; and an interior nul in outgoing text is
+  `Err(SteamError::InvalidParameter)` -- the argument never reached Steam -- which is kept distinct
+  from `Ok(false)`, Steam's own refusal.
 
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
@@ -138,6 +157,19 @@ plus the callbacks the wrapper can deliver.
   `cargo tree -p steamworks -e normal,build -i <crate>`, which only reaches the example members --
   so none of them is in a published `.crate`. Any new advisory turns CI red instead of printing a
   hint nobody is required to read.
+- Two in-repo gates now watch the callback surface (`master`, this release).
+  `every_callback_is_streamable_or_listed_as_debt` parses every `impl_callback!` in the crate
+  (recursively -- the first version of the ruler looked only at `src/*.rs` and missed
+  `src/user_stats/stat_callback.rs`) and requires each one to have a `CallbackResult` variant or a
+  registered reason, so the 24 callbacks that `CallbackStream` still cannot deliver may only shrink.
+  `debt_entries_point_at_callbacks_that_are_still_unstreamed` checks the other direction: a debt
+  entry whose callback was renamed, deleted, or wired up in the meantime fails the test rather than
+  rotting. Both are backed by `the_two_parsers_see_the_whole_crate`, which fails if either parser
+  sees almost nothing -- a count of zero is not a clean bill of health.
+  Controls: deleting a `from_raw` arm, renaming a debt entry, and adding an unwired `impl_callback!`
+  each turn exactly one of the three red. Each mutation was then undone before the next one, with
+  the restore verified by byte-compare for the files it edited and the probe file deleted.
+
 
 ### Fixed
 
@@ -168,6 +200,13 @@ plus the callbacks the wrapper can deliver.
   and still claimed the `ISteamNetworkingSockets` wrapper was "unfinished" — it is not. Six other
   doc comments carried redundant explicit link targets. Rustdoc now runs with `-D warnings` in
   CI, measured clean on both the default and `--all-features` sets before tightening.
+- `CallbackResult` claimed to be "a sum type over all possible callback results" while 28 of the
+  66 callbacks the crate defines had no variant, so `CallbackStream` dropped those events without
+  saying so. Seven now reach the stream -- the three chat announcements, `FriendRichPresenceUpdate`,
+  both `Timeline…RecordingExists` answers and `GlobalStatsReceived` -- and the doc says what the
+  type actually covers, pointing at the registered remainder. `set_listen_for_friends_messages`
+  also lost its "this wrapper does not yet expose the incoming-message callback" caveat, which was
+  true when written and stopped being true in this batch.
 
 ### Changed
 
