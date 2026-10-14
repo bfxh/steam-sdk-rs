@@ -30,6 +30,7 @@ the design notes all live here (no submodules).
 | `Video` | Wraps `ISteamVideo`: broadcast state with viewer count, store-page opening, and Open Graph metadata reads that fail loudly when the caller's buffer is too small instead of returning truncated XML. Entry point `client.video()`. |
 | `Parties` | Wraps `ISteamParties`: beacon discovery and advertising, joining with the host's connect string, the reservation accept/decline pair, and the reservation and "updated" notifications. Entry point `client.parties()`. |
 | `HtmlSurface` | Wraps all 37 methods of `ISteamHTMLSurface` plus the navigation, dialog and link callbacks. `Browser` removes itself on drop, and the three "you MUST respond" callbacks are documented against their responses. Entry point `client.html_surface()`. |
+| `RemoteStorage` one-shot I/O | Upstream only streamed cloud files through `SteamFile::write`/`read`. Adds `write_file`/`read_file` (whole file in one call, argument checks reject an interior nul and an int32-inexpressible length instead of panicking or clipping), `quota`, `local_file_changes` for conflict handling, and `begin_write_batch` whose guard ends the batch on drop. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this

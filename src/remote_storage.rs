@@ -110,6 +110,200 @@ impl RemoteStorage {
             name: CString::new(name).unwrap(),
         }
     }
+
+    /// Writes a whole file in one synchronous call.
+    ///
+    /// Where [`SteamFile::write`] streams through Steam, this is the one-shot
+    /// form Steam documents for small files. The FFI length parameter is an
+    /// int32, so an input that cannot be expressed in it is rejected rather
+    /// than silently truncated.
+    pub fn write_file(&self, name: &str, data: &[u8]) -> Result<(), SteamError> {
+        let file = cloud_file_name(name)?;
+        let len = cloud_chunk_len(data.len())?;
+        // Steam takes a payload pointer even for a zero length write. Handing
+        // it null is not something we can show is safe, so an empty write gets
+        // an aligned, never-dereferenced address instead.
+        let data_ptr: *const c_void = if data.is_empty() {
+            std::ptr::NonNull::<u8>::dangling().as_ptr() as *const c_void
+        } else {
+            data.as_ptr() as *const c_void
+        };
+        let ok = unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_FileWrite(self.rs, file.as_ptr(), data_ptr, len)
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(SteamError::IOFailure)
+        }
+    }
+
+    /// Reads up to `max_bytes` of a cloud file in one synchronous call, and
+    /// returns what was actually read.
+    ///
+    /// Steam reports a missing file, a buffer that was too small and a failed
+    /// read all as a negative count, so that is surfaced as
+    /// [`SteamError::FileNotFound`] rather than as an empty file.
+    pub fn read_file(&self, name: &str, max_bytes: usize) -> Result<Vec<u8>, SteamError> {
+        let file = cloud_file_name(name)?;
+        let to_read = cloud_chunk_len(max_bytes)?;
+        let mut buf = vec![0u8; max_bytes];
+        let read = unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_FileRead(
+                self.rs,
+                file.as_ptr(),
+                buf.as_mut_ptr() as *mut c_void,
+                to_read,
+            )
+        };
+        if read < 0 {
+            return Err(SteamError::FileNotFound);
+        }
+        buf.truncate(read as usize);
+        Ok(buf)
+    }
+
+    /// Cloud storage quota as `(total_bytes, available_bytes)`.
+    ///
+    /// `None` when Steam cannot answer, which is what it does while cloud saves
+    /// are off for this app -- so `None` is not "zero bytes left".
+    pub fn quota(&self) -> Option<(u64, u64)> {
+        let mut total = 0u64;
+        let mut available = 0u64;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_GetQuota(self.rs, &mut total, &mut available)
+        };
+        ok.then_some((total, available))
+    }
+
+    /// Cloud files that changed locally since the previous call.
+    ///
+    /// Steam hands back its own buffer for each name, so every name is copied
+    /// out before the next query.
+    pub fn local_file_changes(&self) -> Vec<LocalFileChange> {
+        let count = unsafe { sys::SteamAPI_ISteamRemoteStorage_GetLocalFileChangeCount(self.rs) };
+        if count <= 0 {
+            return Vec::new();
+        }
+        let mut changes = Vec::with_capacity(count as usize);
+        for index in 0..count {
+            let mut change =
+                sys::ERemoteStorageLocalFileChange::k_ERemoteStorageLocalFileChange_Invalid;
+            let mut path_kind =
+                sys::ERemoteStorageFilePathType::k_ERemoteStorageFilePathType_Invalid;
+            let raw = unsafe {
+                sys::SteamAPI_ISteamRemoteStorage_GetLocalFileChange(
+                    self.rs,
+                    index,
+                    &mut change,
+                    &mut path_kind,
+                )
+            };
+            let path = if raw.is_null() {
+                String::new()
+            } else {
+                unsafe { CStr::from_ptr(raw).to_string_lossy().into_owned() }
+            };
+            changes.push(LocalFileChange {
+                path,
+                change: change.into(),
+                path_kind: path_kind.into(),
+            });
+        }
+        changes
+    }
+
+    /// Starts a group of file writes that Steam syncs once when the returned
+    /// guard is dropped.
+    ///
+    /// Fails when Steam refuses the batch, so a caller cannot mistake a refused
+    /// batch for a fast one.
+    pub fn begin_write_batch(&self) -> Result<FileWriteBatch, SteamError> {
+        if unsafe { sys::SteamAPI_ISteamRemoteStorage_BeginFileWriteBatch(self.rs) } {
+            Ok(FileWriteBatch { rs: self.rs })
+        } else {
+            Err(SteamError::IOFailure)
+        }
+    }
+}
+
+/// A name is passed to Steam as a C string, so an embedded NUL is a bad
+/// argument rather than a panic.
+fn cloud_file_name(name: &str) -> Result<CString, SteamError> {
+    CString::new(name).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// Steam sizes these calls with an int32; a length it cannot express is a bad
+/// argument, not something to clip.
+fn cloud_chunk_len(len: usize) -> Result<i32, SteamError> {
+    i32::try_from(len).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// How one cloud file changed locally.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalFileChangeKind {
+    Invalid,
+    Updated,
+    Deleted,
+}
+
+impl From<sys::ERemoteStorageLocalFileChange> for LocalFileChangeKind {
+    fn from(raw: sys::ERemoteStorageLocalFileChange) -> Self {
+        match raw {
+            sys::ERemoteStorageLocalFileChange::k_ERemoteStorageLocalFileChange_FileUpdated => {
+                LocalFileChangeKind::Updated
+            }
+            sys::ERemoteStorageLocalFileChange::k_ERemoteStorageLocalFileChange_FileDeleted => {
+                LocalFileChangeKind::Deleted
+            }
+            // The binding is `#[non_exhaustive]`, so a value this crate was not
+            // built against can arrive; it maps to Invalid instead of panicking.
+            _ => LocalFileChangeKind::Invalid,
+        }
+    }
+}
+
+/// Whether Steam reported an OS path or an API file name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalFilePathKind {
+    Invalid,
+    Absolute,
+    ApiFilename,
+}
+
+impl From<sys::ERemoteStorageFilePathType> for LocalFilePathKind {
+    fn from(raw: sys::ERemoteStorageFilePathType) -> Self {
+        match raw {
+            sys::ERemoteStorageFilePathType::k_ERemoteStorageFilePathType_Absolute => {
+                LocalFilePathKind::Absolute
+            }
+            sys::ERemoteStorageFilePathType::k_ERemoteStorageFilePathType_APIFilename => {
+                LocalFilePathKind::ApiFilename
+            }
+            _ => LocalFilePathKind::Invalid,
+        }
+    }
+}
+
+/// One entry of [`RemoteStorage::local_file_changes`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalFileChange {
+    pub path: String,
+    pub change: LocalFileChangeKind,
+    pub path_kind: LocalFilePathKind,
+}
+
+/// Ends the Steam write batch on drop.
+pub struct FileWriteBatch {
+    rs: *mut sys::ISteamRemoteStorage,
+}
+
+impl Drop for FileWriteBatch {
+    fn drop(&mut self) {
+        unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_EndFileWriteBatch(self.rs);
+        }
+    }
 }
 
 bitflags! {
@@ -359,6 +553,131 @@ pub struct SteamFileInfo {
     pub name: String,
     /// The size of the file in bytes
     pub size: u64,
+}
+
+/// Offline guards for the one-shot cloud file calls. These need no Steam
+/// client: they pin the argument checks that run before any FFI call.
+#[cfg(test)]
+mod offline_tests {
+    use super::*;
+
+    #[test]
+    fn embedded_nul_in_a_cloud_file_name_is_rejected_not_panicked() {
+        assert!(cloud_file_name("saves/slot1").is_ok());
+        assert!(matches!(
+            cloud_file_name("slot1\0second"),
+            Err(SteamError::InvalidParameter)
+        ));
+    }
+
+    #[test]
+    fn lengths_steam_cannot_express_are_rejected_not_clipped() {
+        assert_eq!(cloud_chunk_len(0).unwrap(), 0);
+        assert_eq!(cloud_chunk_len(4096).unwrap(), 4096);
+        assert_eq!(cloud_chunk_len(i32::MAX as usize).unwrap(), i32::MAX);
+        for too_big in [i32::MAX as usize + 1, usize::MAX] {
+            assert!(
+                matches!(cloud_chunk_len(too_big), Err(SteamError::InvalidParameter)),
+                "{too_big} bytes should not be accepted as an int32 length"
+            );
+        }
+    }
+
+    #[test]
+    fn local_change_kinds_map_onto_the_variants_steam_defines() {
+        use sys::ERemoteStorageLocalFileChange as C;
+        let mapped: Vec<_> = [
+            C::k_ERemoteStorageLocalFileChange_Invalid,
+            C::k_ERemoteStorageLocalFileChange_FileUpdated,
+            C::k_ERemoteStorageLocalFileChange_FileDeleted,
+        ]
+        .iter()
+        .map(|k| LocalFileChangeKind::from(*k))
+        .collect();
+        assert_eq!(
+            mapped,
+            vec![
+                LocalFileChangeKind::Invalid,
+                LocalFileChangeKind::Updated,
+                LocalFileChangeKind::Deleted
+            ]
+        );
+        // Every Steam variant has to land on a distinct safe variant, or two
+        // different states would read back as one.
+        for i in 0..mapped.len() {
+            for j in (i + 1)..mapped.len() {
+                assert_ne!(mapped[i], mapped[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn local_path_kinds_map_onto_the_variants_steam_defines() {
+        use sys::ERemoteStorageFilePathType as P;
+        let mapped: Vec<_> = [
+            P::k_ERemoteStorageFilePathType_Invalid,
+            P::k_ERemoteStorageFilePathType_Absolute,
+            P::k_ERemoteStorageFilePathType_APIFilename,
+        ]
+        .iter()
+        .map(|p| LocalFilePathKind::from(*p))
+        .collect();
+        assert_eq!(
+            mapped,
+            vec![
+                LocalFilePathKind::Invalid,
+                LocalFilePathKind::Absolute,
+                LocalFilePathKind::ApiFilename
+            ]
+        );
+        for i in 0..mapped.len() {
+            for j in (i + 1)..mapped.len() {
+                assert_ne!(mapped[i], mapped[j]);
+            }
+        }
+    }
+}
+
+/// Round-trips the one-shot file APIs. Needs a client, so it is ignored by
+/// default; run it with `cargo test -- --ignored`.
+#[test]
+#[serial]
+#[ignore = "requires a running Steam client"]
+fn test_one_shot_cloud_io() {
+    let client = Client::init().unwrap();
+    let rs = client.remote_storage();
+
+    let payload = b"steamworks-rs one-shot write".to_vec();
+    rs.write_file("qoder-one-shot.bin", &payload).unwrap();
+    // A second, empty write must not be sent as a null payload.
+    rs.write_file("qoder-empty.bin", &[]).unwrap();
+
+    assert_eq!(rs.read_file("qoder-one-shot.bin", 4096).unwrap(), payload);
+    assert_eq!(rs.read_file("qoder-empty.bin", 4096).unwrap(), Vec::new());
+    // Asking for fewer bytes than the file holds truncates, it does not fail.
+    assert_eq!(rs.read_file("qoder-one-shot.bin", 4).unwrap().len(), 4);
+    assert!(matches!(
+        rs.read_file("qoder-does-not-exist.bin", 16),
+        Err(SteamError::FileNotFound)
+    ));
+
+    let _batch = rs.begin_write_batch().unwrap();
+    rs.write_file("qoder-in-batch.bin", b"batched").unwrap();
+    drop(_batch);
+
+    for change in rs.local_file_changes() {
+        println!("{change:?}");
+    }
+    if let Some((total, available)) = rs.quota() {
+        println!("quota: {available} of {total} bytes free");
+    }
+    for name in [
+        "qoder-one-shot.bin",
+        "qoder-empty.bin",
+        "qoder-in-batch.bin",
+    ] {
+        rs.file(name).delete();
+    }
 }
 
 #[test]

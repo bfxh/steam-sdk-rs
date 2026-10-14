@@ -39,6 +39,16 @@ plus the callbacks the wrapper can deliver.
   `EHTMLKeyModifiers` is a `#[repr(i32)]` enum whose combinations have no valid discriminant
   (constructing one would be undefined behaviour, not merely a wrong number), and this SDK's
   `isteamhtmlsurface.h` declares no `RunFrame`, so the wrapper invents none.
+- `RemoteStorage` one-shot cloud file I/O — the interface was bound, but only through the
+  streaming/async path, so every read or write needed a `SteamFileWriter`/`SteamFileReader`.
+  Added: `write_file` and `read_file` (whole file in one call), `quota`, `local_file_changes`
+  (what changed locally since last time, for conflict handling), and `begin_write_batch`, whose
+  guard ends the Steam batch on drop. Argument checks fail closed: an interior nul in a file name
+  and a length Steam's int32 cannot express both return `InvalidParameter` rather than panicking
+  or clipping. Steam's negative read count maps to `FileNotFound`, since it is the same answer for
+  a missing file, an undersized buffer and a failed read. `ISteamRemoteStorage` coverage: 19 of 59
+  binding functions called from `src/`, now 26; the remaining ones are mostly the retired legacy
+  Workshop surface that `ISteamUGC` supersedes.
 - `CallbackStream` behind the `futures` feature (`9575df6` history, `examples/stream_events.rs`),
   plus `SafeUgcUpdate`, a panic-free UGC update builder.
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has

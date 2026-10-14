@@ -634,6 +634,34 @@ ISteamNetworkingMessages / ISteamNetworkingSockets / ISteamNetworkingUtils / ISt
 `SteamAPI_X_vNNN` 形式的访问器（绑定里是 `_SteamAPI_` 中缀或指针传递），它们的方法在 `src/` 里确实被调用，
 但上面的正则看不见。所以 6.1 的"34 个接口"与本节的"29 个访问器"是两个分母，不能互相减。
 
+### 6.1c 接口闭合 ≠ 方法闭合（方法级尺，2026-10-14）
+
+缺口按"接口"数完了，按"方法"数还差得多。同一族函数名前缀，分母取绑定里声明的可调用数：
+
+```bash
+grep -ohE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" steamworks-sys/src/windows_bindings.rs | sort -u | wc -l  # 绑定
+grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l                                    # 已调
+```
+
+| 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
+|------|-----:|-----:|------|-----:|-----:|
+| ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
+| ISteamFriends | 78 | 27 | ISteamUtils | 37 | 16 |
+| ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | 16 |
+| ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
+| ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
+| ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | 4 |
+| ISteamScreenshots | 9 | 4 | | | |
+
+`ISteamRemoteStorage` 一行 2026-10-14 由本轮补齐一部分：新增 `FileWrite` / `FileRead` / `GetQuota` /
+`GetLocalFileChangeCount` + `GetLocalFileChange` / `BeginFileWriteBatch` + `EndFileWriteBatch`
+（19→26，逐个名字复核过：绑定的 59 个里 `src/` 现在调到 26 个）。
+**该接口剩下的 33 个未调方法绝大多数是退役的旧 Workshop 面**（`PublishWorkshopFile`、
+`UpdatePublishedFile*`、`UGCDownload`、`GetCachedUGC*`、`Enumerate*`、投票类）——它们的替代者是
+`ISteamUGC`（已封 60 个方法），**照搬过来会把同一件事实现两遍**，所以不列为待补。
+`ISteamInput`（48−18）与 `ISteamTimeline`（18−4）是下一批候选。
+
+
 ---
 
 ## 0.3 `cargo build` / `clippy` / `test` 实测结果
