@@ -571,7 +571,7 @@ impl UGC {
     }
 
     /// Starts an item update process using the panic-free
-    /// [`SafeUgcUpdate`](crate::SafeUgcUpdate) builder.
+    /// [`SafeUgcUpdate`] builder.
     ///
     /// Each setter on the returned value validates its input and returns
     /// `Result` instead of panicking on invalid paths or interior nul bytes.

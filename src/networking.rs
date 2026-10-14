@@ -1,7 +1,7 @@
 //! An older networking solution that is now deprecated.
 //!
-//! In the future you should use [`networking_sockets`][../networking_sockets], but for now the wrapper for the new API
-//! is still unfinished.
+//! In the future you should use [`networking_sockets`]; this
+//! interface is the older, deprecated networking solution.
 
 use super::*;
 

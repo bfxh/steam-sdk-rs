@@ -74,6 +74,10 @@ plus the callbacks the wrapper can deliver.
 - `steamworks-sys/src/windows_bindings.rs` was stored with mixed line endings; with our own
   sources pinned to `eol=lf` that made the release job's `cargo package` judge the tree dirty
   (`b83dc78`, verified line-ending-only with `git diff --cached --ignore-cr-at-eol`).
+- Doc comments: `src/networking.rs` had a malformed intra-doc link (`[../networking_sockets]`)
+  and still claimed the `ISteamNetworkingSockets` wrapper was "unfinished" — it is not. Six other
+  doc comments carried redundant explicit link targets. Rustdoc now runs with `-D warnings` in
+  CI, measured clean on both the default and `--all-features` sets before tightening.
 
 ### Changed
 

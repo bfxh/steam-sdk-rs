@@ -320,7 +320,7 @@ impl UserStats {
 
     /// Asynchronously requests global stats data, which is available for stats marked as "aggregated".
     ///
-    /// This call is asynchronous, with the results returned in [`GlobalStatsReceived`](crate::GlobalStatsReceived) callback.
+    /// This call is asynchronous, with the results returned in [`GlobalStatsReceived`] callback.
     ///
     /// # Arguments
     ///
@@ -372,7 +372,7 @@ impl UserStats {
     /// The specified stat must exist and be marked as "aggregated" in the Steamworks App Admin.
     ///
     /// Requires [`request_global_stats()`](Self::request_global_stats) to have been called
-    /// and a successful [`GlobalStatsReceived`](crate::GlobalStatsReceived) callback processed.
+    /// and a successful [`GlobalStatsReceived`] callback processed.
     ///
     /// # Arguments
     ///
@@ -404,7 +404,7 @@ impl UserStats {
     /// The specified stat must exist and be marked as "aggregated" in the Steamworks App Admin.
     ///
     /// Requires [`request_global_stats()`](Self::request_global_stats) to have been called
-    /// and a successful [`GlobalStatsReceived`](crate::GlobalStatsReceived) callback processed.
+    /// and a successful [`GlobalStatsReceived`] callback processed.
     ///
     /// # Arguments
     ///
@@ -440,7 +440,7 @@ impl UserStats {
     /// The specified stat must exist and be marked as "aggregated" in the Steamworks App Admin.
     ///
     /// Requires [`request_global_stats()`](Self::request_global_stats) to have been called
-    /// and a successful [`GlobalStatsReceived`](crate::GlobalStatsReceived) callback processed.
+    /// and a successful [`GlobalStatsReceived`] callback processed.
     ///
     /// # Arguments
     ///
@@ -480,7 +480,7 @@ impl UserStats {
     /// The specified stat must exist and be marked as "aggregated" in the Steamworks App Admin.
     ///
     /// Requires [`request_global_stats()`](Self::request_global_stats) to have been called
-    /// and a successful [`GlobalStatsReceived`](crate::GlobalStatsReceived) callback processed.
+    /// and a successful [`GlobalStatsReceived`] callback processed.
     ///
     /// # Arguments
     ///

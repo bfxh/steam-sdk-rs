@@ -65,6 +65,10 @@ jobs:
         run: cargo check --locked --all-targets $EXAMPLES $FEATURES
 
       - name: doc
+        # 文档链接必须是干净的：本机实测 `RUSTDOCFLAGS=-D warnings cargo doc`
+        # 在默认与 --all-features 两种特征集下都通过后，才在这里收紧。
+        env:
+          RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked --no-deps $FEATURES --document-private-items
 
       - name: test (lib)
