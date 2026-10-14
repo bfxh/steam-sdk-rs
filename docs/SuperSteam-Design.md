@@ -813,7 +813,35 @@ times until all app dependencies have been returned" —— 一个分页流，�
 
 
 
-### 6.1f `CallbackResult` 的流式债（2026-10-14 新发现，已由门钉住）
+### 6.1f 两条"测试看不见"的门（2026-10-14）
+
+这两处的共同点不是"重要"，而是**任何测试都不会因为它变红**，所以只能靠门：
+
+1. **Vendored SDK 清单**（`scripts/ci/sdk_vendored.py` + `compare_hashes.py`，基线
+   `baselines/sdk_vendored.txt`，46 条 = 45 个 `.h` + `steam_api.json`）。
+   绑定是生成后**入库**的，所以有人改了 Valve 头文件时，crate 自己的测试一个都不会红——
+   改动只在下一次重生成时显形，而那等于悄悄换了"这个 wrapper 在封谁"。
+   判据分三类各自指名（改动/新增/删除语义不同，混成一句"清单不符"就丢了方向）；
+   另加两条**工具自检**：清单条目 <10 或 SDK 目录不在 ⇒ `rc=2`（是尺子坏了，不是代码错了）。
+   实测控制（每次退出码都从门本身取，不经管道 tail）：追加一行 ⇒ `changed` rc=1；
+   伪造一条记录 ⇒ `added` rc=1；清单缺失 ⇒ rc=1 且同时点出"没提交/被 ignore"两种成因；
+   改名 ⇒ 被生产者自己的地板抓住（45 < 46，rc=2）；每次还原都用 `cmp` 逐字节确认。
+2. **编译覆盖面**（`scripts/ci/compile_coverage.py`）。cargo 对声明了 `required-features`
+   的目标是**静默跳过**，`--all-targets` 也不救；所以"`examples` job 绿"从来不等于
+   `stream_events` 被编过。门把两头都断言，且都是从 cargo 的 JSON 里取实际编译到的目标名：
+   开 `steamworks/futures` ⇒ 必须含 `stream_events`；不开 ⇒ 必须**不含**。
+   后半条是对前半条立论前提的自检：哪天 cargo 不再跳过了，这条门要判红并要求重写判据，
+   而不是继续"通过"一条已经无意义的断言。本机实测
+   `['http','inventory','stream_events']` / `['http','inventory']`。
+
+顺带纠自己一条错账：`.gitattributes` 原写"46 个 Valve SDK 头文件"，`git ls-files --eol`
+复算后是 **46 个 vendored 文本文件 = 45 个头 + `steam_api.json`**，已改。
+这两条门都按上一条教训补了步骤：**先 `git commit`，再 `git clone` 到干净签出里跑正例**——
+上一次就是因为我拿"暂存但未提交"的树去 clone，clone 里根本没有新脚本，跑出来的红是假红。
+
+
+
+### 6.1g `CallbackResult` 的流式债（2026-10-14 新发现，已由门钉住）
 
 复算方法级缺口时顺手扫了一遍 `impl_callback!`，量出一个此前没登记的面：
 `CallbackResult` 的文档自称"all possible callback results"，而 `CallbackStream` 只认这个 sum type。

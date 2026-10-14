@@ -229,6 +229,29 @@ plus the callbacks the wrapper can deliver.
   `cargo tree -p steamworks -e normal,build -i <crate>`, which only reaches the example members --
   so none of them is in a published `.crate`. Any new advisory turns CI red instead of printing a
   hint nobody is required to read.
+- Two more gates, both verifying something no test can see:
+  - **Vendored SDK manifest** -- 45 headers plus `steam_api.json` under
+    `steamworks-sys/lib/steam/public/steam/` are hashed and compared against
+    `scripts/ci/baselines/sdk_vendored.txt`. Editing a Valve header reddens no test: the
+    generated bindings are checked in, so the change only surfaces the next time somebody
+    regenerates them, which silently changes what this wrapper is a wrapper *of*. Controls,
+    each with the exit code read from the gate rather than from a pipeline's tail: one
+    appended line reports `changed` (rc=1), a fabricated record reports `added` (rc=1), a
+    missing manifest names its two possible causes (rc=1), a five-record manifest and a
+    missing SDK directory are treated as tooling failures (rc=2), and renaming a header is
+    caught by the producer's own floor (45 < 46, rc=2). Restores verified by byte-compare.
+    Corrected a claim of mine in `.gitattributes` along the way: the vendored CRLF set is 46
+    files = 45 headers + the API json, not "46 headers".
+  - **Compile coverage** -- cargo skips a target whose `required-features` are not enabled and
+    `--all-targets` does not override that, so a green job can have never looked at
+    `examples/stream_events.rs`. The gate asserts both halves from cargo's own JSON: with
+    `--features steamworks/futures` the target is built; without it the target is *not* built.
+    The second half checks the premise the first half stands on, so if cargo ever stops
+    skipping, the gate says so instead of quietly becoming meaningless. Measured:
+    `['http', 'inventory', 'stream_events']` with the feature, `['http', 'inventory']` without.
+- These two were then run from a clean `git clone` -- the step that was missing when the first
+  batch of gates shipped with their baselines git-ignored.
+
 - Two in-repo gates now watch the callback surface (`master`, this release).
   `every_callback_is_streamable_or_listed_as_debt` parses every `impl_callback!` in the crate
   (recursively -- the first version of the ruler looked only at `src/*.rs` and missed
