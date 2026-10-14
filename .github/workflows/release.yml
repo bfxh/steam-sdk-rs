@@ -8,6 +8,14 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      # 只为把"tag 专用"的两步校验在**不打 tag、不建 Release** 的前提下跑一遍：
+      # 这两步是发布正确性的门，不能等到真发版才第一次执行。留空则跳过。
+      simulate_tag:
+        description: 填 v大.小.补丁 以演练 tag 校验（不会创建 Release）
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -40,15 +48,18 @@ jobs:
           sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
       - name: Tag must match the crate version
-        # workflow_dispatch 没有 v* tag，这一步只在校验真实发布时执行。
-        if: github.ref_type == 'tag'
+        # 真实 tag 时必查；`simulate_tag` 让这一步能在不打 tag 的情况下被演练。
+        # tag 值经 env 传入，不拼进 shell。
+        if: github.ref_type == 'tag' || inputs.simulate_tag != ''
+        env:
+          CHECK_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.simulate_tag }}
         run: |
           set -euo pipefail
           declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${CHECK_TAG#v}"
           echo "Cargo.toml version = $declared, tag = $tag"
           if [ "$declared" != "$tag" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $declared"
+            echo "::error::tag $CHECK_TAG does not match Cargo.toml version $declared"
             exit 1
           fi
           sys_declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' steamworks-sys/Cargo.toml | head -1)
@@ -60,7 +71,7 @@ jobs:
           esac
 
       - name: CHANGELOG must carry this version
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.simulate_tag != ''
         run: |
           set -euo pipefail
           declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
