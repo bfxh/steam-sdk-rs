@@ -291,7 +291,7 @@ impl Server {
                 sys::EBeginAuthSessionResult::k_EBeginAuthSessionResultExpiredTicket => {
                     AuthSessionError::ExpiredTicket
                 }
-                _ => unreachable!(),
+                _ => AuthSessionError::Unknown,
             })
         }
     }

@@ -1,1 +1,1 @@
-116  # lib tests reached with --all-features (101 passed + 15 ignored), measured 2026-10-15 with the file-type fallback tests
+118  # lib tests reached with --all-features (103 passed + 15 ignored), measured 2026-10-15 with the init-error fallback tests

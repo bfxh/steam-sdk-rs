@@ -538,6 +538,11 @@ pub enum SteamAPIInitError {
     /// Returned when the version of the steam client is too old to work with this version of the API.
     #[error("Steam client appears to be out of date")]
     VersionMismatch(String),
+    /// Steam answered with an init result this binding does not name. `k_ESteamAPIInitResult_OK`
+    /// reaches this arm today, because this type only describes failures -- the panic it replaced
+    /// was reachable by calling [`SteamAPIInitError::from_result_and_message`] with a success code.
+    #[error("unknown SteamAPI init result")]
+    Unknown(String),
 }
 
 impl SteamAPIInitError {
@@ -560,7 +565,39 @@ impl SteamAPIInitError {
             sys::ESteamAPIInitResult::k_ESteamAPIInitResult_VersionMismatch => {
                 SteamAPIInitError::VersionMismatch(err_string)
             }
-            _ => unreachable!(),
+            _ => SteamAPIInitError::Unknown(err_string),
         }
+    }
+}
+#[cfg(test)]
+mod init_error_tests {
+    use super::*;
+
+    /// `from_result_and_message` is public and takes any `ESteamAPIInitResult`, including the
+    /// success code -- the one value this error type never describes. That arm used to be
+    /// `unreachable!()`, so a caller asking "why did init fail" with `OK` panicked.
+    #[test]
+    fn a_success_code_becomes_unknown_instead_of_panicking() {
+        let mut message = [0i8; 1024];
+        message[0] = b'r' as i8;
+        let error = SteamAPIInitError::from_result_and_message(
+            sys::ESteamAPIInitResult::k_ESteamAPIInitResult_OK,
+            message,
+        );
+        assert!(matches!(error, SteamAPIInitError::Unknown(ref text) if text == "r"));
+        assert_eq!(error.to_string(), "unknown SteamAPI init result");
+    }
+
+    #[test]
+    fn the_named_failures_keep_their_own_messages() {
+        let mut message = [0i8; 1024];
+        for (index, byte) in b"no client".iter().enumerate() {
+            message[index] = *byte as i8;
+        }
+        let error = SteamAPIInitError::from_result_and_message(
+            sys::ESteamAPIInitResult::k_ESteamAPIInitResult_NoSteamClient,
+            message,
+        );
+        assert!(matches!(error, SteamAPIInitError::NoSteamClient(_)));
     }
 }

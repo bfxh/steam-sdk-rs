@@ -353,7 +353,7 @@ impl UpdateWatchHandle {
                 sys::EItemUpdateStatus::k_EItemUpdateStatusCommittingChanges => {
                     UpdateStatus::CommittingChanges
                 }
-                _ => unreachable!(),
+                _ => UpdateStatus::Unknown,
             };
             (status, progress, total)
         }
@@ -368,4 +368,7 @@ pub enum UpdateStatus {
     UploadingContent,
     UploadingPreviewFile,
     CommittingChanges,
+    /// Steam reported an update status this binding does not name; see
+    /// [`AuthSessionError::Unknown`] for why the arm exists.
+    Unknown,
 }

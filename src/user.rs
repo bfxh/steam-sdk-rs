@@ -109,7 +109,7 @@ impl User {
                 sys::EBeginAuthSessionResult::k_EBeginAuthSessionResultExpiredTicket => {
                     AuthSessionError::ExpiredTicket
                 }
-                _ => unreachable!(),
+                _ => AuthSessionError::Unknown,
             })
         }
     }
@@ -168,7 +168,7 @@ impl User {
                 sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultNoAuth => {
                     UserHasLicense::NoAuth
                 }
-                _ => unreachable!(),
+                _ => UserHasLicense::Unknown,
             }
         }
     }
@@ -192,6 +192,14 @@ pub enum AuthSessionError {
     /// The ticket has expired
     #[error("ticket has expired")]
     ExpiredTicket,
+    /// Steam answered with a result code this binding does not name.
+    ///
+    /// The sys enum is `#[non_exhaustive]`, so the mapping's wildcard arm cannot be dropped;
+    /// it used to be `unreachable!()`, which panicked in the caller's process. Not reachable
+    /// with today's headers -- every declared code is named -- which is why there is no test
+    /// for this arm: the honest guard is the panic-site ledger, not a constructed lie.
+    #[error("unknown authentication session result")]
+    Unknown,
 }
 
 #[test]
@@ -352,7 +360,7 @@ impl_callback!(cb: ValidateAuthTicketResponse_t => ValidateAuthTicketResponse {
             sys::EAuthSessionResponse::k_EAuthSessionResponseAuthTicketNetworkIdentityFailure => {
                 Err(AuthSessionValidateError::AuthTicketNetworkIdentityFailure)
             }
-            _ => unreachable!(),
+            _ => Err(AuthSessionValidateError::Unknown),
         },
     }
 });
@@ -454,6 +462,10 @@ pub enum AuthSessionValidateError {
     /// The ticket's networking identity is the one passed to [`User::authentication_session_ticket`].
     #[error("the authenticator's network identity does not match the one in the ticket")]
     AuthTicketNetworkIdentityFailure,
+    /// Steam answered with a code this binding does not name; see
+    /// [`AuthSessionError::Unknown`].
+    #[error("unknown auth session response")]
+    Unknown,
 }
 
 /// Results from [`User::user_has_license_for_app`]
@@ -461,6 +473,9 @@ pub enum AuthSessionValidateError {
 pub enum UserHasLicense {
     /// The user has a license for the specified app.
     HasLicense,
+    /// Steam answered with a result this binding does not name; see
+    /// [`AuthSessionError::Unknown`] for why the arm exists and why it is not tested.
+    Unknown,
     /// The user does not have a license for the specified app.
     DoesNotHaveLicense,
     /// The user has not been authenticated.
