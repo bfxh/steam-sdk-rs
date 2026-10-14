@@ -76,8 +76,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      # 只有勾选 commit_bindings 时这一步才会推送；读取权限在上面已经足够。
-      contents: ${{ inputs.commit_bindings && 'write' || 'read' }}
+      contents: read
+    outputs:
+      changed: ${{ steps.drift.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -121,20 +122,49 @@ jobs:
           name: bindings-drift
           path: /tmp/bindings.diff
 
-      - name: Commit regenerated bindings
-        if: inputs.commit_bindings == true && steps.drift.outputs.changed == 'true'
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add steamworks-sys/src
-          git commit -m "chore: regenerate bindings from the bundled SDK headers"
-          git push origin "HEAD:${BRANCH}"
-
       - name: Explain
         if: always()
         run: |
           echo "默认行为：只报告漂移并附 diff。要落盘请勾 commit_bindings；"
           echo "之后仍需 CI 的 quality 矩阵在三平台编译这份生成代码。"
+
+  # 写权限只给这一个作业，而且必须是人在 workflow_dispatch 上明确勾选。
+  # 之前把 `contents: ${{ inputs... }}` 写在 permissions 里是错的：`inputs`
+  # 上下文只在 workflow_dispatch 存在，其他事件下整条 workflow 校验失败，
+  # 表现为"跑了但一个 job 都没有"的红。
+  apply:
+    needs: compare
+    if: github.event_name == 'workflow_dispatch' && inputs.commit_bindings == true && needs.compare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libclang and system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libclang-dev clang libasound2-dev libudev-dev
+
+      - name: Collect regenerated bindings
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: steamworks-sys/src/
+          merge-multiple: true
+
+      - name: Commit regenerated bindings
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          rustfmt --edition 2021 steamworks-sys/src/*_bindings.rs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add steamworks-sys/src
+          git diff --cached --quiet && { echo "无改动可提交"; exit 0; }
+          git commit -m "chore: regenerate bindings from the bundled SDK headers"
+          git push origin "HEAD:${BRANCH}"
