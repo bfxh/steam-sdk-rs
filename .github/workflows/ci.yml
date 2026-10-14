@@ -12,6 +12,12 @@ env:
 permissions:
   contents: read
 
+# 同一条线上只跑最新一次：连推几个提交时，被后续提交取代的排队任务直接取消，
+# 否则 `quality-extra`（要从源码编三个工具，十几分钟）会把 runner 排满。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # 质量门禁：fmt / clippy / check / doc / test
   # 成功即绿。clippy 关闭 -D warnings，等 CI 实测确认没有新增真实问题再收紧。
@@ -30,6 +36,7 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         toolchain: [stable, "1.80.0"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     env:
       FEATURES: ${{ matrix.toolchain == 'stable' && '--all-features' || '' }}
     steps:
@@ -92,6 +99,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -121,6 +129,7 @@ jobs:
         os: [ubuntu-latest]
         toolchain: [nightly]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 

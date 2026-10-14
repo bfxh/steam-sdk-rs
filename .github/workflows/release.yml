@@ -1,8 +1,8 @@
 name: Release
 
 # 打 tag（v大.小.补丁）即出发布物：两个 crate 的 .crate 包 + rustdoc 站点。
-# 不自动发 crates.io —— `steamworks` 这个名字的所有权不在本仓，发布只能由
-# 维护者用 `workflow_dispatch` 手动触发，并且必须自己带 CRATESIO_TOKEN。
+# **不发 crates.io**：`steamworks` 这个名字的所有权在原作者手里，本仓只出
+# GitHub Release 附件，发布到 registry 只能是维护者自己的决定。
 on:
   push:
     tags:
@@ -12,13 +12,75 @@ on:
 permissions:
   contents: write
 
+# 同一个 ref 上只留最新一次发布构建；旧的排队任务直接取消，避免两次构建抢着
+# 建同一个 Release。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # 先验"这个 tag 说的东西和树里的一致"，再花时间做发布物。
+  # 没有这一步，完全可能发出一个标签写 0.14.0、Cargo.toml 还是 0.13.1、
+  # CHANGELOG 里根本没有对应条目的包。
+  preflight:
+    name: Preflight checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Tag must match the crate version
+        # workflow_dispatch 没有 v* tag，这一步只在校验真实发布时执行。
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "Cargo.toml version = $declared, tag = $tag"
+          if [ "$declared" != "$tag" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $declared"
+            exit 1
+          fi
+          sys_declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' steamworks-sys/Cargo.toml | head -1)
+          sys_required=$(sed -n 's/^steamworks-sys = .*version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          echo "steamworks-sys version = $sys_declared, required by root = $sys_required"
+          case "$sys_declared" in
+            "$sys_required"*) ;;
+            *) echo "::error::steamworks-sys is $sys_declared but root requires $sys_required" && exit 1 ;;
+          esac
+
+      - name: CHANGELOG must carry this version
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          declared=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          if grep -q "^## \[$declared\]" CHANGELOG.md; then
+            echo "CHANGELOG has a section for $declared"
+          else
+            echo "::error::CHANGELOG.md has no '## [$declared]' section -- move Unreleased into a dated entry before releasing"
+            exit 1
+          fi
+
+      - name: Tests and docs must be clean first
+        run: |
+          cargo test --locked --all-features --lib
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features --document-private-items
+
   artifacts:
     name: Build release artifacts
+    needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
