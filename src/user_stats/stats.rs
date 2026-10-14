@@ -209,15 +209,22 @@ impl AchievementHelper<'_> {
         }
     }
 
-    /// Gets the icon for an achievement.
+    /// Gets the icon for an achievement as RGBA bytes.
     ///
-    /// The image is returned as a handle to be used with `ISteamUtils::GetImageRGBA` to get
-    /// the actual image data.*
+    /// Steam hands back an image *handle* (`isteamuserstats.h:134`: "Gets the icon of the
+    /// achievement, which is a handle to be used in `ISteamUtils::GetImageRGBA()`, or 0 if
+    /// none set"); this function resolves that handle into the pixel buffer and discards it,
+    /// so the returned `Vec<u8>` is `width * height * 4` bytes.
     ///
-    /// **Note: This is handled within the function. Returns a `Vec<u8>` buffer on success,
-    /// which can be converted into the image data and saved to disk (e.g. via external RGBA to image crate).*
-    /// ** Note: This may return None if Steam has not retrieved the icon yet. In that case an `UserAchievementIconFetched` callback will be processed
-
+    /// `None` means no image is in hand right now. Four measured paths reach it: the handle
+    /// is 0, `GetImageSize` fails, the icon is not the 64x64 this getter insists on, or
+    /// `GetImageRGBA` fails.
+    ///
+    /// A zero handle is ambiguous by design -- "A return value of 0 may indicate we are still
+    /// fetching data, and you can wait for the `UserAchievementIconFetched_t` callback which
+    /// will notify you when the bits are ready. If the callback still returns zero, then there
+    /// is no image set for the specified achievement." So retry after that callback before
+    /// concluding the achievement has no icon.
     pub fn get_achievement_icon(&self) -> Option<Vec<u8>> {
         Some(self.internal_get_achievement_icon(true)?.0)
     }

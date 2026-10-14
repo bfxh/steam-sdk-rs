@@ -1466,10 +1466,12 @@ impl NetworkingMessage {
 extern "C" fn free_rust_message_buffer(message: *mut sys::SteamNetworkingMessage_t) {
     // Panic in code called by C is undefined behaviour
     if let Err(e) = catch_unwind(|| unsafe {
-        let buffer =
-            std::slice::from_raw_parts_mut((*message).m_pData, (*message).m_cbSize as usize);
-        // Create the box again and drop it immediately
-        let _ = Box::from_raw(buffer.as_mut_ptr());
+        let data = (*message).m_pData as *mut u8;
+        let len = (*message).m_cbSize as usize;
+        // `set_data` forgot a `Box<[u8]>`, so the pointer has to come back as the
+        // same fat pointer: `Box::from_raw` of the bare `*mut c_void` would free a
+        // `m_cbSize`-byte allocation with a one-byte layout.
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, len));
     }) {
         eprintln!("{:?}", e);
     }

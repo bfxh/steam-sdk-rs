@@ -113,6 +113,19 @@ jobs:
           bash scripts/ci/test_floor.sh lib
           bash scripts/ci/test_floor.sh doc
 
+      # clippy 的 `correctness` / `suspicious` 两类按 clippy 自己的定义就是"大概是 bug"，
+      # 不是风格偏好，所以这里零容忍：不带基线、不带百分比、不允许"以后再说"。
+      # 2026-10-15 第一次跑就抓到 6 处，其中 `free_rust_message_buffer` 用
+      # `Box::from_raw(*mut c_void)` 重建 `Box<[u8]>`：实测尺（E:/tmp/alloc_probe.rs）量出
+      # alloc size=4096 / dealloc size=1 同一指针，即按错误布局释放。
+      # 只在 stable 臂跑：MSRV 臂的 clippy 是 1.80 的旧 lint 集，两类会少判几条。
+      # 门禁还自带三道地板：cargo 没跑起来 / 没编出两个 crate 的 artifact / JSON 解析不动，
+      # 都算"没判定"（退出码 2）而不是绿；源码里每一处 `#[allow(clippy::…)]` 也进了台账，
+      # 多一条即红——否则"这条门一条都没报"可能只是因为它被人静音了。
+      - name: clippy correctness/suspicious (zero tolerance)
+        if: matrix.toolchain == 'stable'
+        run: python3 scripts/ci/clippy_gate.py
+
   # 示例与库本体分开编译，有两个实测原因：
   # 1. 示例是各自独立的 workspace 成员，不加 --workspace 就永远不会被编译，
   #    只能靠人手动跑才发现它们烂了；

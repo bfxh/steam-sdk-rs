@@ -1,7 +1,7 @@
-src/networking_types/mod.rs 1733
+src/networking_types/mod.rs 1735
 src/lib.rs 1355
+src/friends/mod.rs 1321
 src/networking_sockets.rs 1314
-src/friends/mod.rs 1299
 src/matchmaking.rs 1297
 src/inventory.rs 966
 src/user_stats.rs 868
@@ -16,7 +16,7 @@ src/error.rs 566
 src/http.rs 566
 src/networking_types/config.rs 551
 src/app.rs 550
-src/ugc/types.rs 521
+src/ugc/types.rs 519
 src/callback.rs 502
 src/parties.rs 499
 src/ugc/query.rs 487
@@ -26,7 +26,7 @@ src/networking_messages.rs 372
 src/ugc/update.rs 371
 src/screenshots.rs 329
 src/server_stats.rs 309
-src/user_stats/stats.rs 269
+src/user_stats/stats.rs 276
 src/networking.rs 257
 src/input.rs 248
 src/networking_utils.rs 242

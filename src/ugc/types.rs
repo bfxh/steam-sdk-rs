@@ -15,9 +15,7 @@ pub struct UGC {
 }
 
 // TODO: should come from sys, but I don't think its generated.
-#[allow(non_upper_case_globals)]
-
-/// Worshop item ID
+/// Workshop item ID
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PublishedFileId(pub u64);

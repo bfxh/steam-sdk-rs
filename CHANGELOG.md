@@ -190,8 +190,23 @@ plus the callbacks the wrapper can deliver.
     that *reached* the runner. `cargo test` with a filter that matches nothing still
     exits 0 and prints `test result: ok. 0 passed`, which is how a green job can prove
     nothing; the gate refuses a zero run and a run below the registered floor
-    (lib 102, doc 16 -- measured, not guessed). Control: raising the floor by one turned
+    (lib 103, doc 16 -- measured, not guessed; lib moved from 102 when `game_played` gained
+    its layout test). Control: raising the floor by one turned
     it red with the count printed.
+  - `clippy correctness/suspicious (zero tolerance)` runs `cargo clippy --locked --all-targets
+    --all-features -- -D clippy::correctness -D clippy::suspicious` and fails on any hit. These
+    two categories are clippy's own "probably a bug" buckets, so there is no baseline to slide
+    and no percentage to argue about. Four controls, each with the exit code read from the gate:
+    re-inserting one `.to_owned()` printed `clippy::suspicious_to_owned: src/error.rs:550` and
+    exited 1 (C1); adding a second `#[allow(clippy::…)]` exited 1 with
+    "2 clippy suppressions in the sources, 1 registered" (C2) -- because a suppressed lint is
+    otherwise this gate's blind spot, so every suppression in the hand-written sources is in a
+    ledger that only a deliberate commit may change; a syntax error exited 2 with "failed for a
+    reason outside the two denied categories" instead of claiming zero findings (C3); an unknown
+    feature, where cargo never reaches the lint pass, exited 2 with "the gate has no verdict, so
+    it refuses to report clean" (C4). A first version of the floor ordering reported C1 as
+    "no compiled artifact for ['steamworks']" -- true but not the verdict, since a denied lint
+    *should* stop that crate from producing an artifact; the findings are now read first.
   - `feature matrix` builds each optional feature alone (`raw-bindings`, `serde`,
     `image`, `futures`) plus the feature-free build, because `--all-features` hides a
     feature whose own `cfg` block rotted -- and the first person to hit that is a user

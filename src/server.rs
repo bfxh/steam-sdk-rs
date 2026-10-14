@@ -774,7 +774,7 @@ pub struct GSClientDeny {
 impl_callback!(cb: GSClientDeny_t => GSClientDeny {
     let deny_text = unsafe {
         let cstr = CStr::from_ptr(cb.m_rgchOptionalText.as_ptr() as *const c_char);
-        cstr.to_string_lossy().to_owned().into_owned()
+        cstr.to_string_lossy().into_owned()
     };
 
     GSClientDeny {

@@ -991,7 +991,7 @@ impl Friend {
             let mut info: sys::FriendGameInfo_t = std::mem::zeroed();
             if sys::SteamAPI_ISteamFriends_GetFriendGamePlayed(self.friends, self.id.0, &mut info) {
                 Some(FriendGame {
-                    game: GameId(std::mem::transmute(info.m_gameID)),
+                    game: GameId(info.m_gameID.__bindgen_anon_1.m_ulGameID),
                     game_address: info.m_unGameIP.into(),
                     game_port: info.m_usGamePort,
                     query_port: info.m_usQueryPort,
@@ -1279,6 +1279,28 @@ mod state_mapping_tests {
         assert_eq!(
             relationship_from(R::k_EFriendRelationshipMax),
             FriendRelationship::Unknown
+        );
+    }
+
+    #[test]
+    fn game_id_field_read_covers_the_whole_union() {
+        // `game_played` reads `m_ulGameID` instead of transmuting the union. That is
+        // only equivalent while the union is exactly one `u64` wide: a wider binding
+        // would make the field read silently drop bytes, which no compile error would
+        // catch. This assert is the lock for that assumption.
+        assert_eq!(
+            std::mem::size_of::<sys::CGameID>(),
+            std::mem::size_of::<u64>(),
+            "CGameID must stay a single 64-bit union for m_ulGameID to be the whole value"
+        );
+        let id = sys::CGameID {
+            __bindgen_anon_1: sys::CGameID__bindgen_ty_1 {
+                m_ulGameID: 0x0100_0000_0000_0421,
+            },
+        };
+        assert_eq!(
+            unsafe { id.__bindgen_anon_1.m_ulGameID },
+            0x0100_0000_0000_0421
         );
     }
 }
