@@ -1,7 +1,7 @@
 src/networking_types.rs 2271
-src/friends.rs 1501
 src/lib.rs 1355
 src/networking_sockets.rs 1314
+src/friends/mod.rs 1299
 src/matchmaking.rs 1297
 src/inventory.rs 966
 src/user_stats.rs 868
@@ -29,6 +29,7 @@ src/user_stats/stats.rs 269
 src/networking.rs 257
 src/input.rs 248
 src/networking_utils.rs 242
+src/friends/chat.rs 216
 src/safe_ugc.rs 216
 src/parental.rs 191
 src/remote_play.rs 180
