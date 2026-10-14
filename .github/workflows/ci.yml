@@ -170,6 +170,28 @@ jobs:
 
       - run: bash scripts/ci/feature_matrix.sh
 
+      # required-features 的目标会被 cargo 静默跳过（--all-targets 也不编），
+      # 所以"作业跑了"不等于"这个示例被编过"。这里两头都验：开了特征必须编到，
+      # 不开特征必须编不到——后者同时是本门立论前提的自检。
+      - name: compile coverage (no silently-skipped targets)
+        run: python3 scripts/ci/compile_coverage.py
+
+  # 随仓的 Valve SDK 文本文件（45 个头 + steam_api.json）被改动不会让任何测试变红：
+  # 绑定是生成后入库的，头文件被动过只会在下次重生成时显形，而那等于悄悄换了
+  # "这个 wrapper 是在封谁"。清单把改动/新增/删除都变成指名判红。
+  vendored:
+    name: vendored SDK manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: vendored files match the manifest
+        run: |
+          set -uo pipefail
+          python3 scripts/ci/sdk_vendored.py > "$RUNNER_TEMP/vendored.txt"
+          python3 scripts/ci/compare_hashes.py scripts/ci/baselines/sdk_vendored.txt "$RUNNER_TEMP/vendored.txt"
+
   # 静态质检：unsafe 边界、死依赖、依赖漏洞。
   quality-extra:
     strategy:

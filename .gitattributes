@@ -1,5 +1,5 @@
 # 只管自己写的文本：钉住 LF，这样三个平台签出的源码字节才可比。
-# 没有用 `* text=auto`，因为随仓的 46 个 Valve SDK 头文件在索引里本来就是
+# 没有用 `* text=auto`，因为随仓的 46 个 Valve 文件（45 个 SDK 头 + steam_api.json，
 # CRLF（`git ls-files --eol` 实测 i/crlf=46，全部在 steamworks-sys/lib/ 下）；
 # 全局 text 会把它们一次性重规范成 LF，产生一个和任何真实改动无关的 46 文件差异。
 *.rs text eol=lf
