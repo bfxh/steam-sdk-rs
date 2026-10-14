@@ -12,7 +12,7 @@ the design notes all live here (no submodules).
 | --- | --- |
 | `src/` | the safe bindings |
 | `steamworks-sys/` | bindgen-generated FFI, one bindings file per platform |
-| `examples/` | examples: `stream_events.rs` (needs `--features futures`), `inventory.rs`, `http.rs`, and the multi-file game/networking demos. All of them are compile-checked by CI; running any of them needs a live Steam client, and they are not run-verified here. |
+| `examples/` | examples: `stream_events.rs` (needs `--features futures`), `inventory.rs`, `http.rs`, and the multi-file game/networking demos. CI compiles every one, explicitly enabling `steamworks/futures` so the feature-gated example is not silently skipped; running any of them needs a live Steam client, and they are not run-verified here. |
 | `docs/` | design rationale and defect analysis; start with `docs/SuperSteam-Design.md` |
 | `CHANGELOG.md` | what this fork adds over upstream, per commit, including CI and release automation |
 

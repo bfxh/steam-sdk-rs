@@ -107,7 +107,10 @@ jobs:
         with:
           key: examples-${{ matrix.os }}
 
-      - run: cargo check --locked --workspace --all-targets
+      # `stream_events.rs` 声明了 required-features = ["futures"]，不带该特征时
+      # cargo 会静默跳过它——`--all-targets` 也不编。这里显式打开，用包名限定
+      # 是为了让 --workspace 里不含该特征的成员（steamworks-sys）不报错。
+      - run: cargo check --locked --workspace --all-targets --features steamworks/futures
 
   # 静态质检：unsafe 边界、死依赖、依赖漏洞。
   # 工具必须装上（装不上就判红），但**发现内容**只作提示、不挡 PR。

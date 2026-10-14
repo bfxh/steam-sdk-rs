@@ -49,7 +49,11 @@ plus the callbacks the wrapper can deliver.
 - `Cargo.lock` is committed and every build step runs `--locked`, so dependency drift fails the
   gate instead of silently changing the graph (`477870d`).
 - `examples` job compiles the example crates on all three OSes (`845b430`). They are separate
-  workspace members, so before this job nothing built them.
+  workspace members, so before this job nothing built them. It enables `steamworks/futures`
+  explicitly: `stream_events.rs` declares `required-features = ["futures"]`, and cargo skips a
+  target whose required features are absent without failing — measured with
+  `cargo check --all-targets --message-format json`, which produces no `stream_events` artifact
+  until the feature is named.
 - `release.yml` builds both crates and the rustdoc site from the locked graph and attaches them
   to a GitHub Release on a `v*` tag (`b7fc121`). It does **not** publish to crates.io: the
   `steamworks` name belongs to the original author, so that remains a maintainer action.
