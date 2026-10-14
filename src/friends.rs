@@ -240,12 +240,14 @@ impl Friends {
         unsafe { sys::SteamAPI_ISteamFriends_GetFriendSteamLevel(self.friends, friend.raw()) }
     }
 
-    /// The key names present in a friend's rich presence, for use with
     /// The key names present in a friend's rich presence; feed them to
     /// [`Friend::rich_presence`] to read the values back.
     ///
     /// Steam owns the strings it returns here, so each one is copied out before
     /// the next query; a null entry is skipped rather than pushed empty.
+    ///
+    /// Keys only appear once Steam has the data: see
+    /// [`Friends::request_friend_rich_presence`].
     pub fn rich_presence_keys(&self, friend: SteamId) -> Vec<String> {
         let count = unsafe {
             sys::SteamAPI_ISteamFriends_GetFriendRichPresenceKeyCount(self.friends, friend.raw())
@@ -269,6 +271,19 @@ impl Friends {
             keys.push(key.to_string_lossy().into_owned());
         }
         keys
+    }
+
+    /// Asks Steam to fetch a friend's rich presence.
+    ///
+    /// Without this, [`Friends::rich_presence_keys`] and
+    /// [`Friend::rich_presence`] usually read nothing: Steam only pulls another
+    /// user's presence on request, and then reports changes through
+    /// [`FriendRichPresenceUpdate`]. Fire-and-forget, so there is no answer to
+    /// check.
+    pub fn request_friend_rich_presence(&self, friend: SteamId) {
+        unsafe {
+            sys::SteamAPI_ISteamFriends_RequestFriendRichPresence(self.friends, friend.raw());
+        }
     }
 
     /// Tells Steam the player is speaking in in-game voice, so the overlay does
@@ -405,7 +420,205 @@ impl Friends {
             sys::SteamAPI_ISteamFriends_IsClanChatAdmin(self.friends, clan_chat.raw(), user.raw())
         }
     }
+
+    /// Cached activity for a clan: `(online, in_game, chatting)`.
+    ///
+    /// `None` means Steam has no numbers for this clan yet -- it is not zero
+    /// activity. Ask for fresh figures with
+    /// [`Friends::download_clan_activity_counts`].
+    pub fn clan_activity(&self, clan: SteamId) -> Option<ClanActivity> {
+        let mut online = 0i32;
+        let mut in_game = 0i32;
+        let mut chatting = 0i32;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamFriends_GetClanActivityCounts(
+                self.friends,
+                clan.raw(),
+                &mut online,
+                &mut in_game,
+                &mut chatting,
+            )
+        };
+        ok.then_some(ClanActivity {
+            online,
+            in_game,
+            chatting,
+        })
+    }
+
+    /// Asks Steam to refresh activity figures for several clans at once.
+    ///
+    /// The answer arrives as `Ok(true/false)` carrying Steam's own success flag;
+    /// the figures themselves are then read back with
+    /// [`Friends::clan_activity`], because Steam does not put them in the
+    /// response.
+    pub fn download_clan_activity_counts<F>(
+        &self,
+        clans: &[SteamId],
+        callback: F,
+    ) -> Result<(), SteamError>
+    where
+        F: FnOnce(Result<bool, SteamError>) + 'static + Send,
+    {
+        // The FFI takes a CSteamID array; CSteamID is a transparent 64-bit
+        // wrapper, so the raw ids are laid out the same way.
+        let ids: Vec<u64> = clans.iter().map(|id| id.raw()).collect();
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamFriends_DownloadClanActivityCounts(
+                self.friends,
+                ids.as_ptr() as *mut sys::CSteamID,
+                ids.len() as i32,
+            )
+        };
+        unsafe {
+            register_call_result::<sys::DownloadClanActivityCountsResult_t, _>(
+                &self.inner,
+                api_call,
+                move |v, io_error| {
+                    callback(if io_error {
+                        Err(SteamError::IOFailure)
+                    } else {
+                        // Steam's own success flag, not a made-up error variant:
+                        // a rejected batch is reported as `Ok(false)`.
+                        Ok(v.m_bSuccess)
+                    })
+                },
+            );
+        }
+        Ok(())
+    }
+
+    /// Fetches a clan's officer list. Until the answer arrives,
+    /// [`Friends::clan_officer_count`] and [`Friends::clan_officers`] report
+    /// nothing useful for that clan.
+    pub fn request_clan_officer_list<F>(&self, clan: SteamId, callback: F) -> Result<(), SteamError>
+    where
+        F: FnOnce(Result<ClanOfficerListResponse, SteamError>) + 'static + Send,
+    {
+        let api_call =
+            unsafe { sys::SteamAPI_ISteamFriends_RequestClanOfficerList(self.friends, clan.raw()) };
+        unsafe {
+            register_call_result::<sys::ClanOfficerListResponse_t, _>(
+                &self.inner,
+                api_call,
+                move |v, io_error| {
+                    callback(if io_error {
+                        Err(SteamError::IOFailure)
+                    } else {
+                        Ok(ClanOfficerListResponse {
+                            clan: SteamId::from_raw(v.m_steamIDClan.m_steamid.m_unAll64Bits),
+                            officer_count: v.m_cOfficers,
+                            success: v.m_bSuccess != 0,
+                        })
+                    })
+                },
+            );
+        }
+        Ok(())
+    }
+
+    /// Asks Steam how many users follow `user`; the answer arrives as
+    /// [`FollowerCount`]. The sibling question is [`Friends::is_following`] --
+    /// they are separate round-trips because Steam answers them separately.
+    pub fn follower_count<F>(&self, user: SteamId, callback: F) -> Result<(), SteamError>
+    where
+        F: FnOnce(Result<FollowerCount, SteamError>) + 'static + Send,
+    {
+        let api_call =
+            unsafe { sys::SteamAPI_ISteamFriends_GetFollowerCount(self.friends, user.raw()) };
+        unsafe {
+            register_call_result::<sys::FriendsGetFollowerCount_t, _>(
+                &self.inner,
+                api_call,
+                move |v, io_error| {
+                    callback(if io_error {
+                        Err(SteamError::IOFailure)
+                    } else {
+                        to_steam_result(v.m_eResult).map(|()| FollowerCount {
+                            user: SteamId::from_raw(v.m_steamID.m_steamid.m_unAll64Bits),
+                            count: v.m_nCount,
+                        })
+                    })
+                },
+            );
+        }
+        Ok(())
+    }
+
+    /// Asks whether the local user follows `other`; the answer arrives as
+    /// [`IsFollowingResult`].
+    pub fn is_following<F>(&self, other: SteamId, callback: F) -> Result<(), SteamError>
+    where
+        F: FnOnce(Result<IsFollowingResult, SteamError>) + 'static + Send,
+    {
+        let api_call =
+            unsafe { sys::SteamAPI_ISteamFriends_IsFollowing(self.friends, other.raw()) };
+        unsafe {
+            register_call_result::<sys::FriendsIsFollowing_t, _>(
+                &self.inner,
+                api_call,
+                move |v, io_error| {
+                    callback(if io_error {
+                        Err(SteamError::IOFailure)
+                    } else {
+                        to_steam_result(v.m_eResult).map(|()| IsFollowingResult {
+                            target: SteamId::from_raw(v.m_steamID.m_steamid.m_unAll64Bits),
+                            following: v.m_bIsFollowing,
+                        })
+                    })
+                },
+            );
+        }
+        Ok(())
+    }
 }
+
+/// Cached clan activity from [`Friends::clan_activity`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClanActivity {
+    pub online: i32,
+    pub in_game: i32,
+    pub chatting: i32,
+}
+
+/// Answers [`Friends::request_clan_officer_list`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClanOfficerListResponse {
+    pub clan: SteamId,
+    /// How many officers to read back with [`Friends::clan_officers`].
+    pub officer_count: i32,
+    pub success: bool,
+}
+
+/// Answers [`Friends::follower_count`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FollowerCount {
+    pub user: SteamId,
+    pub count: i32,
+}
+
+/// Answers [`Friends::is_following`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IsFollowingResult {
+    pub target: SteamId,
+    pub following: bool,
+}
+
+/// A friend's rich presence changed, typically after
+/// [`Friends::request_friend_rich_presence`] or while they play.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FriendRichPresenceUpdate {
+    pub friend: SteamId,
+    /// The game the presence belongs to; Steam reports the current app id here.
+    pub app_id: AppId,
+}
+
+impl_callback!(cb: FriendRichPresenceUpdate_t => FriendRichPresenceUpdate {
+    Self {
+        friend: SteamId::from_raw(cb.m_steamIDFriend.m_steamid.m_unAll64Bits),
+        app_id: AppId(cb.m_nAppID),
+    }
+});
 
 /// Copies a Steam-owned C string out before the caller's next query, treating a
 /// null pointer as "not available" instead of dereferencing it.

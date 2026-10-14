@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | **27 → 47** | ISteamUtils | 37 | **16 → 32** |
+| ISteamFriends | 78 | **27 → 53** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -706,9 +706,16 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 另：同批次补上**公会（clan）同步面**（27→47 里的后 11 个调用）：`clan_count`/`clans`、
 `clan_name`/`clan_tag`（Steam 未缓存时返回 `None` 而不是空字符串——"没数据"和"没名字"是两回事）、
 `clan_owner`、`clan_officer_count`/`clan_officers`、`is_clan_public`/`is_clan_official_game_group`、
-`clan_chat_member_count`、`is_clan_chat_admin`。 officer 那两个的可用前提是先取回公会官员列表
-（`RequestClanOfficerList` 异步，**尚未封**，已记为待补）。
-`IsFollowing` 与 `GetFollowerCount` 都返回 `SteamAPICall_t`（异步），不是我原以为的 bool/int。
+`clan_chat_member_count`、`is_clan_chat_admin`。
+
+同日再补**公会/跟随的异步组**（47→53）：`request_clan_officer_list`（回应 `ClanOfficerListResponse`，
+它到之前 `clan_officer_count`/`clan_officers` 读不到有意义值 —— 这条前提写在方法上）、
+`download_clan_activity_counts`（只回 Steam 自己的 success 位，数字仍要用 `clan_activity` 回读，
+所以不假装响应带数据）、`clan_activity`（缓存值，`None` = 还没数据）、`follower_count`、`is_following`，
+外加 `request_friend_rich_presence` + `FriendRichPresenceUpdate` 回调 —— 没有这一下，
+`rich_presence_keys`/`rich_presence` 往往读到空。
+判据记录：`IsFollowing` 与 `GetFollowerCount` **返回 `SteamAPICall_t`**，不是头文件直觉上的 bool/int，
+所以走 `register_call_result` 而不是同步返回。
 `ISteamApps` 一行 2026-10-14 补到 **29/33**：DLC（数量、逐项列表含 `available` 归属位、安装/卸载、下载进度）、
 家庭共享借用位、`timed_trial`（**Steam 的 bool 才决定"是不是试用"，秒数 0 仍然是试用**，映射抽成
 `timed_trial_from` 以便钉住）、最早购买时间（0 → `None`）、`mark_content_corrupt`、
