@@ -1,7 +1,7 @@
-src/networking_types/mod.rs 1735
 src/friends/mod.rs 1321
 src/networking_sockets.rs 1314
 src/matchmaking.rs 1297
+src/networking_types/mod.rs 1100
 src/inventory.rs 966
 src/user_stats.rs 868
 src/html_surface.rs 842
@@ -23,12 +23,14 @@ src/parties.rs 499
 src/ugc/query.rs 487
 src/ugc/results.rs 473
 src/user.rs 468
+src/networking_types/end.rs 384
 src/networking_messages.rs 372
 src/ugc/update.rs 371
 src/lib_tests.rs 354
 src/screenshots.rs 329
 src/server_stats.rs 309
 src/user_stats/stats.rs 276
+src/networking_types/connection_info.rs 271
 src/networking.rs 257
 src/input.rs 248
 src/networking_utils.rs 242

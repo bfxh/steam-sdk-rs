@@ -300,6 +300,14 @@ plus the callbacks the wrapper can deliver.
   was lost in the move: `type_surface` still reports the same 79 keys and 786 inherent methods, and the
   lib suite still reaches exactly 109 tests -- the same count the floor was tightened to before
   the split, which is the evidence that no test was orphaned by the cut.
+- `src/networking_types/mod.rs` (1735) is cut twice more: the connection-end taxonomy --
+  `AppNetConnectionEnd`, `NetConnectionEnd` and the three mapping impls between them and raw
+  `i32` (384 lines) -- goes to `src/networking_types/end.rs`, and the read side of a live
+  connection (`NetConnectionInfo`, `NetConnectionRealTimeInfo`, `NetConnectionRealTimeLaneStatus`
+  with their `Debug`/`From` impls, 271 lines) goes to `src/networking_types/connection_info.rs`.
+  `mod.rs` is now 1100 and every public path is still `steamworks::networking_types::*`, because
+  both modules are re-exported with `pub use`. The same two checks carry the claim as before:
+  `type_surface` unchanged at 79 keys / 786 methods, and the lib suite still reaching 109 tests.
 - Building that split found a hole in the coverage ledger shipped in the same session: the
   `#[cfg(test)]` guard only recognised test modules written *inside* a file, so a test moved to
   `lib_tests.rs` would have had its Steam calls counted as wrapper coverage. Test-named files
