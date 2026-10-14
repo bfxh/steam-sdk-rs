@@ -51,6 +51,17 @@ plus the callbacks the wrapper can deliver.
   Workshop surface that `ISteamUGC` supersedes.
 - `CallbackStream` behind the `futures` feature (`9575df6` history, `examples/stream_events.rs`),
   plus `SafeUgcUpdate`, a panic-free UGC update builder.
+- `ISteamTimeline` completed -- 4 of its 18 functions were reachable; all 18 are now. Added:
+  `add_instantaneous_event`, `start_range_event`, `update_range_event`, `end_range_event`,
+  `remove_event`, `open_overlay_to_event`, `start_game_phase`, `end_game_phase`,
+  `set_game_phase_id`, `add_game_phase_tag`, `set_game_phase_attribute`,
+  `open_overlay_to_game_phase`, and the two async queries
+  `does_event_recording_exist` / `does_game_phase_recording_exist` with their callbacks
+  (`TimelineEventRecordingExists`, `TimelineGamePhaseRecordingExists` -- durations are `Duration`,
+  and the fixed 64-byte phase id is cut at the first nul rather than read past it). The functions
+  that must produce a value report `SteamError::Disabled` when the client is too old, instead of
+  returning a handle from an API call that never happened; strings are checked for interior nuls
+  before reaching Steam.
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 
@@ -88,6 +99,12 @@ plus the callbacks the wrapper can deliver.
 - `steamworks-sys/src/windows_bindings.rs` was stored with mixed line endings; with our own
   sources pinned to `eol=lf` that made the release job's `cargo package` judge the tree dirty
   (`b83dc78`, verified line-ending-only with `git diff --cached --ignore-cr-at-eol`).
+- `add_timeline_event` passed its arguments to `AddRangeTimelineEvent` in the wrong order: the
+  call site gave `(icon, title, description)` while the binding declares
+  `(pchTitle, pchDescription, pchIcon)`, so the icon name showed up as the event title and the
+  title as the description. Fixed after checking both `isteamtimeline.h` and the generated
+  signature; the wrapper's own parameter list is unchanged, so existing callers keep compiling and
+  now land in the right UI fields.
 - Doc comments: `src/networking.rs` had a malformed intra-doc link (`[../networking_sockets]`)
   and still claimed the `ISteamNetworkingSockets` wrapper was "unfinished" — it is not. Six other
   doc comments carried redundant explicit link targets. Rustdoc now runs with `-D warnings` in

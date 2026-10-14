@@ -650,8 +650,17 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | 16 |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
-| ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | 4 |
+| ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | **4 → 18** |
 | ISteamScreenshots | 9 | 4 | | | |
+
+`ISteamTimeline` 一行 2026-10-14 补到 **18/18**（整接口闭合）。补的时候发现并修掉一个**真参数顺序缺陷**：
+`add_timeline_event(icon, title, description, ..)` 原来按 `(icon, title, description)` 传给
+`AddRangeTimelineEvent`，而绑定签名是 `(pchTitle, pchDescription, pchIcon, ..)` ——
+标题位收到图标名、图标位收到描述文本。Steam 头文件与 `windows_bindings.rs` 双侧核过才动手。
+另外该函数原先把 `AddRangeTimelineEvent` 返回的 `TimelineEventHandle_t` 直接丢弃，
+所以事后无法 Update/End/Remove；新版另开 `add_instantaneous_event` / `start_range_event` 等把句柄返回出来，
+旧签名不动（不改已发布形态）。两个 `Does*RecordingExist` 是异步的，配了
+`TimelineEventRecordingExists` / `TimelineGamePhaseRecordingExists` 两个回调。
 
 `ISteamRemoteStorage` 一行 2026-10-14 由本轮补齐一部分：新增 `FileWrite` / `FileRead` / `GetQuota` /
 `GetLocalFileChangeCount` + `GetLocalFileChange` / `BeginFileWriteBatch` + `EndFileWriteBatch`
