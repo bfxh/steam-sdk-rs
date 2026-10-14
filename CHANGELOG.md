@@ -215,6 +215,20 @@ plus the callbacks the wrapper can deliver.
   negative count takes nothing instead of wrapping into a huge `usize` (controls N1/N2/N3 each
   turned the matching test red, and N1 swaps the two sentinels while N3 drops exactly the
   `.max(0)`).
+- `panic sites on unnamed enum values stay counted` (`scripts/ci/no_panic_on_unknown_enum.py`):
+  every `unreachable!()` in a fallback arm of a `match` over a `#[non_exhaustive]` Steam enum is
+  a panic inside the caller's process the first time Steam answers with a value the vendored
+  headers do not name. The gate counts them per file, bidirectionally, and prints each
+  `file:line` in the log; the first run measured 10. One is fixed here: `LobbyChatUpdate`'s
+  member-state field now maps through `chat_member_state_change`, which returns
+  `ChatMemberStateChange::Unknown` for an unnamed code instead of panicking, with the bitmask
+  caveat documented (Steam's own field is flags, so a combination is possible, and reading it as
+  flags rather than one state is the open change). Controls: swapping `Entered` for `Left` turned
+  the named-flag test red (U1); adding a second `unreachable!()` turned the ledger red with
+  `src/error.rs: 1 -> 2 (+1)` (U2). The other 9 stay registered as a ceiling that can only move
+  toward zero -- `user.rs` (3), `ugc/types.rs` (2), `error.rs`, `remote_storage.rs`, `server.rs`
+  and `ugc/update.rs` (1 each) -- because giving nine more public enums an `Unknown` variant is an
+  API decision that deserves its own change, not the tail of this one.
 
 ### Added — CI and release automation
 

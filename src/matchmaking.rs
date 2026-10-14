@@ -976,6 +976,34 @@ pub enum ChatMemberStateChange {
 
     /// The user has been kicked and banned.
     Banned,
+
+    /// Steam sent a code this binding does not name, or a combination of the flags below.
+    ///
+    /// The field is a bitmask -- `isteammatchmaking.h:961` calls these "Flags describing how a
+    /// users lobby state has changed" -- and this wrapper reads only the five single flags, so a
+    /// combination lands here rather than panicking. Reading it as flags instead of one state is
+    /// the open change; until then `Unknown` is the honest answer for anything unnamed.
+    Unknown,
+}
+
+/// One lobby-state flag, or [`ChatMemberStateChange::Unknown`] for anything else.
+fn chat_member_state_change(code: u32) -> ChatMemberStateChange {
+    if code == sys::EChatMemberStateChange::k_EChatMemberStateChangeEntered as u32 {
+        return ChatMemberStateChange::Entered;
+    }
+    if code == sys::EChatMemberStateChange::k_EChatMemberStateChangeLeft as u32 {
+        return ChatMemberStateChange::Left;
+    }
+    if code == sys::EChatMemberStateChange::k_EChatMemberStateChangeDisconnected as u32 {
+        return ChatMemberStateChange::Disconnected;
+    }
+    if code == sys::EChatMemberStateChange::k_EChatMemberStateChangeKicked as u32 {
+        return ChatMemberStateChange::Kicked;
+    }
+    if code == sys::EChatMemberStateChange::k_EChatMemberStateChangeBanned as u32 {
+        return ChatMemberStateChange::Banned;
+    }
+    ChatMemberStateChange::Unknown
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1139,26 +1167,7 @@ impl_callback!(cb: LobbyChatUpdate_t => LobbyChatUpdate {
         lobby: LobbyId(cb.m_ulSteamIDLobby),
         user_changed: SteamId(cb.m_ulSteamIDUserChanged),
         making_change: SteamId(cb.m_ulSteamIDMakingChange),
-        member_state_change: match cb.m_rgfChatMemberStateChange {
-            x if x == sys::EChatMemberStateChange::k_EChatMemberStateChangeEntered as u32 => {
-                ChatMemberStateChange::Entered
-            }
-            x if x == sys::EChatMemberStateChange::k_EChatMemberStateChangeLeft as u32 => {
-                ChatMemberStateChange::Left
-            }
-            x if x
-                == sys::EChatMemberStateChange::k_EChatMemberStateChangeDisconnected as u32 =>
-            {
-                ChatMemberStateChange::Disconnected
-            }
-            x if x == sys::EChatMemberStateChange::k_EChatMemberStateChangeKicked as u32 => {
-                ChatMemberStateChange::Kicked
-            }
-            x if x == sys::EChatMemberStateChange::k_EChatMemberStateChangeBanned as u32 => {
-                ChatMemberStateChange::Banned
-            }
-            _ => unreachable!(),
-        },
+        member_state_change: chat_member_state_change(cb.m_rgfChatMemberStateChange),
     }
 });
 
@@ -1293,5 +1302,38 @@ fn test_set_lobby_game_server() {
     for _ in 0..100 {
         client.run_callbacks();
         ::std::thread::sleep(::std::time::Duration::from_millis(100));
+    }
+}
+
+#[cfg(test)]
+mod chat_flag_tests {
+    use super::*;
+
+    #[test]
+    fn each_named_flag_maps_to_its_own_state() {
+        let named = [
+            (1u32, ChatMemberStateChange::Entered),
+            (2, ChatMemberStateChange::Left),
+            (4, ChatMemberStateChange::Disconnected),
+            (8, ChatMemberStateChange::Kicked),
+            (16, ChatMemberStateChange::Banned),
+        ];
+        for (code, expected) in named {
+            assert_eq!(chat_member_state_change(code), expected, "code {code}");
+        }
+    }
+
+    #[test]
+    fn an_unnamed_code_or_a_combination_answers_unknown_instead_of_panicking() {
+        // Steam's field is a bitmask, so `Entered | Left` and `Kicked | Banned` are expressible,
+        // and a newer runtime can send a flag this binding never heard of. Before this mapping
+        // existed, all four of these were `unreachable!()` -- a panic inside the caller's process.
+        for code in [0u32, 3, 24, 32, 1 << 20] {
+            assert_eq!(
+                chat_member_state_change(code),
+                ChatMemberStateChange::Unknown,
+                "code {code} must not panic"
+            );
+        }
     }
 }

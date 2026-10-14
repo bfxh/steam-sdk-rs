@@ -1,6 +1,6 @@
+src/matchmaking.rs 1339
 src/friends/mod.rs 1321
 src/networking_sockets.rs 1314
-src/matchmaking.rs 1297
 src/networking_types/mod.rs 1100
 src/inventory.rs 966
 src/user_stats.rs 868

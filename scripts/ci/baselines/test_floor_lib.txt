@@ -1,1 +1,1 @@
-112  # lib tests reached with --all-features (97 passed + 15 ignored), measured 2026-10-15 with the ping/POP cluster
+114  # lib tests reached with --all-features (99 passed + 15 ignored), measured 2026-10-15 with the chat-flag mapper tests

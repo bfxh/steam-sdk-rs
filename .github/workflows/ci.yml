@@ -115,6 +115,14 @@ jobs:
           python3 scripts/ci/api_coverage.py > "$RUNNER_TEMP/coverage.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/api_coverage.txt "$RUNNER_TEMP/coverage.txt"
 
+      # `unreachable!()` 落在 `match` 的兜底臂里 = Steam 上游枚举多出一个值时，在本进程内 panic。
+      # 台账按文件计数，双向判红：新增一处即红；修掉一处也要把基线改小才算数（方向是 0）。
+      # 首跑实测 10 处，修掉 `ChatMemberStateChange` 那处后登记 9 处，逐条 `文件:行号` 进日志。
+      - name: panic sites on unnamed enum values stay counted
+        run: |
+          python3 scripts/ci/no_panic_on_unknown_enum.py src > "$RUNNER_TEMP/panic_sites.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/no_panic_sites.txt "$RUNNER_TEMP/panic_sites.txt"
+
       # `cargo test` 在"一个测试都没匹配到"时仍然退出 0 并打印 `test result: ok. 0 passed`。
       # 这条门读实际跑到的用例数，为 0 就判红，并拒绝低于登记地板的数量。
       - name: test floors (a run that tested nothing is not green)
