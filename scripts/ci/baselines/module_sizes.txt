@@ -23,6 +23,7 @@ src/ugc/types.rs 535
 src/networking_utils.rs 513
 src/parties.rs 499
 src/ugc/query.rs 487
+src/input.rs 486
 src/user.rs 483
 src/ugc/results.rs 473
 src/networking_types/end.rs 384
@@ -34,7 +35,6 @@ src/server_stats.rs 309
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/networking.rs 257
-src/input.rs 248
 src/friends/chat.rs 216
 src/safe_ugc.rs 216
 src/ugc/ugc_tests.rs 211

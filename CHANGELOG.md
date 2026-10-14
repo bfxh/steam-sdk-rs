@@ -230,6 +230,24 @@ plus the callbacks the wrapper can deliver.
   and `ugc/update.rs` (1 each) -- because giving nine more public enums an `Unknown` variant is an
   API decision that deserves its own change, not the tail of this one.
 
+- `ISteamInput` controller commands and layer enumeration, from 18 called functions to 35 of its
+  48 (`src/input.rs`): `trigger_vibration`, `trigger_vibration_extended`,
+  `trigger_simple_haptic_event`, `stop_analog_action_momentum`, `set_led_color`,
+  `activate_action_set_layer` / `deactivate_action_set_layer` /
+  `deactivate_all_action_set_layers`, `active_action_set_layers`, `current_action_set`,
+  `remote_play_session_id`, `session_input_configuration_settings`, `device_binding_revision`,
+  `new_data_available`, `wait_for_data`, and both directions of the legacy gamepad-index mapping.
+  Two of them carry measured bounds rather than assumptions: `active_action_set_layers` allocates
+  exactly `STEAM_INPUT_MAX_ACTIVE_LAYERS` (16, Steam's own constant) and clamps Steam's written
+  count with `layers_to_take`, so an over-count cannot read past the array and a negative one
+  cannot wrap; `device_binding_revision` returns `None` for Steam's false answer instead of a
+  `(0, 0)` pair that a caller could misread as "revision zero", and its mapping lives in
+  `binding_revision` so the test runs the production function rather than restating
+  `bool::then_some`. Controls L1 (drop `.max(0)`), L2 (drop `.min(capacity)`) and L3 (always
+  `Some`) each turned the matching test red.
+  `wait_for_data` is documented as parking the calling thread, which is what Steam's own note says
+  it is for ("games with a dedicated input thread").
+
 ### Added — CI and release automation
 
 - Four new strictness gates, each one step with one verdict (`scripts/ci/`, so the

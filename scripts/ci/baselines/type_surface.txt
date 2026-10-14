@@ -1,6 +1,7 @@
 Friends 48
 Server 38
 UGC 37
+Input 36
 Browser 33
 QueryHandle 33
 Apps 29
@@ -11,7 +12,6 @@ UserStats 24
 UpdateHandle 22
 Inventory 21
 QueryResults 21
-Input 19
 Timeline 18
 NetConnection 16
 NetworkingUtils 16
