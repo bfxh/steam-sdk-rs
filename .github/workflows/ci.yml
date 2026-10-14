@@ -85,6 +85,34 @@ jobs:
         if: matrix.toolchain == 'stable'
         run: cargo test --locked --doc $FEATURES
 
+      # MSRV 只能有一处权威声明：Cargo.toml、steamworks-sys/Cargo.toml 与本作业跑的
+      # 版本必须一致，否则叫 "1.80.0" 的作业在测别的东西，用户按声明装依赖时才会发现。
+      - name: MSRV has a single source
+        if: matrix.toolchain == '1.80.0'
+        run: bash scripts/ci/msrv_single_source.sh "1.80.0"
+
+      # 两个"上帝模块"尺：单文件行数与单类型公开方法数。
+      # 基线就是实测当下值（2026-10-14 复算），**双向**判红：
+      # 长大一寸即红；缩小也红，逼着把基线改成真数——
+      # 留一条比现实宽的基线，下一批就会按那条宽线继续堆。
+      - name: module sizes stay under their registered ceilings
+        run: |
+          python3 scripts/ci/module_sizes.py src > "$RUNNER_TEMP/sizes.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/module_sizes.txt "$RUNNER_TEMP/sizes.txt"
+
+      - name: no type grows into a god object
+        run: |
+          python3 scripts/ci/type_surface.py src > "$RUNNER_TEMP/types.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/type_surface.txt "$RUNNER_TEMP/types.txt"
+
+      # `cargo test` 在"一个测试都没匹配到"时仍然退出 0 并打印 `test result: ok. 0 passed`。
+      # 这条门读实际跑到的用例数，为 0 就判红，并拒绝低于登记地板的数量。
+      - name: test floors (a run that tested nothing is not green)
+        if: matrix.toolchain == 'stable'
+        run: |
+          bash scripts/ci/test_floor.sh lib
+          bash scripts/ci/test_floor.sh doc
+
   # 示例与库本体分开编译，有两个实测原因：
   # 1. 示例是各自独立的 workspace 成员，不加 --workspace 就永远不会被编译，
   #    只能靠人手动跑才发现它们烂了；
@@ -120,8 +148,29 @@ jobs:
       # 是为了让 --workspace 里不含该特征的成员（steamworks-sys）不报错。
       - run: cargo check --locked --workspace --all-targets --features steamworks/futures
 
+  # 每个可选特征单独编得动。`--all-features` 会掩盖某个特征自己的 cfg 已经烂掉，
+  # 而先撞上这个坑的是只开了 `serde`（或只开 `image`）的用户，不是我们。
+  features:
+    name: feature matrix (each feature alone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: features-ubuntu
+
+      - run: bash scripts/ci/feature_matrix.sh
+
   # 静态质检：unsafe 边界、死依赖、依赖漏洞。
-  # 工具必须装上（装不上就判红），但**发现内容**只作提示、不挡 PR。
   quality-extra:
     strategy:
       fail-fast: false
