@@ -645,7 +645,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
+| ISteamUGC | 99 | **60 → 73** | ISteamMatchmaking | 38 | 28 |
 | ISteamFriends | 78 | **27 → 63** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
@@ -773,10 +773,25 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 
 | 批次 | 内容 | 方法 |
 |---|---|---|
-| 2a 查询侧 | `ugc_tag_count`/`ugc_tag`/`ugc_tag_display_name`、`additional_preview*`（含 `EItemPreviewType` 映射，本仓目前**没有**这个枚举的任何封装）、`first_key_value_tag`、`supported_game_version*`、`add_required_tag_group`、`set_return_playtime_stats`、两个时间区间、`query_all_with_cursor` | 13 |
-| 2b 更新侧 | `AddItemPreviewFile/Video`、`UpdateItemPreviewFile/Video`、`RemoveItemPreview`、`SetRequiredGameVersions`、`SetAdminQuery`（"admin queries return hidden items"，只是给句柄置位，不假称客户端有权限） | 7 |
+| 2a 查询侧 —— **已交，60→73** | `tag`/`tag_display_name`/`tag_count`、`additional_preview*`（新增 `PreviewKind` 六变体 + `Unknown`）、`first_key_value_tag`、`supported_game_version*`、`add_required_tag_group`、`set_return_playtime_stats`、两个时间区间、`query_all_with_cursor` | 13 ✓ |
+| 2b 更新侧 | `AddItemPreviewFile/Video`、`UpdateItemPreviewFile/Video`、`RemoveItemPreview`、`SetRequiredGameVersions`、`SetAdminQuery`（"admin queries return hidden items"，只是给句柄置位，不假称客户端有权限）、`SetAllowLegacyUpload`（头文件讲 single small file ≤10MB 的旧上传路，现役但窄） | 8 |
 | 2c 本地缓存/数组出参 | `GetNumDownloadedItems`、`GetDownloadedItems`、`MarkDownloadedItemAsUnused`、`SetItemsDisabledLocally`、`SetSubscriptionsLoadOrder`、`GetUserContentDescriptorPreferences` | 6 |
-| 2d 异步答案 | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus`（+`ShowWorkshopEULA`） | 10 |
+| 2d 异步答案 | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus`、`ShowWorkshopEULA` | 11 |
+
+2a 的三条实测口径：
+① **缓冲长度一律取 Steam 自己的常量**，不用我拍的数：单个 tag 用 `k_cchTagListMax = 1025`、
+preview 的 URL 用 `k_cchPublishedFileURLMax = 256`、原始文件名用 `k_cchFilenameMax = 260`
+（三者都在四平台绑定里存在）；只有 KV 值与 branch 名 Steam 没给常量，沿用本文件一直在用的 256 并写成命名常量。
+② **回读不信任 Steam 的终止符**：`steam_out_string` 在"我们自己拥有的这块缓冲"里截到第一个 NUL，
+答案填满缓冲时也不会读到缓冲区外（变异：把 `unwrap_or(buffer.len())` 改成 `unwrap_or(0)` 判红）。
+③ `EItemPreviewType` 同 `EChatEntryType` 一样 **Windows `repr(i32)`、其余 `repr(u32)` 且两侧 `#[non_exhaustive]`**
+（实测四份绑定），所以 out 参数按裸 `i32` 接住再映射，`ReservedMax = 255` 落 `PreviewKind::Unknown`。
+
+顺带把游标分页**闭环**：`SteamUGCQueryCompleted_t.m_rgchNextCursor`（四平台绑定都是 `[c_char; 256]`，
+头文件原文 "If a paging cursor was used, then this will be the next cursor to get the next result set"）
+以前被丢掉，现在 `QueryResults::next_cursor()` 把它读出来，空串 = 没有下一页（`then_some`，变异：改成恒 `Some` 判红）。
+`add_required_tag_group` 一个 tag 带内嵌 NUL 就**整组不提交**（抽成 `tag_group_strings` 才测得到这条；
+变异成"静默丢掉坏字节"判红）。
 
 2d 有一条**必须先定的形状问题**：`GetAppDependencies` 的头文件原文是
 "note that whatever callback you register for `GetAppDependenciesResult_t` may be called multiple

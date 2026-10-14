@@ -130,6 +130,32 @@ plus the callbacks the wrapper can deliver.
   `Err(SteamError::InvalidParameter)` -- the argument never reached Steam -- which is kept distinct
   from `Ok(false)`, Steam's own refusal.
 
+- `ISteamUGC` query surface, from 60 to 73 of its 99 functions (`master`, this release):
+  `QueryResults::tag` / `tag_display_name` / `tag_count`, `additional_preview` /
+  `additional_preview_count` with a new `PreviewKind` (six named Steam types plus `Unknown`,
+  because Steam's `ReservedMax` is a real answer and the generated enum is `#[repr(i32)]` on
+  Windows and `#[repr(u32)]` elsewhere -- so the out-parameter is read as a plain 32-bit integer
+  rather than materialised as a non-exhaustive enum), `first_key_value_tag` (Steam's own header
+  answers "false if there was an error or no matching value was found", so `None` covers both and
+  it is documented as such), `supported_game_version` / `supported_game_version_count`,
+  `QueryHandle::add_required_tag_group` / `set_return_playtime_stats` /
+  `set_time_created_date_range` / `set_time_updated_date_range`, and
+  `UGC::query_all_with_cursor` for Steam's deep paging.
+  Cursor paging now actually closes: `SteamUGCQueryCompleted_t.m_rgchNextCursor` -- present on all
+  four platforms -- was dropped on the floor, so a cursor query could never be continued. It is
+  read into `QueryResults::next_cursor`, with Steam's empty answer meaning "no next page".
+  Buffer sizes come from Steam's own constants (`k_cchTagListMax`, `k_cchPublishedFileURLMax`,
+  `k_cchFilenameMax`) rather than invented round numbers, and out-strings are cut at the first nul
+  inside the buffer this side owns instead of trusting Steam to terminate, so an answer that fills
+  the buffer cannot make the read run past it. One unusable tag fails a whole tag group: Steam
+  must not be asked for a partial version of what the caller wrote.
+  Measured with six mutation controls (terminator fallback, `Unknown` reported as `Image`, a
+  dropped preview arm, an always-`Some` cursor, a silently-stripped nul byte, a shrunk buffer
+  constant), each red, each restored by byte-compare. 26 of the 99 remain, classified against
+  `isteamugc.h` in `docs/SuperSteam-Design.md` (update-handle previews, the local-cache array
+  calls, the asynchronous dependency/favourite/vote/EULA answers, and the deprecated
+  `RequestUGCDetails`).
+
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 

@@ -728,6 +728,47 @@ impl UGC {
         })
     }
 
+    /// Queries every matching item with Steam's deep paging interface.
+    ///
+    /// `cursor` continues a previous page; Steam's header says it "should be set
+    /// to NULL or `\"*\"` to get the first result set", which is what `None`
+    /// sends. The answer carries [`QueryResults::next_cursor`] while more results
+    /// remain. A cursor with an interior nul never reaches Steam and is refused as
+    /// `CreateQueryError`.
+    pub fn query_all_with_cursor(
+        &self,
+        query_type: UGCQueryType,
+        item_type: UGCType,
+        appids: AppIDs,
+        cursor: Option<&str>,
+    ) -> Result<QueryHandle, CreateQueryError> {
+        let cursor = match cursor {
+            Some(cursor) => Some(CString::new(cursor).map_err(|_| CreateQueryError)?),
+            None => None,
+        };
+        let cursor_ptr = cursor
+            .as_ref()
+            .map_or(std::ptr::null(), |cursor| cursor.as_ptr());
+        let handle = unsafe {
+            sys::SteamAPI_ISteamUGC_CreateQueryAllUGCRequestCursor(
+                self.ugc,
+                query_type.into(),
+                item_type.into(),
+                appids.creator_app_id().unwrap_or(AppId(0)).0,
+                appids.consumer_app_id().unwrap_or(AppId(0)).0,
+                cursor_ptr,
+            )
+        };
+        if handle == UGCQueryHandleInvalid {
+            return Err(CreateQueryError);
+        }
+        Ok(QueryHandle {
+            ugc: self.ugc,
+            inner: Arc::clone(&self.inner),
+            handle: Some(handle),
+        })
+    }
+
     /// Queries a list of workshop itmes, related to a user in some way (Ex. user's subscriptions, favorites, upvoted, ...)
     pub fn query_user(
         &self,
@@ -1519,7 +1560,81 @@ impl QueryHandle {
         self
     }
 
+    /// Requires returned items to carry at least one tag from this group: Steam
+    /// matches *any* of the tags in the group, where [`QueryHandle::require_tag`]
+    /// demands one specific tag.
+    ///
+    /// A tag with an interior nul is refused as `InvalidParameter` instead of
+    /// panicking, and none of the group is applied in that case.
+    pub fn add_required_tag_group<S: AsRef<str>>(self, groups: &[S]) -> Result<Self, SteamError> {
+        let strings = tag_group_strings(groups)?;
+        let mut pointers: Vec<*const c_char> = strings.iter().map(|s| s.as_ptr()).collect();
+        let raw = sys::SteamParamStringArray_t {
+            m_nNumStrings: pointers.len() as i32,
+            m_ppStrings: pointers.as_mut_ptr(),
+        };
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_AddRequiredTagGroup(self.ugc, self.handle.unwrap(), &raw)
+        };
+        if ok {
+            Ok(self)
+        } else {
+            Err(SteamError::InvalidParameter)
+        }
+    }
+
+    /// Asks Steam to include playtime statistics for the last `days` days in the
+    /// results ([`QueryResults::statistic`] then has values for them).
+    #[must_use]
+    pub fn set_return_playtime_stats(self, days: u32) -> Self {
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_SetReturnPlaytimeStats(self.ugc, self.handle.unwrap(), days)
+        };
+        debug_assert!(ok);
+        self
+    }
+
+    /// Restricts results to items created between two Unix timestamps.
+    ///
+    /// The bounds go to Steam as given; a reversed range is Steam's to answer
+    /// (with nothing), not something this wrapper silently swaps.
+    #[must_use]
+    pub fn set_time_created_date_range(self, start: u32, end: u32) -> Self {
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_SetTimeCreatedDateRange(
+                self.ugc,
+                self.handle.unwrap(),
+                start,
+                end,
+            )
+        };
+        debug_assert!(ok);
+        self
+    }
+
+    /// Restricts results to items updated between two Unix timestamps.
+    ///
+    /// See [`QueryHandle::set_time_created_date_range`] for why the bounds are
+    /// passed through unexamined.
+    #[must_use]
+    pub fn set_time_updated_date_range(self, start: u32, end: u32) -> Self {
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_SetTimeUpdatedDateRange(
+                self.ugc,
+                self.handle.unwrap(),
+                start,
+                end,
+            )
+        };
+        debug_assert!(ok);
+        self
+    }
+
     /// Sends the query to Steam and calls the provided callback with the results when completed.
+    ///
+    /// When the query was created for deep paging, the answer carries
+    /// [`QueryResults::next_cursor`], which is what [`UGC::query_all_with_cursor`]
+    /// continues from.
     pub fn fetch<F>(mut self, cb: F)
     where
         F: for<'a> FnOnce(Result<QueryResults<'a>, SteamError>) + 'static + Send,
@@ -1552,6 +1667,7 @@ impl QueryHandle {
                         num_results_returned: v.m_unNumResultsReturned,
                         num_results_total: v.m_unTotalMatchingResults,
                         was_cached: v.m_bCachedData,
+                        next_cursor: next_cursor_from(&v.m_rgchNextCursor),
                         _phantom: Default::default(),
                     };
                     cb(Ok(result));
@@ -1601,6 +1717,7 @@ pub struct QueryResults<'a> {
     num_results_returned: u32,
     num_results_total: u32,
     was_cached: bool,
+    next_cursor: Option<String>,
     _phantom: marker::PhantomData<&'a sys::ISteamUGC>,
 }
 impl<'a> Drop for QueryResults<'a> {
@@ -1830,6 +1947,167 @@ impl<'a> QueryResults<'a> {
         }
     }
 
+    /// The tags Steam reports for the item at `index`.
+    ///
+    /// Steam answers a tag count and then one call per tag, so this reads the
+    /// pair itself. A tag Steam refuses (an index past the end, or a query built
+    /// without `include_key_value_tags`-style preview data) comes back as `None`
+    /// rather than as an empty tag.
+    pub fn tag(&self, index: u32, tag_index: u32) -> Option<String> {
+        self.read_tag(index, tag_index, sys::SteamAPI_ISteamUGC_GetQueryUGCTag)
+    }
+
+    /// The display name of the tag at `tag_index`, which Steam keeps separate
+    /// from the tag's machine name ([`QueryResults::tag`]).
+    pub fn tag_display_name(&self, index: u32, tag_index: u32) -> Option<String> {
+        self.read_tag(
+            index,
+            tag_index,
+            sys::SteamAPI_ISteamUGC_GetQueryUGCTagDisplayName,
+        )
+    }
+
+    /// How many tags Steam reports for the item at `index`.
+    pub fn tag_count(&self, index: u32) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUGC_GetQueryUGCNumTags(self.ugc, self.handle, index) }
+    }
+
+    fn read_tag(
+        &self,
+        index: u32,
+        tag_index: u32,
+        read: unsafe extern "C" fn(
+            *mut sys::ISteamUGC,
+            sys::UGCQueryHandle_t,
+            u32,
+            u32,
+            *mut c_char,
+            u32,
+        ) -> bool,
+    ) -> Option<String> {
+        let mut buffer = vec![0 as c_char; sys::k_cchTagListMax as usize];
+        let ok = unsafe {
+            read(
+                self.ugc,
+                self.handle,
+                index,
+                tag_index,
+                buffer.as_mut_ptr(),
+                sys::k_cchTagListMax,
+            )
+        };
+        ok.then(|| steam_out_string(&buffer))
+    }
+
+    /// How many previews besides the main one Steam reports for `index`.
+    pub fn additional_preview_count(&self, index: u32) -> u32 {
+        unsafe {
+            sys::SteamAPI_ISteamUGC_GetQueryUGCNumAdditionalPreviews(self.ugc, self.handle, index)
+        }
+    }
+
+    /// One of the item's extra previews: a URL or YouTube id, the original file
+    /// name Steam recorded, and what kind of preview it is.
+    ///
+    /// Requires the query to have been built with
+    /// [`QueryHandle::set_return_additional_previews`] (or
+    /// [`QueryHandle::include_additional_previews`]); Steam answers `None`
+    /// otherwise, which is a missing request, not an empty preview.
+    pub fn additional_preview(&self, index: u32, preview_index: u32) -> Option<AdditionalPreview> {
+        let mut url = vec![0 as c_char; sys::k_cchPublishedFileURLMax as usize];
+        let mut filename = vec![0 as c_char; sys::k_cchFilenameMax as usize];
+        // Steam writes a 4-byte EItemPreviewType here. This wrapper deliberately
+        // does not read it as `sys::EItemPreviewType`: that enum is `#[repr(i32)]`
+        // on Windows and `#[repr(u32)]` on the other platforms, and both are
+        // `#[non_exhaustive]`, so a code Steam has not named in this binding must
+        // not be turned into one of its variants.
+        let mut kind: i32 = 0;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_GetQueryUGCAdditionalPreview(
+                self.ugc,
+                self.handle,
+                index,
+                preview_index,
+                url.as_mut_ptr(),
+                sys::k_cchPublishedFileURLMax,
+                filename.as_mut_ptr(),
+                sys::k_cchFilenameMax,
+                &mut kind as *mut i32 as *mut sys::EItemPreviewType,
+            )
+        };
+        ok.then(|| AdditionalPreview {
+            url_or_video_id: steam_out_string(&url),
+            original_filename: steam_out_string(&filename),
+            kind: preview_kind_from(kind),
+        })
+    }
+
+    /// The first value stored under `key` for the item at `index`.
+    ///
+    /// Steam's own answer is "false if there was an error or no matching value
+    /// was found", so `None` covers both. A key containing an interior nul can
+    /// never match a C string, and is answered the same way instead of panicking.
+    /// A key may map to several values; [`QueryResults::get_key_value_tag`] walks
+    /// them by index.
+    pub fn first_key_value_tag(&self, index: u32, key: &str) -> Option<String> {
+        let key = CString::new(key).ok()?;
+        let mut value = vec![0 as c_char; UGC_KEY_VALUE_TAG_MAX as usize];
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_GetQueryFirstUGCKeyValueTag(
+                self.ugc,
+                self.handle,
+                index,
+                key.as_ptr(),
+                value.as_mut_ptr(),
+                UGC_KEY_VALUE_TAG_MAX,
+            )
+        };
+        ok.then(|| steam_out_string(&value))
+    }
+
+    /// How many game-version (Steam branch) ranges the item at `index` declares.
+    pub fn supported_game_version_count(&self, index: u32) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUGC_GetNumSupportedGameVersions(self.ugc, self.handle, index) }
+    }
+
+    /// One declared game-version range, as the two branch names Steam recorded.
+    ///
+    /// The ends stay exactly as Steam answers them, including an empty one: this
+    /// SDK's header only defines the empty-string meaning for the *setter*
+    /// (`SetRequiredGameVersions`), so reading one back as "unbounded" would be
+    /// this wrapper's invention.
+    pub fn supported_game_version(
+        &self,
+        index: u32,
+        version_index: u32,
+    ) -> Option<GameVersionRange> {
+        let mut min_branch = vec![0 as c_char; UGC_GAME_BRANCH_MAX as usize];
+        let mut max_branch = vec![0 as c_char; UGC_GAME_BRANCH_MAX as usize];
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_GetSupportedGameVersionData(
+                self.ugc,
+                self.handle,
+                index,
+                version_index,
+                min_branch.as_mut_ptr(),
+                max_branch.as_mut_ptr(),
+                UGC_GAME_BRANCH_MAX,
+            )
+        };
+        ok.then(|| GameVersionRange {
+            min_branch: steam_out_string(&min_branch),
+            max_branch: steam_out_string(&max_branch),
+        })
+    }
+
+    /// The cursor for the next page of a deep-paged query, or `None` when Steam
+    /// gave none (a page-size query, or the last page).
+    ///
+    /// Feed it to [`UGC::query_all_with_cursor`] to continue.
+    pub fn next_cursor(&self) -> Option<&str> {
+        self.next_cursor.as_deref()
+    }
+
     /// Gets the developer-set metadata associated with the item at the specified index.
     ///
     /// This is returned as a vector of raw bytes.
@@ -1901,3 +2179,192 @@ impl fmt::Display for CreateQueryError {
     }
 }
 impl error::Error for CreateQueryError {}
+
+/// How much this wrapper asks Steam for a key-value tag's value.
+///
+/// Steam publishes no such limit (`k_cchTagListMax` covers a whole tag list, not
+/// one value), so this keeps the 256 the file has always used for KV tags.
+const UGC_KEY_VALUE_TAG_MAX: u32 = 256;
+
+/// How much this wrapper asks Steam for one end of a game-version range. Same
+/// reason as [`UGC_KEY_VALUE_TAG_MAX`]: no published per-branch limit to size by.
+const UGC_GAME_BRANCH_MAX: u32 = 256;
+
+/// Turns a required-tag group into the C strings Steam expects.
+///
+/// One unusable tag fails the whole group: a partial group would ask Steam for
+/// something the caller never wrote.
+fn tag_group_strings<S: AsRef<str>>(groups: &[S]) -> Result<Vec<CString>, SteamError> {
+    groups
+        .iter()
+        .map(|tag| CString::new(tag.as_ref()).map_err(|_| SteamError::InvalidParameter))
+        .collect()
+}
+
+/// Reads a Steam out-string without trusting its terminator: the answer is cut at
+/// the first nul inside the buffer this side owns, so an answer that fills the
+/// whole buffer cannot make the read run past it.
+fn steam_out_string(buffer: &[c_char]) -> String {
+    let end = buffer
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(buffer.len());
+    let bytes: Vec<u8> = buffer[..end].iter().map(|byte| *byte as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// The paging cursor of a completed query. Steam leaves the field empty for a
+/// page-number query and for the last cursor page, and both mean "no next page".
+fn next_cursor_from(raw: &[c_char]) -> Option<String> {
+    let cursor = steam_out_string(raw);
+    (!cursor.is_empty()).then_some(cursor)
+}
+
+/// One of the extra previews on a workshop item, beyond its main picture.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdditionalPreview {
+    /// A URL, or a YouTube video id for [`PreviewKind::YouTubeVideo`] -- Steam
+    /// uses the same field for both.
+    pub url_or_video_id: String,
+    pub original_filename: String,
+    pub kind: PreviewKind,
+}
+
+/// One game-version (Steam branch) range an item declares it works with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameVersionRange {
+    pub min_branch: String,
+    pub max_branch: String,
+}
+
+/// What kind of preview Steam recorded for an item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PreviewKind {
+    Image,
+    YouTubeVideo,
+    Sketchfab,
+    EnvironmentMapHorizontalCross,
+    EnvironmentMapLatLong,
+    Clip,
+    /// A preview type this binding cannot name, including Steam's `ReservedMax`
+    /// sentinel and any type added after these bindings were generated.
+    Unknown,
+}
+
+/// Maps Steam's `EItemPreviewType` answer.
+///
+/// The out-parameter is read as a plain 32-bit integer rather than as
+/// `sys::EItemPreviewType`: the generated enum is `#[repr(i32)]` on Windows and
+/// `#[repr(u32)]` on the other platforms, and both are `#[non_exhaustive]`.
+fn preview_kind_from(raw: i32) -> PreviewKind {
+    use sys::EItemPreviewType as P;
+    match raw {
+        x if x == P::k_EItemPreviewType_Image as i32 => PreviewKind::Image,
+        x if x == P::k_EItemPreviewType_YouTubeVideo as i32 => PreviewKind::YouTubeVideo,
+        x if x == P::k_EItemPreviewType_Sketchfab as i32 => PreviewKind::Sketchfab,
+        x if x == P::k_EItemPreviewType_EnvironmentMap_HorizontalCross as i32 => {
+            PreviewKind::EnvironmentMapHorizontalCross
+        }
+        x if x == P::k_EItemPreviewType_EnvironmentMap_LatLong as i32 => {
+            PreviewKind::EnvironmentMapLatLong
+        }
+        x if x == P::k_EItemPreviewType_Clip as i32 => PreviewKind::Clip,
+        _ => PreviewKind::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod query_surface_tests {
+    use super::*;
+
+    #[test]
+    fn steam_out_strings_are_cut_inside_the_buffer_that_owns_them() {
+        let mut buffer = [0 as c_char; 8];
+        buffer[..5].copy_from_slice(&[72, 105, 0, 33, 33].map(i8_cast));
+        assert_eq!(steam_out_string(&buffer), "Hi");
+
+        // No terminator inside the buffer: the whole thing is the answer, and
+        // nothing past it is read.
+        let full = b"12345678".map(i8_cast);
+        assert_eq!(steam_out_string(&full), "12345678");
+
+        let empty = [0 as c_char; 4];
+        assert_eq!(steam_out_string(&empty), "");
+
+        // Steam hands back bytes, not promised UTF-8.
+        let not_utf8 = [0xffu8, b'a', 0].map(i8_cast);
+        assert_eq!(steam_out_string(&not_utf8), "\u{fffd}a");
+    }
+
+    /// Keeps the fixtures byte-for-byte without `as` casts at every literal.
+    const fn i8_cast(byte: u8) -> i8 {
+        byte as i8
+    }
+
+    #[test]
+    fn an_empty_cursor_is_no_next_page() {
+        let none = [0 as c_char; 6];
+        assert_eq!(next_cursor_from(&none), None);
+
+        let mut page = [0 as c_char; 6];
+        page[..5].copy_from_slice(&b"abc12".map(i8_cast));
+        assert_eq!(next_cursor_from(&page).as_deref(), Some("abc12"));
+    }
+
+    #[test]
+    fn preview_types_map_without_collapsing_or_guessing() {
+        let named = [
+            (0, PreviewKind::Image),
+            (1, PreviewKind::YouTubeVideo),
+            (2, PreviewKind::Sketchfab),
+            (3, PreviewKind::EnvironmentMapHorizontalCross),
+            (4, PreviewKind::EnvironmentMapLatLong),
+            (5, PreviewKind::Clip),
+        ];
+        for (raw, expected) in named {
+            assert_eq!(preview_kind_from(raw), expected);
+        }
+        let mapped: Vec<PreviewKind> = named.iter().map(|(_, kind)| *kind).collect();
+        for i in 0..mapped.len() {
+            for j in (i + 1)..mapped.len() {
+                assert_ne!(mapped[i], mapped[j], "Steam codes must not merge");
+            }
+        }
+        // The sentinel and the gaps are answers this binding cannot name.
+        for unknown in [-1, 6, 128, 255, i32::MAX] {
+            assert_eq!(
+                preview_kind_from(unknown),
+                PreviewKind::Unknown,
+                "{unknown} must not be reported as a named preview type"
+            );
+        }
+    }
+
+    #[test]
+    fn the_constants_the_query_readers_size_their_buffers_with_are_usable() {
+        // Guards against an edit that makes a buffer smaller than the length
+        // handed to Steam: the call would then write past the allocation.
+        for len in [UGC_KEY_VALUE_TAG_MAX, UGC_GAME_BRANCH_MAX] {
+            assert!(len > 1, "a {len}-byte buffer cannot hold a value and a nul");
+            let buffer = vec![0 as c_char; len as usize];
+            assert_eq!(buffer.len(), len as usize);
+        }
+        let tag_buffer = vec![0 as c_char; sys::k_cchTagListMax as usize];
+        assert_eq!(tag_buffer.len(), 1025);
+    }
+
+    #[test]
+    fn a_tag_group_with_an_interior_nul_is_refused_as_a_whole() {
+        let good = tag_group_strings(&["env", "pvp"]);
+        assert!(good.is_ok());
+        assert_eq!(good.unwrap().len(), 2);
+
+        // One unusable tag must fail the group rather than quietly send the part
+        // that survived: Steam would then filter on something nobody asked for.
+        let bad = tag_group_strings(&["env", "bad\0tag"]);
+        assert_eq!(bad.err(), Some(SteamError::InvalidParameter));
+
+        let empty: [&str; 0] = [];
+        assert_eq!(tag_group_strings(&empty).map(|v| v.len()), Ok(0));
+    }
+}
