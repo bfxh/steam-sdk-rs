@@ -56,10 +56,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: clippy (no -D warnings)
-        run: cargo clippy --locked --all-targets $FEATURES --message-format short
+        run: cargo clippy --locked --all-targets $EXAMPLES $FEATURES --message-format short
 
       - name: check (all targets)
-        run: cargo check --locked --all-targets $FEATURES
+        run: cargo check --locked --all-targets $EXAMPLES $FEATURES
 
       - name: doc
         run: cargo doc --locked --no-deps $FEATURES --document-private-items
@@ -70,6 +70,37 @@ jobs:
       - name: test (doc)
         if: matrix.toolchain == 'stable'
         run: cargo test --locked --doc $FEATURES
+
+  # 示例与库本体分开编译，有两个实测原因：
+  # 1. 示例是各自独立的 workspace 成员，不加 --workspace 就永远不会被编译，
+  #    只能靠人手动跑才发现它们烂了；
+  # 2. `--workspace` 与 `--all-features` 不能写在同一条命令里——实测本机
+  #    `cargo clippy --workspace --all-features` 会连带打开 steamworks-sys 的
+  #    `rebuild-bindings` 特征，触发 bindgen 并要求 libclang，直接编译失败
+  #    （`Unable to find libclang`）。所以这里只用默认特征集。
+  examples:
+    name: examples (workspace members)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        if: runner.os == 'linux'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: examples-${{ matrix.os }}
+
+      - run: cargo check --locked --workspace --all-targets
 
   # 静态质检：unsafe 边界、死依赖、依赖漏洞（非阻塞提示，不挡 PR）
   quality-extra:
