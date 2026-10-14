@@ -647,7 +647,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
 | ISteamFriends | 78 | 27 | ISteamUtils | 37 | **16 → 32** |
-| ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | 16 |
+| ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 28** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
 | ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | **4 → 18** |
@@ -694,6 +694,16 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 `FilterText` 是唯一的文本过滤通路。判"某 API 已被取代"必须先查绑定里有没有那个替代品，
 不能按 Steamworks 的版本常识直接推。输出侧按头文件要求分配 `strlen(input)+1`，
 回读时截到第一个 NUL（不依赖 Steam 一定补终止符），负数返回按失败处理而不是"改了 0 个字符"。
+
+`ISteamApps` 一行 2026-10-14 补到 **28/33**：DLC（数量、逐项列表含 `available` 归属位、安装/卸载、下载进度）、
+家庭共享借用位、`timed_trial`（**Steam 的 bool 才决定"是不是试用"，秒数 0 仍然是试用**，映射抽成
+`timed_trial_from` 以便钉住）、最早购买时间（0 → `None`）、`mark_content_corrupt`、
+beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含内嵌 NUL 直接判 `InvalidParameter`）。
+**余下 5 个的判据**：`RequestAllProofOfPurchaseKeys` / `RequestAppProofOfPurchaseKey` 是
+传统 CD-key DRM（`k_cubAppProofOfPurchaseKeyMax`，现代发行不用）；`SetDlcContext` 只影响后续调用的
+上下文，属边角；`GetInstalledDepots` 是数组出参（内容工具向）；
+`GetFileDetails` 是 **真待补**——异步且有自己的 `FileDetailsResult_t` 回调，工作量与两个
+`Does*RecordingExist` 同类，列为下一块。
 
 同理两条硬事实登记在此免得反复重查：
 ① 本 SDK 的 `isteamutils.h` 里两处 `Deprecated` 都是 `STEAM_PRIVATE_API`（`GetCSERIPPort`、`RunFrame`），**不在公开面**，所以不存在"漏封退役方法"；

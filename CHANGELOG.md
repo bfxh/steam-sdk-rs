@@ -83,6 +83,16 @@ plus the callbacks the wrapper can deliver.
   return as failure rather than zero changes. These stay in the list rather than in the skipped
   register because the newer interface I first assumed replaced them is not in these bindings at
   all (`grep -c SteamAPI_ISteamTextFiltering` = 0).
+- `ISteamApps` from 16 to 28 of its 33 functions: `dlc_count`, `dlcs` (each entry carrying the
+  ownership bit Steam reports), `install_dlc` / `uninstall_dlc`, `dlc_download_progress`,
+  `is_subscribed_from_family_sharing`, `timed_trial` (Steam's bool -- not the second counts --
+  decides whether there is a trial at all, so a trial with zero allowance stays a trial),
+  `earliest_purchase_unix_time` (Steam's 0 for "no purchase record" maps to `None`),
+  `mark_content_corrupt`, and the beta branches: `beta_counts`, `betas`, and `set_active_beta`,
+  whose argument is checked for an interior nul before reaching Steam. The five left unwrapped are
+  registered with reasons in `docs/SuperSteam-Design.md`; four are legacy DRM or content-tooling
+  (`RequestAllProofOfPurchaseKeys`, `RequestAppProofOfPurchaseKey`, `SetDlcContext`,
+  `GetInstalledDepots`) and `GetFileDetails` is genuinely still open.
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 

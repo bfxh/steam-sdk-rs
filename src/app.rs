@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Duration;
 
 /// An id for a steam app/game
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +171,294 @@ impl Apps {
             let value = CStr::from_ptr(value);
             value.to_string_lossy().into_owned()
         }
+    }
+
+    /// Number of DLC entries Steam reports for this app, including ones the
+    /// user does not own.
+    pub fn dlc_count(&self) -> i32 {
+        unsafe { sys::SteamAPI_ISteamApps_GetDLCCount(self.apps) }
+    }
+
+    /// Every DLC Steam lists for this app.
+    ///
+    /// `available` is whether the user owns it; entries are read by index, so
+    /// a DLC that appears or disappears mid-listing can shift the rest.
+    pub fn dlcs(&self) -> Vec<DlcInfo> {
+        let count = self.dlc_count();
+        if count <= 0 {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        for index in 0..count {
+            let mut app_id = 0u32;
+            let mut available = false;
+            // Steam copies into the caller's buffer; 256 matches the size used
+            // for the other fixed strings in this module.
+            let mut name = vec![0 as std::os::raw::c_char; 256];
+            let ok = unsafe {
+                sys::SteamAPI_ISteamApps_BGetDLCDataByIndex(
+                    self.apps,
+                    index,
+                    &mut app_id,
+                    &mut available,
+                    name.as_mut_ptr(),
+                    name.len() as i32,
+                )
+            };
+            if ok {
+                out.push(DlcInfo {
+                    app_id: AppId(app_id),
+                    available,
+                    name: fixed_cstring(&name),
+                });
+            }
+        }
+        out
+    }
+
+    /// Asks Steam to download the given DLC.
+    ///
+    /// Nothing is returned because Steam reports the outcome through its own
+    /// download progress, not through this call.
+    pub fn install_dlc(&self, app_id: AppId) {
+        unsafe { sys::SteamAPI_ISteamApps_InstallDLC(self.apps, app_id.0) }
+    }
+
+    /// Asks Steam to remove the given DLC from the installation.
+    pub fn uninstall_dlc(&self, app_id: AppId) {
+        unsafe { sys::SteamAPI_ISteamApps_UninstallDLC(self.apps, app_id.0) }
+    }
+
+    /// Download progress for optional DLC: `(bytes_downloaded, bytes_total)`.
+    ///
+    /// `None` when Steam has no such DLC, which is also what it answers for a
+    /// DLC that is already fully installed and needs no download.
+    pub fn dlc_download_progress(&self, app_id: AppId) -> Option<(u64, u64)> {
+        let mut downloaded = 0u64;
+        let mut total = 0u64;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamApps_GetDlcDownloadProgress(
+                self.apps,
+                app_id.0,
+                &mut downloaded,
+                &mut total,
+            )
+        };
+        ok.then_some((downloaded, total))
+    }
+
+    /// Whether this copy was borrowed through Family Sharing.
+    ///
+    /// When true, [`Apps::app_owner`] names the lender rather than the player.
+    pub fn is_subscribed_from_family_sharing(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamApps_BIsSubscribedFromFamilySharing(self.apps) }
+    }
+
+    /// Whether the app is running as a timed trial, and how much of the allowance
+    /// has been used.
+    ///
+    /// `None` means "not a timed trial" -- it is not a reading of zero seconds.
+    pub fn timed_trial(&self) -> Option<TimedTrial> {
+        let mut allowed = 0u32;
+        let mut played = 0u32;
+        timed_trial_from(
+            unsafe { sys::SteamAPI_ISteamApps_BIsTimedTrial(self.apps, &mut allowed, &mut played) },
+            allowed,
+            played,
+        )
+    }
+
+    /// When the user first bought this app, as a Unix timestamp.
+    ///
+    /// Steam returns 0 when there is no purchase record, which maps to `None`.
+    pub fn earliest_purchase_unix_time(&self, app_id: AppId) -> Option<u32> {
+        match unsafe { sys::SteamAPI_ISteamApps_GetEarliestPurchaseUnixTime(self.apps, app_id.0) } {
+            0 => None,
+            seconds => Some(seconds),
+        }
+    }
+
+    /// Tells Steam the install looks damaged so it should verify files.
+    ///
+    /// `missing_files_only` narrows the check to absent files rather than
+    /// re-hashing everything. The return is Steam's "request accepted", not the
+    /// verification result.
+    pub fn mark_content_corrupt(&self, missing_files_only: bool) -> bool {
+        unsafe { sys::SteamAPI_ISteamApps_MarkContentCorrupt(self.apps, missing_files_only) }
+    }
+
+    /// Beta branch counts: `(total, public_available, private)`.
+    pub fn beta_counts(&self) -> (i32, i32, i32) {
+        let mut available = 0i32;
+        let mut private = 0i32;
+        let total = unsafe {
+            sys::SteamAPI_ISteamApps_GetNumBetas(self.apps, &mut available, &mut private)
+        };
+        (total, available, private)
+    }
+
+    /// Lists the beta branches Steam offers for this app.
+    ///
+    /// Indexes come from [`Apps::beta_counts`]; `last_updated` is a Unix
+    /// timestamp of the branch's most recent build.
+    pub fn betas(&self) -> Vec<BetaInfo> {
+        let (total, _, _) = self.beta_counts();
+        if total <= 0 {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(total as usize);
+        for index in 0..total {
+            let mut flags = 0u32;
+            let mut build_id = 0u32;
+            let mut last_updated = 0u32;
+            let mut name = vec![0 as std::os::raw::c_char; 256];
+            let mut description = vec![0 as std::os::raw::c_char; 1024];
+            let ok = unsafe {
+                sys::SteamAPI_ISteamApps_GetBetaInfo(
+                    self.apps,
+                    index,
+                    &mut flags,
+                    &mut build_id,
+                    name.as_mut_ptr(),
+                    name.len() as i32,
+                    description.as_mut_ptr(),
+                    description.len() as i32,
+                    &mut last_updated,
+                )
+            };
+            if ok {
+                out.push(BetaInfo {
+                    name: fixed_cstring(&name),
+                    description: fixed_cstring(&description),
+                    flags,
+                    build_id,
+                    last_updated,
+                });
+            }
+        }
+        out
+    }
+
+    /// Switches the app to a beta branch (or back to `public`).
+    ///
+    /// `Ok(false)` is Steam declining the branch name; a name containing an
+    /// interior nul is refused as `InvalidParameter` before any call is made.
+    pub fn set_active_beta(&self, branch: &str) -> Result<bool, SteamError> {
+        let branch = beta_branch_name(branch)?;
+        Ok(unsafe { sys::SteamAPI_ISteamApps_SetActiveBeta(self.apps, branch.as_ptr()) })
+    }
+}
+
+/// A beta branch name reaching Steam as a C string: an interior nul is a bad
+/// argument, not a panic.
+fn beta_branch_name(branch: &str) -> Result<CString, SteamError> {
+    CString::new(branch).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// Reads a Steam fixed-size char buffer, stopping at the first nul so a buffer
+/// that was never terminated cannot run past the allocation.
+fn fixed_cstring(buffer: &[std::os::raw::c_char]) -> String {
+    let bytes: Vec<u8> = buffer
+        .iter()
+        .map(|byte| *byte as u8)
+        .take_while(|byte| *byte != 0)
+        .collect();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Turns Steam's "is this a timed trial" answer plus its two out-parameters into
+/// an `Option`: only a true answer is a trial, and a trial with zero seconds
+/// allowed stays a trial.
+fn timed_trial_from(
+    is_trial: bool,
+    allowed_seconds: u32,
+    played_seconds: u32,
+) -> Option<TimedTrial> {
+    is_trial.then_some(TimedTrial {
+        allowed: Duration::from_secs(allowed_seconds as u64),
+        played: Duration::from_secs(played_seconds as u64),
+    })
+}
+
+/// One DLC entry from [`Apps::dlcs`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DlcInfo {
+    pub app_id: AppId,
+    /// Whether the user owns this DLC.
+    pub available: bool,
+    pub name: String,
+}
+
+/// Timed-trial allowance from [`Apps::timed_trial`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimedTrial {
+    pub allowed: Duration,
+    pub played: Duration,
+}
+
+/// One beta branch from [`Apps::betas`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BetaInfo {
+    pub name: String,
+    pub description: String,
+    /// Steam's beta flags bitfield, passed through unchanged.
+    pub flags: u32,
+    pub build_id: u32,
+    /// Unix timestamp of this branch's latest build.
+    pub last_updated: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixed_buffers_are_read_up_to_the_nul_and_no_further() {
+        let mut buffer = [0 as std::os::raw::c_char; 16];
+        for (slot, byte) in buffer.iter_mut().zip(b"beta-nightly".iter().copied()) {
+            *slot = byte as std::os::raw::c_char;
+        }
+        // Bytes past the terminator must not leak into the value.
+        buffer[13] = b'X' as std::os::raw::c_char;
+        assert_eq!(fixed_cstring(&buffer), "beta-nightly");
+
+        let empty = [0 as std::os::raw::c_char; 8];
+        assert_eq!(fixed_cstring(&empty), "");
+
+        // A buffer with no terminator at all still yields a bounded string.
+        let unterminated: Vec<std::os::raw::c_char> =
+            "abc".bytes().map(|b| b as std::os::raw::c_char).collect();
+        assert_eq!(fixed_cstring(&unterminated), "abc");
+    }
+
+    #[test]
+    fn timed_trial_zero_is_not_reported_as_no_trial() {
+        // The mapping `Apps::timed_trial` delegates to: Steam's bool decides
+        // whether there is a trial at all, never the second counts.
+        let trial = timed_trial_from(true, 0, 0);
+        assert!(
+            trial.is_some(),
+            "a trial with a zero allowance is still a trial"
+        );
+        assert_eq!(trial.unwrap().allowed, Duration::ZERO);
+
+        assert!(
+            timed_trial_from(false, 7200, 0).is_none(),
+            "Steam's false answer must not look like a trial"
+        );
+        let full = timed_trial_from(true, 7200, 1234).unwrap();
+        assert_eq!(full.allowed, Duration::from_secs(7200));
+        assert_eq!(full.played, Duration::from_secs(1234));
+    }
+
+    #[test]
+    fn beta_branch_names_reject_interior_nul() {
+        // This is the guard `set_active_beta` actually runs through.
+        assert_eq!(beta_branch_name("public").unwrap().as_bytes(), b"public");
+        assert!(matches!(
+            beta_branch_name("beta\0branch"),
+            Err(SteamError::InvalidParameter)
+        ));
     }
 }
 
