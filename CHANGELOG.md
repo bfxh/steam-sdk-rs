@@ -290,8 +290,10 @@ plus the callbacks the wrapper can deliver.
   changed owner, or vanished during the cut. The size gate going red first is the point: an
   unregistered new file (`config.rs=551`, `mod.rs=1733`) and a stale key
   (`src/networking_types.rs`) were both named before anything was recorded.
-  Three files are still above 1300 lines -- `networking_types/mod.rs` (1733), `lib.rs` (1355) and
-  `networking_sockets.rs` (1314) -- and are next under the same rule.
+  At that moment three files were above 1300 lines -- `networking_types/mod.rs` (1733), `lib.rs`
+  (1355) and `networking_sockets.rs` (1314) -- and the first two are since gone below it, in the
+  two entries further down; `networking_sockets.rs` (1314) and `friends/mod.rs` (1321, grown by a
+  test since) are what the same rule has left to do.
 - `src/lib.rs` (1355) is split three ways: the identity types (`SteamId`, `Universe`,
   `AccountType`, `AccountId`, `GameId`) move to `src/identity.rs` (198) and are re-exported from
   the crate root, so every public path -- `steamworks::SteamId` included -- is unchanged; the
