@@ -182,6 +182,25 @@ jobs:
   # 发布物里到底有什么：仓库里有不该进 .crate 的东西（工作流、设计笔记、
   # 本机跑示例留下的 steam_appid.txt），也有绝不该少的东西（两份 LICENSE）。
   # 只有 `cargo package --list` 能回答"用户实际收到什么"，所以清单进门。
+  # 门自己也要被查：这一步专管"workflow 引用的文件在不在仓里"（我这边真实栽过两次：
+  # 基线被 .gitignore 的 *.txt 吞掉、以及拿未提交的树去 clone），
+  # 加上 permissions 插值（历史上把非 dispatch 的跑整条打成零作业）与逃生口计数。
+  workflows:
+    name: workflow self-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: referenced files, timeouts and permissions
+        run: python3 scripts/ci/workflow_inputs.py
+
+      - name: shell escape hatches may only shrink
+        run: |
+          set -uo pipefail
+          python3 scripts/ci/shell_hatches.py > "$RUNNER_TEMP/hatches.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/shell_hatches.txt "$RUNNER_TEMP/hatches.txt"
+
   packaging:
     name: packaging inventory
     runs-on: ubuntu-latest
