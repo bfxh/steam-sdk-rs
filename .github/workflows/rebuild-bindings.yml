@@ -1,10 +1,31 @@
 name: Rebuild bindings
 
-on: 
+# 用 bindgen 从 `steamworks-sys/lib/steam` 的头文件重生成四平台绑定。
+#
+# 这里刻意**不再**在 push 时自动跑并自动提交：原先的写法是
+# `on: push: paths: [steamworks-sys]` + 一个 push 作业直接把
+# `Update bindings` 提交回触发分支，用的还是 `ad-m/github-push-action@master`
+# （浮动 tag 的第三方推送动作）和未声明 permissions 时的默认写权限。
+# 那等于"任何碰到 sys 目录的提交都可能让机器人往 master 写生成代码"，
+# 而生成结果由四台 runner 的 bindgen/libclang 版本决定，不由我控制。
+#
+# 现在的口径：默认只**报告漂移**（产出 bindings.diff 附件），要落盘就得是
+# 人明确勾选 `commit_bindings`，且提交作业单独只拿 `contents: write`。
+on:
   workflow_dispatch:
-  push:
-    paths:
-      - "steamworks-sys"
+    inputs:
+      commit_bindings:
+        description: 把重生成的绑定提交回当前分支（默认只生成 diff 附件）
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rebuild-bindings-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,85 +33,108 @@ env:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest, ubuntu-22.04-arm]
+        include:
+          - os: windows-latest
+            target_file: windows_bindings.rs
+          - os: ubuntu-latest
+            target_file: linux_bindings.rs
+          - os: macos-latest
+            target_file: macos_bindings.rs
+          - os: ubuntu-22.04-arm
+            target_file: linuxarm_bindings.rs
     runs-on: ${{ matrix.os }}
-
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@v1
-        id: toolchain
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
+      # actions-rs/toolchain@v1 已弃用（上游仓库撤下后会在解析阶段失败），
+      # 换成和 CI 主链一致的 dtolnay。
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install alsa and udev
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
+      - name: Install libclang and system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libclang-dev clang libasound2-dev libudev-dev
         if: runner.os == 'linux'
 
-      - name: Setup cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-test-rustc-${{ steps.toolchain.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
+      - uses: Swatinem/rust-cache@v2
 
-      - run: cargo build --features "rebuild-bindings"
+      - name: Regenerate bindings
+        # rebuild-bindings 特征会拉起 bindgen；STEAM_SDK_LOCATION 指向仓内随包的 SDK。
+        run: cargo build --features "rebuild-bindings"
         working-directory: steamworks-sys
-        env:
-          STEAM_SDK_LOCATION: ./lib/steam
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifact-linux-bindings
-          path: steamworks-sys/src/linux_bindings.rs
-        if: matrix.os == 'ubuntu-latest'
+          name: bindings-${{ matrix.os }}
+          path: steamworks-sys/src/${{ matrix.target_file }}
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifact-linux-arm-bindings
-          path: steamworks-sys/src/linuxarm_bindings.rs
-        if: matrix.os == 'ubuntu-22.04-arm'
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifact-macos-bindings
-          path: steamworks-sys/src/macos_bindings.rs
-        if: matrix.os == 'macos-latest'
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifact-windows-bindings
-          path: steamworks-sys/src/windows_bindings.rs
-        if: matrix.os == 'windows-latest'
-
-  push:
+  compare:
     needs: build
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
+    permissions:
+      # 只有勾选 commit_bindings 时这一步才会推送；读取权限在上面已经足够。
+      contents: ${{ inputs.commit_bindings && 'write' || 'read' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download generated bindings
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libclang and system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libclang-dev clang libasound2-dev libudev-dev
+
+      - name: Collect regenerated bindings
         uses: actions/download-artifact@v4
         with:
-          pattern: artifact-*-bindings
+          pattern: bindings-*
           path: steamworks-sys/src/
           merge-multiple: true
 
-      - name: Commit changes
+      # 生成代码要求格式稳定，否则漂移 diff 里混进 rustfmt 噪音。
+      # 直接点名文件：`rustfmt.toml` 里 `ignore = ["steamworks-sys"]` 需要 nightly
+      # 才生效，走 `cargo fmt -p` 在 stable 上行为不可预期。
+      - name: Format regenerated bindings
+        run: rustfmt --edition 2021 steamworks-sys/src/*_bindings.rs
+
+      - id: drift
+        name: Does the tree differ?
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add steamworks-sys/src/*_bindings.rs
-          git commit -m "Update bindings" || echo "No changes to commit"
-      
-      - name: Push changes
-        uses: ad-m/github-push-action@master
+          set -euo pipefail
+          if git diff --quiet -- steamworks-sys/src; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "重生成结果与仓内绑定一致（无漂移）"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- steamworks-sys/src | tee /tmp/drift-stat.txt
+            git diff -- steamworks-sys/src > /tmp/bindings.diff
+            echo "漂移已写入 /tmp/bindings.diff，未提交"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: steps.drift.outputs.changed == 'true'
         with:
-          branch: ${{ github.ref }}
+          name: bindings-drift
+          path: /tmp/bindings.diff
+
+      - name: Commit regenerated bindings
+        if: inputs.commit_bindings == true && steps.drift.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add steamworks-sys/src
+          git commit -m "chore: regenerate bindings from the bundled SDK headers"
+          git push origin "HEAD:${BRANCH}"
+
+      - name: Explain
+        if: always()
+        run: |
+          echo "默认行为：只报告漂移并附 diff。要落盘请勾 commit_bindings；"
+          echo "之后仍需 CI 的 quality 矩阵在三平台编译这份生成代码。"
