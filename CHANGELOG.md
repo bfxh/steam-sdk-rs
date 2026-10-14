@@ -155,6 +155,18 @@ plus the callbacks the wrapper can deliver.
   `isteamugc.h` in `docs/SuperSteam-Design.md` (update-handle previews, the local-cache array
   calls, the asynchronous dependency/favourite/vote/EULA answers, and the deprecated
   `RequestUGCDetails`).
+- `ISteamUGC` update and local-cache surface, from 73 to 88 of its 99 functions:
+  `UpdateHandle::add_preview_file` / `add_preview_video` / `update_preview_file` /
+  `update_preview_video` / `remove_preview` / `set_required_game_versions` / `set_admin_query` /
+  `set_allow_legacy_upload`, `UGC::show_workshop_eula`, and the local-cache set
+  `downloaded_item_count` / `downloaded_items` / `mark_downloaded_item_as_unused` /
+  `set_items_disabled_locally` / `set_subscriptions_load_order` /
+  `user_content_descriptor_preferences`.
+  These answer `Err` where the inherited setters panic: an unresolvable preview path is
+  `FileNotFound` rather than `canonicalize().unwrap()`, an interior nul is `InvalidParameter`, and
+  `PreviewKind::Unknown` is refused on the way *in*, since no integer means "a code this wrapper
+  cannot name". 11 of the 99 are left, all of them asynchronous answers, plus the deprecated
+  `RequestUGCDetails`.
 
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
@@ -222,6 +234,14 @@ plus the callbacks the wrapper can deliver.
   title as the description. Fixed after checking both `isteamtimeline.h` and the generated
   signature; the wrapper's own parameter list is unchanged, so existing callers keep compiling and
   now land in the right UI fields.
+- `QueryResults::content_descriptor` used the count Steam reported as a slice bound
+  on its own 10-entry array, so an answer of more than ten descriptors panicked;
+  the count is now clamped to the buffer. The same array was built with
+  `mem::zeroed()`, and Steam's descriptor codes start at 1, so an all-zero value is
+  not one this enum may hold -- it is initialised to a real variant now. Both
+  findings came from writing the sibling reader
+  (`UGC::user_content_descriptor_preferences`) and reading what it had to be careful
+  about.
 - Doc comments: `src/networking.rs` had a malformed intra-doc link (`[../networking_sockets]`)
   and still claimed the `ISteamNetworkingSockets` wrapper was "unfinished" — it is not. Six other
   doc comments carried redundant explicit link targets. Rustdoc now runs with `-D warnings` in

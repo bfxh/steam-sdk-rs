@@ -645,7 +645,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamUGC | 99 | **60 → 73** | ISteamMatchmaking | 38 | 28 |
+| ISteamUGC | 99 | **60 → 88** | ISteamMatchmaking | 38 | 28 |
 | ISteamFriends | 78 | **27 → 63** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
@@ -774,9 +774,20 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 | 批次 | 内容 | 方法 |
 |---|---|---|
 | 2a 查询侧 —— **已交，60→73** | `tag`/`tag_display_name`/`tag_count`、`additional_preview*`（新增 `PreviewKind` 六变体 + `Unknown`）、`first_key_value_tag`、`supported_game_version*`、`add_required_tag_group`、`set_return_playtime_stats`、两个时间区间、`query_all_with_cursor` | 13 ✓ |
-| 2b 更新侧 | `AddItemPreviewFile/Video`、`UpdateItemPreviewFile/Video`、`RemoveItemPreview`、`SetRequiredGameVersions`、`SetAdminQuery`（"admin queries return hidden items"，只是给句柄置位，不假称客户端有权限）、`SetAllowLegacyUpload`（头文件讲 single small file ≤10MB 的旧上传路，现役但窄） | 8 |
-| 2c 本地缓存/数组出参 | `GetNumDownloadedItems`、`GetDownloadedItems`、`MarkDownloadedItemAsUnused`、`SetItemsDisabledLocally`、`SetSubscriptionsLoadOrder`、`GetUserContentDescriptorPreferences` | 6 |
-| 2d 异步答案 | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus`、`ShowWorkshopEULA` | 11 |
+| 2b 更新侧 —— **已交** | `add_preview_file`（按值收 `EItemPreviewType`，`Unknown` 直接拒发）、`add_preview_video`、`update_preview_file/video`、`remove_preview`、`set_required_game_versions`（空串=该端不限，头文件原文）、`set_admin_query`、`set_allow_legacy_upload`、`show_workshop_eula` | 9 ✓ |
+| 2c 本地缓存/数组出参 —— **已交** | `downloaded_item_count`、`downloaded_items`、`mark_downloaded_item_as_unused`、`set_items_disabled_locally`、`set_subscriptions_load_order`、`user_content_descriptor_preferences` | 6 ✓ |
+| 2d 异步答案 —— **未做** | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus` | 10 |
+| 不补 | `RequestUGCDetails`（头文件明写 DEPRECATED，替代者 `CreateQueryUGCDetailsRequest` 已封） | 1 |
+
+2b/2c 补的时候顺手修掉两条**真缺陷**（都不是"顺手美化"）：
+① `QueryResults::content_descriptor` 把 Steam 报回的计数直接当切片上界用
+（`&descriptors[..num_descriptors]`，数组容量 10）——计数只要大于容量就 **panic**；
+现在过 `clamped_entries` 夹到容量（变异：去掉 `min` → `steam_reported_counts_are_clamped_to_the_buffer` 判红）。
+② 同一处用 `unsafe { std::mem::zeroed() }` 造 `[EUGCContentDescriptorID; 10]`，
+而 `EUGCContentDescriptorID` 的第一个码是 **1**（实测绑定），全零不是这个枚举允许的值，
+按值构造即 UB；改为用一个有效变体初始化。新的 `user_content_descriptor_preferences`
+同样按有效变体起手、同样夹计数，并把容量钉成 `const _: () = assert!(... > 5)`——
+数组缩到装不下 Steam 现有 5 个码时**编译不过**，而不是测试变红（对照 M6 实测为 BUILD-FAIL）。
 
 2a 的三条实测口径：
 ① **缓冲长度一律取 Steam 自己的常量**，不用我拍的数：单个 tag 用 `k_cchTagListMax = 1025`、

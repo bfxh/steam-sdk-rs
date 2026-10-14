@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::c_string_arg;
 
 use std::error;
 use std::ffi::{CStr, CString};
@@ -969,6 +970,115 @@ impl UGC {
             )
         }
     }
+
+    /// Shows the app's latest Workshop EULA in an overlay window, where the user can
+    /// accept or decline it.
+    ///
+    /// The return value is Steam's acceptance of the request to show the window, not
+    /// the user's decision. Reading that decision back is the asynchronous
+    /// `GetWorkshopEULAStatus`, which this crate does not wrap yet.
+    pub fn show_workshop_eula(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUGC_ShowWorkshopEULA(self.ugc) }
+    }
+
+    /// How many workshop items are actually downloaded on this machine.
+    ///
+    /// This is not the number of subscriptions: an item can be subscribed and not
+    /// downloaded, and [`UGC::subscribed_items`] answers that other question.
+    pub fn downloaded_item_count(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUGC_GetNumDownloadedItems(self.ugc) }
+    }
+
+    /// The items Steam has downloaded locally, as it reports them right now.
+    ///
+    /// The list is sized from [`UGC::downloaded_item_count`] and then truncated to
+    /// however many entries Steam actually wrote, so a count that changes between
+    /// the two calls cannot read past what was filled.
+    pub fn downloaded_items(&self) -> Vec<PublishedFileId> {
+        let count = self.downloaded_item_count();
+        if count == 0 {
+            return Vec::new();
+        }
+        let mut ids: Vec<sys::PublishedFileId_t> = vec![0; count as usize];
+        let written = unsafe {
+            sys::SteamAPI_ISteamUGC_GetDownloadedItems(
+                self.ugc,
+                ids.as_mut_ptr(),
+                ids.len() as sys::uint32,
+            )
+        };
+        ids.truncate(clamped_entries(written as usize, ids.len()));
+        ids.into_iter()
+            .filter(|id| *id != 0)
+            .map(PublishedFileId)
+            .collect()
+    }
+
+    /// Tells Steam to stop keeping this item in its local cache. The item stays
+    /// subscribed; Steam just stops trying to keep it on disk, unless another user
+    /// on this machine subscribes to it too (its header's own caveat).
+    pub fn mark_downloaded_item_as_unused(&self, item: PublishedFileId) -> bool {
+        unsafe { sys::SteamAPI_ISteamUGC_MarkDownloadedItemAsUnused(self.ugc, item.0) }
+    }
+
+    /// Disables or re-enables items locally. A disabled item is left out of
+    /// [`UGC::subscribed_items`] unless that call asks for disabled ones.
+    ///
+    /// An empty list asks for no change at all, so this answers `false` without
+    /// calling Steam: there is nothing there for Steam to have accepted.
+    pub fn set_items_disabled_locally(&self, items: &[PublishedFileId], disabled: bool) -> bool {
+        if items.is_empty() {
+            return false;
+        }
+        let mut ids: Vec<sys::PublishedFileId_t> = items.iter().map(|id| id.0).collect();
+        unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemsDisabledLocally(
+                self.ugc,
+                ids.as_mut_ptr(),
+                ids.len() as sys::uint32,
+                disabled,
+            )
+        }
+    }
+
+    /// Sets the order items load in locally. Items left out of `items` sort by the
+    /// time they were subscribed, which is Steam's stated behaviour rather than
+    /// something this wrapper adds.
+    pub fn set_subscriptions_load_order(&self, items: &[PublishedFileId]) -> bool {
+        if items.is_empty() {
+            return false;
+        }
+        let mut ids: Vec<sys::PublishedFileId_t> = items.iter().map(|id| id.0).collect();
+        unsafe {
+            sys::SteamAPI_ISteamUGC_SetSubscriptionsLoadOrder(
+                self.ugc,
+                ids.as_mut_ptr(),
+                ids.len() as sys::uint32,
+            )
+        }
+    }
+
+    /// Which kinds of community content the user has chosen to see.
+    ///
+    /// Steam writes into a fixed array here, so this returns at most eight entries
+    /// -- five descriptor codes exist today, and the count Steam reports is trusted
+    /// only up to the buffer's length.
+    pub fn user_content_descriptor_preferences(&self) -> Vec<UGCContentDescriptorID> {
+        let mut descriptors: [sys::EUGCContentDescriptorID; UGC_CONTENT_DESCRIPTORS_MAX] =
+            [sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_NudityOrSexualContent;
+                UGC_CONTENT_DESCRIPTORS_MAX];
+        let written = unsafe {
+            sys::SteamAPI_ISteamUGC_GetUserContentDescriptorPreferences(
+                self.ugc,
+                descriptors.as_mut_ptr(),
+                descriptors.len() as sys::uint32,
+            )
+        };
+        descriptors[..clamped_entries(written as usize, descriptors.len())]
+            .iter()
+            .map(|&descriptor| descriptor.into())
+            .collect()
+    }
 }
 
 /// A handle to update a published item
@@ -1140,6 +1250,109 @@ impl UpdateHandle {
             ));
         }
         self
+    }
+
+    /// Adds one of the item's extra previews from a file on disk, with the kind of
+    /// preview it is.
+    ///
+    /// Unlike the older `preview_path`, nothing here panics: a path this machine
+    /// cannot resolve is `Err(FileNotFound)`, and asking for
+    /// [`PreviewKind::Unknown`] is `Err(InvalidParameter)` -- Steam is not sent a
+    /// type nobody named. `false` from Steam becomes `Err(InvalidParameter)` too,
+    /// which is what an unusable update handle answers as.
+    pub fn add_preview_file(self, path: &Path, kind: PreviewKind) -> Result<Self, SteamError> {
+        let kind = preview_kind_to_sys(kind)?;
+        let path = preview_file_path(path)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_AddItemPreviewFile(self.ugc, self.handle, path.as_ptr(), kind)
+        };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Adds a YouTube video as one of the item's previews.
+    pub fn add_preview_video(self, video_id: &str) -> Result<Self, SteamError> {
+        let video_id = c_string_arg(video_id)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_AddItemPreviewVideo(self.ugc, self.handle, video_id.as_ptr())
+        };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Replaces the preview at `index` with a different file.
+    ///
+    /// Steam's previews are sorted and indexed from zero, so an index Steam does
+    /// not have answers `Err(InvalidParameter)` rather than adding a preview.
+    pub fn update_preview_file(self, index: u32, path: &Path) -> Result<Self, SteamError> {
+        let path = preview_file_path(path)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_UpdateItemPreviewFile(
+                self.ugc,
+                self.handle,
+                index,
+                path.as_ptr(),
+            )
+        };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Replaces the preview video at `index`.
+    pub fn update_preview_video(self, index: u32, video_id: &str) -> Result<Self, SteamError> {
+        let video_id = c_string_arg(video_id)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_UpdateItemPreviewVideo(
+                self.ugc,
+                self.handle,
+                index,
+                video_id.as_ptr(),
+            )
+        };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Removes the preview at `index`.
+    pub fn remove_preview(self, index: u32) -> Result<Self, SteamError> {
+        let ok = unsafe { sys::SteamAPI_ISteamUGC_RemoveItemPreview(self.ugc, self.handle, index) };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Restricts the item to a range of the game's branches (its versions).
+    ///
+    /// Steam's header is explicit about the empty string here: "an empty string
+    /// for either parameter means that it will match any version on that end of
+    /// the range", and the restriction only applies once the content has actually
+    /// changed.
+    pub fn set_required_game_versions(
+        self,
+        min_branch: &str,
+        max_branch: &str,
+    ) -> Result<Self, SteamError> {
+        let min_branch = c_string_arg(min_branch)?;
+        let max_branch = c_string_arg(max_branch)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_SetRequiredGameVersions(
+                self.ugc,
+                self.handle,
+                min_branch.as_ptr(),
+                max_branch.as_ptr(),
+            )
+        };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Marks this request as an admin query, which returns items the workshop has
+    /// hidden. Setting the flag is not a permission check: Steam answers nothing
+    /// unless the logged-in account actually has the right.
+    pub fn set_admin_query(self, admin: bool) -> Result<Self, SteamError> {
+        let ok = unsafe { sys::SteamAPI_ISteamUGC_SetAdminQuery(self.ugc, self.handle, admin) };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
+    }
+
+    /// Allows the legacy single-small-file upload path (Steam's header: the content
+    /// must be one file under 10 MB). Modern multi-file items leave this off.
+    pub fn set_allow_legacy_upload(self, allow: bool) -> Result<Self, SteamError> {
+        let ok =
+            unsafe { sys::SteamAPI_ISteamUGC_SetAllowLegacyUpload(self.ugc, self.handle, allow) };
+        ok.then_some(self).ok_or(SteamError::InvalidParameter)
     }
 
     pub fn submit<F>(self, change_note: Option<&str>, cb: F) -> UpdateWatchHandle
@@ -1789,18 +2002,25 @@ impl<'a> QueryResults<'a> {
 
     /// Gets UGCContentDescriptors of the published file at the specified index.
     pub fn content_descriptor(&self, index: u32) -> Vec<UGCContentDescriptorID> {
-        let mut descriptors: [sys::EUGCContentDescriptorID; 10] = unsafe { std::mem::zeroed() };
+        // A valid variant rather than `mem::zeroed()`: Steam's descriptor codes
+        // start at 1, so an all-zero array is not a value this enum is allowed to
+        // hold, and building one would be undefined on its own.
+        let mut descriptors: [sys::EUGCContentDescriptorID; 10] =
+            [sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_NudityOrSexualContent; 10];
         let max_entries = descriptors.len() as std::ffi::c_uint;
 
-        let num_descriptors = unsafe {
-            sys::SteamAPI_ISteamUGC_GetQueryUGCContentDescriptors(
-                self.ugc,
-                self.handle,
-                index,
-                descriptors.as_mut_ptr(),
-                max_entries,
-            )
-        } as usize;
+        let num_descriptors = clamped_entries(
+            unsafe {
+                sys::SteamAPI_ISteamUGC_GetQueryUGCContentDescriptors(
+                    self.ugc,
+                    self.handle,
+                    index,
+                    descriptors.as_mut_ptr(),
+                    max_entries,
+                )
+            } as usize,
+            descriptors.len(),
+        );
 
         Vec::from(&descriptors[..num_descriptors])
             .iter()
@@ -2273,6 +2493,49 @@ fn preview_kind_from(raw: i32) -> PreviewKind {
     }
 }
 
+/// How many content-descriptor preferences this wrapper has room for in one read.
+///
+/// Five descriptors exist in these bindings; the extra room is so a growing list
+/// does not silently overflow the array, and Steam's reported count is only ever
+/// trusted up to this length.
+const UGC_CONTENT_DESCRIPTORS_MAX: usize = 8;
+
+// Compile-time rather than a test: shrinking the array below Steam's own code list
+// must stop the build, not turn a test red.
+const _: () = assert!(UGC_CONTENT_DESCRIPTORS_MAX > 5);
+
+/// A preview kind going to Steam, which takes the type by value.
+///
+/// [`PreviewKind::Unknown`] is refused rather than sent -- it is this wrapper's
+/// word for "a code I cannot name", so there is no integer that means it.
+fn preview_kind_to_sys(kind: PreviewKind) -> Result<sys::EItemPreviewType, SteamError> {
+    use sys::EItemPreviewType as P;
+    Ok(match kind {
+        PreviewKind::Image => P::k_EItemPreviewType_Image,
+        PreviewKind::YouTubeVideo => P::k_EItemPreviewType_YouTubeVideo,
+        PreviewKind::Sketchfab => P::k_EItemPreviewType_Sketchfab,
+        PreviewKind::EnvironmentMapHorizontalCross => {
+            P::k_EItemPreviewType_EnvironmentMap_HorizontalCross
+        }
+        PreviewKind::EnvironmentMapLatLong => P::k_EItemPreviewType_EnvironmentMap_LatLong,
+        PreviewKind::Clip => P::k_EItemPreviewType_Clip,
+        PreviewKind::Unknown => return Err(SteamError::InvalidParameter),
+    })
+}
+
+/// A preview file as Steam receives it: resolved on this machine first, so a
+/// missing path is an answer rather than an `unwrap()` in the caller's loop.
+fn preview_file_path(path: &Path) -> Result<CString, SteamError> {
+    let resolved = path.canonicalize().map_err(|_| SteamError::FileNotFound)?;
+    CString::new(resolved.to_string_lossy().as_bytes()).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// How many entries to take from a Steam array answer: the count Steam reports is
+/// an answer about its own write, not a promise about the caller's buffer.
+fn clamped_entries(reported: usize, capacity: usize) -> usize {
+    reported.min(capacity)
+}
+
 #[cfg(test)]
 mod query_surface_tests {
     use super::*;
@@ -2351,6 +2614,87 @@ mod query_surface_tests {
         }
         let tag_buffer = vec![0 as c_char; sys::k_cchTagListMax as usize];
         assert_eq!(tag_buffer.len(), 1025);
+    }
+
+    #[test]
+    fn preview_kinds_round_trip_and_the_unnamed_one_is_refused() {
+        // Going to Steam and back must land on the same kind, or a preview uploaded
+        // as a video would come out of the next query as something else.
+        let kinds = [
+            PreviewKind::Image,
+            PreviewKind::YouTubeVideo,
+            PreviewKind::Sketchfab,
+            PreviewKind::EnvironmentMapHorizontalCross,
+            PreviewKind::EnvironmentMapLatLong,
+            PreviewKind::Clip,
+        ];
+        let mut codes = Vec::new();
+        for kind in kinds {
+            let raw = preview_kind_to_sys(kind).expect("a named kind always maps");
+            let round_trip = preview_kind_from(raw as i32);
+            assert_eq!(round_trip, kind, "{kind:?} did not survive the round trip");
+            codes.push(raw as i32);
+        }
+        for i in 0..codes.len() {
+            for j in (i + 1)..codes.len() {
+                assert_ne!(
+                    codes[i], codes[j],
+                    "two kinds would reach Steam as one code"
+                );
+            }
+        }
+        assert_eq!(
+            preview_kind_to_sys(PreviewKind::Unknown),
+            Err(SteamError::InvalidParameter),
+            "there is no integer that means 'a code this wrapper cannot name'"
+        );
+    }
+
+    #[test]
+    fn a_missing_preview_file_is_an_answer_not_a_panic() {
+        // The inherited `preview_path` does `canonicalize().unwrap()`; this is the
+        // same question with an answer.
+        let missing = std::path::Path::new("no-such-preview-file-9f3a2b.png");
+        assert!(preview_file_path(missing).is_err());
+        // The error must be the "cannot find it" one, not a generic refusal: a
+        // caller branching on FileNotFound would otherwise branch on nothing.
+        assert_eq!(
+            preview_file_path(missing).err(),
+            Some(SteamError::FileNotFound)
+        );
+
+        let real = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let resolved = preview_file_path(&real).expect("the manifest is readable");
+        assert!(!resolved.as_bytes().is_empty());
+        assert!(
+            !resolved.as_bytes().contains(&0),
+            "a C string body must not hold a nul"
+        );
+    }
+
+    #[test]
+    fn steam_reported_counts_are_clamped_to_the_buffer() {
+        assert_eq!(clamped_entries(3, 10), 3);
+        assert_eq!(clamped_entries(10, 10), 10);
+        // Steam answering more than the buffer holds must not slice past it, which
+        // is what `content_descriptor` used to do.
+        assert_eq!(clamped_entries(11, 10), 10);
+        assert_eq!(clamped_entries(usize::MAX, 10), 10);
+        assert_eq!(clamped_entries(0, 0), 0);
+    }
+
+    #[test]
+    fn descriptor_preferences_are_read_through_the_clamp() {
+        let buffer = [sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_NudityOrSexualContent;
+            UGC_CONTENT_DESCRIPTORS_MAX];
+        // A count above the buffer must not slice past it.
+        assert_eq!(
+            clamped_entries(UGC_CONTENT_DESCRIPTORS_MAX + 7, buffer.len()),
+            UGC_CONTENT_DESCRIPTORS_MAX
+        );
+        // And the slice the method takes has to stay inside the array.
+        let taken = &buffer[..clamped_entries(UGC_CONTENT_DESCRIPTORS_MAX + 7, buffer.len())];
+        assert_eq!(taken.len(), UGC_CONTENT_DESCRIPTORS_MAX);
     }
 
     #[test]
