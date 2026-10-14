@@ -14,6 +14,7 @@ QueryResults 21
 Input 19
 Timeline 18
 NetConnection 16
+NetworkingUtils 16
 Friend 14
 NetworkingMessage 14
 NetConnectionRealTimeInfo 13
@@ -42,7 +43,6 @@ ParentalSettings 6
 ServerListRequest 6
 NetConnectionInfo 5
 NetworkingMessages 5
-NetworkingUtils 5
 RelayNetworkStatus 5
 RemotePlaySession 5
 ConnectedEvent 4
@@ -74,6 +74,7 @@ FileDetails 1
 Leaderboard 1
 NetPollGroup 1
 NetworkingConfigValue 1
+PingEstimate 1
 SessionRequestBuilder 1
 SteamAPIInitError 1
 UpdateWatchHandle 1

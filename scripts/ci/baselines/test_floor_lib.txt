@@ -1,1 +1,1 @@
-109  # lib tests reached with --all-features (94 passed + 15 ignored), measured 2026-10-15 with the dependency page
+112  # lib tests reached with --all-features (97 passed + 15 ignored), measured 2026-10-15 with the ping/POP cluster

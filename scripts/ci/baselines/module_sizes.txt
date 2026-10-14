@@ -19,6 +19,7 @@ src/networking_types/config.rs 551
 src/app.rs 550
 src/callback.rs 539
 src/ugc/types.rs 519
+src/networking_utils.rs 513
 src/parties.rs 499
 src/ugc/query.rs 487
 src/ugc/results.rs 473
@@ -33,7 +34,6 @@ src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/networking.rs 257
 src/input.rs 248
-src/networking_utils.rs 242
 src/friends/chat.rs 216
 src/safe_ugc.rs 216
 src/identity.rs 198

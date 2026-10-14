@@ -199,6 +199,23 @@ plus the callbacks the wrapper can deliver.
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 
+- `ISteamNetworkingUtils` ping and POP diagnostics, from 3 called functions to 14 of its 41:
+  `local_ping_location` (which returns the *age* of the data and `None` on Steam's -1 "no data
+  is available yet"), `estimate_ping_time`, `estimate_ping_time_from_local_host`,
+  `ping_location_text` / `parse_ping_location` (the only supported round-trip — Steam says of
+  the text form "it is subject to change so please do not parse it yourself", and of the struct
+  "Do not serialize it, send it over the wire, or persist it", which is why
+  `SteamNetworkPingLocation` has no `Serialize` impl), `ping_data_up_to_date`,
+  `ping_to_data_center`, `direct_ping_to_pop`, `pop_count`, `pop_list`, `local_timestamp`.
+  Latency answers are `PingEstimate`, which names only the two sentinels Steam documents
+  (`k_nSteamNetworkingPing_Failed` -1, `k_nSteamNetworkingPing_Unknown` -2) and leaves every
+  other integer a number rather than guessing at a third meaning. `pop_list` sizes its buffer
+  from `GetPOPCount` and clamps Steam's filled-count through `pops_to_take`, extracted so the
+  two failure directions are testable: a count above capacity truncates to the buffer, a
+  negative count takes nothing instead of wrapping into a huge `usize` (controls N1/N2/N3 each
+  turned the matching test red, and N1 swaps the two sentinels while N3 drops exactly the
+  `.max(0)`).
+
 ### Added — CI and release automation
 
 - Four new strictness gates, each one step with one verdict (`scripts/ci/`, so the
