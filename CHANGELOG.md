@@ -248,6 +248,24 @@ plus the callbacks the wrapper can deliver.
   `wait_for_data` is documented as parking the calling thread, which is what Steam's own note says
   it is for ("games with a dedicated input thread").
 
+- `ISteamInput` glyph, action-name and origin translation, from 35 called functions to 43 of its
+  48: `glyph_for_xbox_origin`, `glyph_png_for_action_origin`, `glyph_svg_for_action_origin`,
+  `string_for_analog_action_name`, `string_for_digital_action_name`, `string_for_xbox_origin`,
+  `translate_action_origin`, `action_origin_from_xbox_origin`.
+  **Breaking**: the two pre-existing string getters
+  (`get_glyph_for_action_origin`, `get_string_for_action_origin`) now return `Option<String>`.
+  Their bodies were a bare `CStr::from_ptr` on a pointer Steam owns and can hand back as null --
+  `from_ptr(null)` is immediate undefined behaviour, not a delayed error -- so every one of these
+  eight calls now goes through `steam_static_str`, which reports `None` for the null case and
+  otherwise returns lossy text (one invalid byte must not delete Steam's whole answer). Control:
+  turning the null case into `Some(String::new())` -- exactly the "empty means missing" confusion
+  the change removes -- turns the test red.
+  `translate_action_origin` and `action_origin_from_xbox_origin` deliberately return the raw
+  binding enum rather than a Rust enum of ours: `EInputActionOrigin` is `#[non_exhaustive]`, so a
+  newer Steam can name an origin this crate has never heard of, and forwarding it unchanged is the
+  only answer that cannot lose or mislabel it. The header's own contract is cited in the docs
+  (`isteaminput.h:1003-1005`).
+
 ### Added — CI and release automation
 
 - Four new strictness gates, each one step with one verdict (`scripts/ci/`, so the

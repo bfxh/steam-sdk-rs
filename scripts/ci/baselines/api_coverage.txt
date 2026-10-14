@@ -39,7 +39,7 @@ ISteamGameServer.called 23
 ISteamGameServerStats.called 10
 ISteamHTMLSurface.called 37
 ISteamHTTP.called 22
-ISteamInput.called 35
+ISteamInput.called 43
 ISteamInventory.called 34
 ISteamMatchmaking.called 28
 ISteamMatchmakingPingResponse.called 0

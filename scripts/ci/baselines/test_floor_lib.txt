@@ -1,1 +1,1 @@
-120  # lib tests reached with --all-features (105 passed + 15 ignored), measured 2026-10-15 with the ISteamInput cluster
+123  # lib tests reached with --all-features (108 passed + 15 ignored), measured 2026-10-15 with the glyph/string cluster

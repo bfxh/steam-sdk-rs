@@ -9,6 +9,7 @@ src/lib.rs 814
 src/networking_sockets/mod.rs 789
 src/remote_storage.rs 713
 src/utils.rs 700
+src/input.rs 636
 src/error.rs 603
 src/ugc/answers.rs 599
 src/ugc/mod.rs 595
@@ -23,7 +24,6 @@ src/ugc/types.rs 535
 src/networking_utils.rs 513
 src/parties.rs 499
 src/ugc/query.rs 487
-src/input.rs 486
 src/user.rs 483
 src/ugc/results.rs 473
 src/networking_types/end.rs 384
