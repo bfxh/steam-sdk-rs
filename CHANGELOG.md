@@ -165,8 +165,23 @@ plus the callbacks the wrapper can deliver.
   These answer `Err` where the inherited setters panic: an unresolvable preview path is
   `FileNotFound` rather than `canonicalize().unwrap()`, an interior nul is `InvalidParameter`, and
   `PreviewKind::Unknown` is refused on the way *in*, since no integer means "a code this wrapper
-  cannot name". 11 of the 99 are left, all of them asynchronous answers, plus the deprecated
-  `RequestUGCDetails`.
+  cannot name". Two of the 99 binding names were then left un-called, and both are still open:
+  `RequestUGCDetails` (the header marks it "DEPRECATED - Use CreateQueryUGCDetailsRequest call
+  above instead!") and `GetAppDependencies` (Steam answers it more than once -- see the next
+  entry for why that one is not wrapped).
+
+- `ISteamUGC` consumer answers, from 88 to 97 of its 99 functions (`src/ugc/answers.rs`):
+  `add_dependency` / `remove_dependency`, `add_app_dependency` / `remove_app_dependency`,
+  `add_item_to_favorites` / `remove_item_from_favorites`, `set_user_item_vote`,
+  `get_user_item_vote`, `get_workshop_eula_status`. Each is one call with exactly one
+  `STEAM_CALL_RESULT` callback, so `FnOnce(Result<P, SteamError>)` describes it honestly, and
+  all eight answer types also became `CallbackResult` variants, so the callback stream carries
+  them instead of only the registering closure seeing them.
+  `GetAppDependencies` stays unwrapped on purpose: `isteamugc.h:380-381` says its callback "may
+  be called multiple times until all app dependencies have been returned", and handing the first
+  of those to a `FnOnce` would present a partial list as the whole answer.
+  `UGC::get_workshop_eula_status` also replaces the "this crate does not wrap yet" note on
+  `show_workshop_eula`, which is now the pointer it always wanted to be.
 
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.

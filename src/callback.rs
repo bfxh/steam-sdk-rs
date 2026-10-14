@@ -17,6 +17,8 @@ use std::sync::{Arc, Weak};
 /// `register_callback` regardless.
 #[derive(Debug)]
 pub enum CallbackResult {
+    AddAppDependencyResult(AddAppDependencyResult),
+    AddUGCDependencyResult(AddUGCDependencyResult),
     AuthSessionTicketResponse(AuthSessionTicketResponse),
     ClanChatMessageReceived(ClanChatMessageReceived),
     DownloadItemResult(DownloadItemResult),
@@ -27,6 +29,7 @@ pub enum CallbackResult {
     GameOverlayActivated(GameOverlayActivated),
     GamepadTextInputDismissed(GamepadTextInputDismissed),
     GameRichPresenceJoinRequested(GameRichPresenceJoinRequested),
+    GetUserItemVoteResult(GetUserItemVoteResult),
     GlobalStatsReceived(GlobalStatsReceived),
     LobbyChatMsg(LobbyChatMsg),
     LobbyChatUpdate(LobbyChatUpdate),
@@ -43,8 +46,11 @@ pub enum CallbackResult {
     RelayNetworkStatusCallback(RelayNetworkStatusCallback),
     RemotePlayConnected(RemotePlayConnected),
     RemotePlayDisconnected(RemotePlayDisconnected),
+    RemoveAppDependencyResult(RemoveAppDependencyResult),
+    RemoveUGCDependencyResult(RemoveUGCDependencyResult),
     ScreenshotRequested(ScreenshotRequested),
     ScreenshotReady(ScreenshotReady),
+    SetUserItemVoteResult(SetUserItemVoteResult),
     SteamServerConnectFailure(SteamServerConnectFailure),
     SteamServersConnected(SteamServersConnected),
     SteamServersDisconnected(SteamServersDisconnected),
@@ -54,6 +60,7 @@ pub enum CallbackResult {
     UnreadChatMessagesChanged(UnreadChatMessagesChanged),
     UserAchievementStored(UserAchievementStored),
     UserAchievementIconFetched(UserAchievementIconFetched),
+    UserFavoriteItemsListChanged(UserFavoriteItemsListChanged),
     UserStatsReceived(UserStatsReceived),
     UserStatsStored(UserStatsStored),
     ValidateAuthTicketResponse(ValidateAuthTicketResponse),
@@ -62,6 +69,7 @@ pub enum CallbackResult {
     GSClientKick(GSClientKick),
     GSClientGroupStatus(GSClientGroupStatus),
     NewUrlLaunchParameters(NewUrlLaunchParameters),
+    WorkshopEULAStatus(WorkshopEULAStatus),
 }
 
 impl CallbackResult {
@@ -165,6 +173,28 @@ impl CallbackResult {
             ValidateAuthTicketResponse::ID => {
                 Self::ValidateAuthTicketResponse(ValidateAuthTicketResponse::from_raw(data))
             }
+            AddAppDependencyResult::ID => {
+                Self::AddAppDependencyResult(AddAppDependencyResult::from_raw(data))
+            }
+            AddUGCDependencyResult::ID => {
+                Self::AddUGCDependencyResult(AddUGCDependencyResult::from_raw(data))
+            }
+            GetUserItemVoteResult::ID => {
+                Self::GetUserItemVoteResult(GetUserItemVoteResult::from_raw(data))
+            }
+            RemoveAppDependencyResult::ID => {
+                Self::RemoveAppDependencyResult(RemoveAppDependencyResult::from_raw(data))
+            }
+            RemoveUGCDependencyResult::ID => {
+                Self::RemoveUGCDependencyResult(RemoveUGCDependencyResult::from_raw(data))
+            }
+            SetUserItemVoteResult::ID => {
+                Self::SetUserItemVoteResult(SetUserItemVoteResult::from_raw(data))
+            }
+            UserFavoriteItemsListChanged::ID => {
+                Self::UserFavoriteItemsListChanged(UserFavoriteItemsListChanged::from_raw(data))
+            }
+            WorkshopEULAStatus::ID => Self::WorkshopEULAStatus(WorkshopEULAStatus::from_raw(data)),
             GSClientApprove::ID => Self::GSClientApprove(GSClientApprove::from_raw(data)),
             GSClientDeny::ID => Self::GSClientDeny(GSClientDeny::from_raw(data)),
             GSClientKick::ID => Self::GSClientKick(GSClientKick::from_raw(data)),

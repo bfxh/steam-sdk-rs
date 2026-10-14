@@ -645,13 +645,21 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamUGC | 99 | **60 → 88** | ISteamMatchmaking | 38 | 28 |
+| ISteamUGC | 99 | **60 → 88 → 97** | ISteamMatchmaking | 38 | 28 |
 | ISteamFriends | 78 | **27 → 63** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
 | ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | **4 → 18** |
 | ISteamScreenshots | 9 | 4 → **9** | | | |
+
+这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
+方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了
+`…RequestPage` / `…RequestCursor` 后缀，所以 99 个名字只对应 97 个不同的方法。UGC 补到 **97/99** 之后
+剩下两条，各有明确去处：`RequestUGCDetails`（头文件原文 "DEPRECATED - Use CreateQueryUGCDetailsRequest
+call above instead!"）与 `GetAppDependencies`（多次答案，见 6.1e）。两处都用"绑定名前缀匹配"来判已调，
+早先用**精确名字相等**的尺子把 `CreateQueryAllUGCRequest` 误报成没调过 —— 它其实是被
+`…_RequestPage` / `…_RequestCursor` 调的，**绑定名 ≠ 头文件名，别拿名字相等当覆盖判据**。
 
 `ISteamScreenshots` 也在 2026-10-14 补到 **9/9**：新增 `write_screenshot`（原始 RGB 缓冲，字节数按
 Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空缓冲给对齐悬垂指针而非 null）、
@@ -776,7 +784,8 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 | 2a 查询侧 —— **已交，60→73** | `tag`/`tag_display_name`/`tag_count`、`additional_preview*`（新增 `PreviewKind` 六变体 + `Unknown`）、`first_key_value_tag`、`supported_game_version*`、`add_required_tag_group`、`set_return_playtime_stats`、两个时间区间、`query_all_with_cursor` | 13 ✓ |
 | 2b 更新侧 —— **已交** | `add_preview_file`（按值收 `EItemPreviewType`，`Unknown` 直接拒发）、`add_preview_video`、`update_preview_file/video`、`remove_preview`、`set_required_game_versions`（空串=该端不限，头文件原文）、`set_admin_query`、`set_allow_legacy_upload`、`show_workshop_eula` | 9 ✓ |
 | 2c 本地缓存/数组出参 —— **已交** | `downloaded_item_count`、`downloaded_items`、`mark_downloaded_item_as_unused`、`set_items_disabled_locally`、`set_subscriptions_load_order`、`user_content_descriptor_preferences` | 6 ✓ |
-| 2d 异步答案 —— **未做** | `Add/RemoveAppDependency`、`GetAppDependencies`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus` | 10 |
+| 2d 异步答案 —— **已交 9 个** | `Add/RemoveAppDependency`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus` | 10 中的 9 |
+| 2d 余下 | `GetAppDependencies`（多次答案，形状未定，见下） | 1 |
 | 不补 | `RequestUGCDetails`（头文件明写 DEPRECATED，替代者 `CreateQueryUGCDetailsRequest` 已封） | 1 |
 
 2b/2c 补的时候顺手修掉两条**真缺陷**（都不是"顺手美化"）：
@@ -804,12 +813,27 @@ preview 的 URL 用 `k_cchPublishedFileURLMax = 256`、原始文件名用 `k_cch
 `add_required_tag_group` 一个 tag 带内嵌 NUL 就**整组不提交**（抽成 `tag_group_strings` 才测得到这条；
 变异成"静默丢掉坏字节"判红）。
 
-2d 有一条**必须先定的形状问题**：`GetAppDependencies` 的头文件原文是
-"note that whatever callback you register for `GetAppDependenciesResult_t` may be called multiple
-times until all app dependencies have been returned" —— 一个分页流，而本仓的
-`register_call_result` 是 `FnOnce`（一次答案、一条 handle）。要么把它做成 `FnMut`+终止条件，
-要么给它单独一个"流到 empty/结束为止"的收拢 API。**不要把多次答案伪装成一次**，
-所以 2d 排最后，先交 2a-2c 的同步面。
+2d 的形状问题按"一次调用 = 一个答案"这条界线切开处理：
+
+- **9 个一问一答的先交**（`src/ugc/answers.rs`）。它们的 `STEAM_CALL_RESULT` 都是一次性的，
+  `register_call_result`（`FnOnce`，按 `SteamAPICall_t` 只触发一次）正是它们的形状，
+  所以统一走 `answered(io_error, v.m_eResult, || 载荷)`：IO 失败 → `IOFailure`，Steam 拒绝 → 它自己的
+  `SteamError`，其余 → 载荷。8 个回调全部进了 `CallbackResult`（不是只挂 `register_call_result`），
+  这样流式 API 也收得到。
+- **`GetAppDependencies` 仍然没做，而且不能按上面的形状做**。头文件原文是
+  "note that whatever callback you register for `GetAppDependenciesResult_t` may be called multiple
+  times until all app dependencies have been returned"（`isteamugc.h:380-381`）—— 一个分页流。
+  拿 `FnOnce` 接它就是把"部分列表"当成"完整列表"交给调用方，这一条写在 `answers.rs` 的模块注释里，
+  不在代码里假装解决。要做的是 `FnMut`+终止条件，或一个"收到 empty 为止"的收拢 API —— **待定**。
+
+2d 的 5 条变异复算（`E:/tmp/answers_mutants*.sh`，读数一律取自门禁自身而不是管道尾）：
+`answered` 的 io 分支改成 `if false` ⇒ M1 判红；`voted_down` 抄 `m_bVotedUp` ⇒ **第一版判绿**，
+因为那条测试在第二个用例里只断了 `voted_up` 为真、没断 `voted_down` 为假，补成"每个输出位各自来自
+自己的源位"三段断言后 M2 判红；`action_time` 抄 `m_unVersion` ⇒ M3 判红；`was_add_request` 恒 `true`
+⇒ M4 判红；删掉 `AddUGCDependencyResult::ID` 那条解码臂 ⇒ M5b 判红。
+第一版 M5 想改成"两条臂共用一个 ID"，结果编不过 —— **编不过的变异不算击杀**，只记 UNVIABLE。
+另外这轮还抓到自家分类器的错：`grep "^error"` 把失败测试打印的 `error: test failed` 当成"编译失败"，
+于是把两条真击杀误报成 UNVIABLE；判据改成只认 `error[E` / `could not compile`。
 
 
 

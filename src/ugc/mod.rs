@@ -9,6 +9,7 @@ use std::mem;
 use std::os::raw::c_char;
 use std::path::Path;
 
+mod answers;
 mod query;
 mod read;
 mod results;
@@ -17,6 +18,7 @@ mod types;
 mod ugc_tests;
 mod update;
 
+pub use answers::*;
 pub use query::*;
 pub use read::*;
 pub use results::*;
@@ -477,7 +479,7 @@ impl UGC {
     ///
     /// The return value is Steam's acceptance of the request to show the window, not
     /// the user's decision. Reading that decision back is the asynchronous
-    /// `GetWorkshopEULAStatus`, which this crate does not wrap yet.
+    /// [`UGC::get_workshop_eula_status`].
     pub fn show_workshop_eula(&self) -> bool {
         unsafe { sys::SteamAPI_ISteamUGC_ShowWorkshopEULA(self.ugc) }
     }
