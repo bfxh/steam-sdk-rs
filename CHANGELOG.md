@@ -68,16 +68,21 @@ plus the callbacks the wrapper can deliver.
   never-read address rather than null), `add_vr_screenshot_to_library` with the six
   `VRScreenshotKind` variants, and the three tag calls `set_location`, `tag_user`,
   `tag_published_file`.
-- `ISteamUtils` from 16 to 30 of its 37 functions: `seconds_since_app_active`,
+- `ISteamUtils` from 16 to 32 of its 37 functions: `seconds_since_app_active`,
   `seconds_since_computer_active`, `ipc_call_count`, `battery_power` (Steam's 255 sentinel becomes
   `BatteryPower::OnAcPower` rather than a 255% reading), `overlay_needs_present`,
   `is_steam_running_in_vr`, `is_steam_china_launcher`, `entered_gamepad_text_length`,
   `dismiss_gamepad_text_input`, `dismiss_floating_gamepad_text_input`,
-  `set_overlay_notification_inset`, and the VR headset streaming pair. The remaining seven are
+  `set_overlay_notification_inset`, and the VR headset streaming pair. The remaining five are
   registered one by one with the header text behind each judgement in
-  `docs/SuperSteam-Design.md` 6.1d -- including `FilterText`, which first has to be kept off the
-  "already superseded" list: these bindings expose no `ISteamTextFiltering` at all
-  (`grep -c SteamAPI_ISteamTextFiltering` = 0), so it is the only text-filter path available here.
+  `docs/SuperSteam-Design.md` 6.1d.
+- Text filtering on `ISteamUtils`: `init_text_filter` (Steam's answer for "unavailable in this
+  language" is a passthrough, not an error, so the doc says so rather than letting a caller read
+  it as clean text) and `filter_text`, which allocates the `strlen(input)+1` buffer Steam asks
+  for, cuts the result at the first nul instead of trusting a terminator, and treats a negative
+  return as failure rather than zero changes. These stay in the list rather than in the skipped
+  register because the newer interface I first assumed replaced them is not in these bindings at
+  all (`grep -c SteamAPI_ISteamTextFiltering` = 0).
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 

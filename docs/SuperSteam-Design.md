@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | 27 | ISteamUtils | 37 | **16 → 30** |
+| ISteamFriends | 78 | 27 | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | 16 |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -678,7 +678,7 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 
 ### 6.1d 补口的取舍登记（2026-10-14，避免"没写"被误读成"漏了"）
 
-`ISteamUtils` 补到 30/37 之后，剩下 7 个**逐个对着 `isteamutils.h` 判过**，不是漏项：
+`ISteamUtils` 补到 32/37 之后，剩下 5 个**逐个对着 `isteamutils.h` 判过**，不是漏项：
 
 | 未封方法 | 判据（读头文件原文，不靠猜） |
 |---|---|
@@ -687,7 +687,13 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 | `GetConnectedUniverse` | 客户端连的是哪个 universe（public/beta…），诊断类 |
 | `SetGameLauncherMode` | 头文件写明是给"没有手柄支持的启动器"用（Steam Input 转键鼠），不是游戏态 |
 | `StartVRDashboard` | 头文件："ask SteamUI to create and render its OpenVR dashboard"，属客户端工具 |
-| `InitFilterText` / `FilterText` | **真待补**：本绑定里搜不到 `SteamAPI_ISteamTextFiltering_*`（计数 0），所以这对是老文本过滤的**唯一通路**；要补得处理 `CSteamID` 入参 + 输出缓冲与截断语义，列为下一块 |
+
+`InitFilterText` / `FilterText` 已在同一轮补上（`init_text_filter` / `filter_text`）。
+**这里留一条判错记录**：我最初打算以"已被 `ISteamTextFiltering` 取代"为由跳过这对函数，
+但本绑定里 `grep -c SteamAPI_ISteamTextFiltering` = **0** —— 那套新接口在这份 SDK 绑定中根本不存在，
+`FilterText` 是唯一的文本过滤通路。判"某 API 已被取代"必须先查绑定里有没有那个替代品，
+不能按 Steamworks 的版本常识直接推。输出侧按头文件要求分配 `strlen(input)+1`，
+回读时截到第一个 NUL（不依赖 Steam 一定补终止符），负数返回按失败处理而不是"改了 0 个字符"。
 
 同理两条硬事实登记在此免得反复重查：
 ① 本 SDK 的 `isteamutils.h` 里两处 `Deprecated` 都是 `STEAM_PRIVATE_API`（`GetCSERIPPort`、`RunFrame`），**不在公开面**，所以不存在"漏封退役方法"；
