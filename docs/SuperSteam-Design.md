@@ -643,23 +643,59 @@ grep -ohE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" steamworks-sys/src/windows_bindi
 grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l                                    # 已调
 ```
 
-| 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
+| 接口 | 已调 | 绑定 | 接口 | 已调 | 绑定 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamUGC | 99 | **60 → 88 → 97** | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | **27 → 63** | ISteamUtils | 37 | **16 → 32** |
-| ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
-| ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
-| ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
-| ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | **4 → 18** |
-| ISteamScreenshots | 9 | 4 → **9** | | | |
+| ISteamNetworkingUtils |    3 |  41 | ISteamHTTP |   22 |  25 |
+| ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
+| ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
+| ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamInput |   18 |  48 | ISteamMatchmakingServers |   14 |  17 |
+| ISteamUser |    9 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
+| ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
+| ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
+| ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
+| ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
+| ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
+| ISteamUserStats |   31 |  44 | ISteamMusic |    9 |   9 |
+| ISteamMatchmaking |   28 |  38 | ISteamParentalSettings |    6 |   6 |
+| ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
+| ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
+| ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
+| ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
+
+**总计 576 / 913**（33 个接口）。这张表现在由 CI 的
+`interface coverage stays at its registered ledger` 一步复算：尺子是
+`scripts/ci/api_coverage.py`，基线是 `scripts/ci/baselines/api_coverage.txt`，
+每个接口两条数（`declared` / `called`）**双向**判红 —— 少包一个函数、或 SDK 升级悄悄换了
+可调用集合，都要人在提交信息里显式认过。上面那条 `grep` 只是同一件事的手工写法，
+现在它不再是唯一口径。
+
+四个 0 行要分两类说，别一概说成"不需要"：
+
+- **确实不该包**：`ISteamController` —— `isteamcontroller.h:2` 原文 "The older ISteamController
+  interface has been deprecated in favor of ISteamInput"，而 `ISteamInput` 本仓已包 18 个。
+  `ISteamClient` —— 绑定给它生成 33 个入口，本仓一个都不调：接口指针一律来自扁平 C API 的
+  `SteamAPI_Steam<Name>_vNNN()` 全局函数（`lib.rs` 24 处 + `server.rs` 8 处，均带 null 守卫）。
+- **真缺口，不是结构性豁免**：`ISteamMatchmaking{Ping,Players,Rules,ServerList}Response`
+  （2~3 个入口各一）与 `ISteamNetworkingFakeUDPPort`（4 个）。判据是**内容尺而不是名字猜测**：
+  `grep -rn "PlayersResponse\|PingResponse\|RulesResponse\|ServerListResponse" src/` 与
+  `grep -rn "FakeUDPPort\|CreateFakeUDPPort" src/` 实测**零命中** —— 本仓连这些名字都没出现过，
+  所以它们是没做，不是"做了但不占这些入口"的误读。
+  需要区分的是：`matchmaking_servers.rs` 确实**实现了**这四类服务端回调 ——
+  `matchmaking_servers_callback!`（该文件第 8 行）在 148 / 449 / 467 / 480 行以
+  `ServerList` / `Ping` / `PlayerDetails` / `ServerRules` 实例化，手写 `extern "C"` vtable
+  交给 Steam 回调进来。但那套实现**一次都没有调用**绑定给这四个接口生成的入口函数，
+  所以台账读 0：这里 0 的含义是"入口没被调"，不是"接口不存在于本仓"。
 
 这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
 方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了
 `…RequestPage` / `…RequestCursor` 后缀，所以 99 个名字只对应 97 个不同的方法。UGC 补到 **97/99** 之后
 剩下两条，各有明确去处：`RequestUGCDetails`（头文件原文 "DEPRECATED - Use CreateQueryUGCDetailsRequest
-call above instead!"）与 `GetAppDependencies`（多次答案，见 6.1e）。两处都用"绑定名前缀匹配"来判已调，
-早先用**精确名字相等**的尺子把 `CreateQueryAllUGCRequest` 误报成没调过 —— 它其实是被
-`…_RequestPage` / `…_RequestCursor` 调的，**绑定名 ≠ 头文件名，别拿名字相等当覆盖判据**。
+call above instead!"）与 `GetAppDependencies`（多次答案，见 6.1e）。
+判"已调"的单位两边都是**绑定名**，所以精确相等就够了；但把**头文件名**拿去和绑定名精确相等是错的 ——
+早先一把这样的尺子把 `CreateQueryAllUGCRequest` 报成从没调过，实际它由
+`…_RequestPage` / `…_RequestCursor` 两个绑定入口调用。**头文件名 ≠ 绑定名**，这条尺子因此改成
+绑定名对绑定名，并顺带把重载数（99 个名字 / 97 个方法）写在上面。
 
 `ISteamScreenshots` 也在 2026-10-14 补到 **9/9**：新增 `write_screenshot`（原始 RGB 缓冲，字节数按
 Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空缓冲给对齐悬垂指针而非 null）、

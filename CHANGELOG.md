@@ -222,6 +222,31 @@ plus the callbacks the wrapper can deliver.
     it refuses to report clean" (C4). A first version of the floor ordering reported C1 as
     "no compiled artifact for ['steamworks']" -- true but not the verdict, since a denied lint
     *should* stop that crate from producing an artifact; the findings are now read first.
+  - `interface coverage stays at its registered ledger` (`scripts/ci/api_coverage.py`) measures
+    every Steam interface as two registered numbers -- `declared` (what the bindings expose) and
+    `called` (what `src/` calls) -- across all 33 of them, currently **576 / 913**. The design doc's
+    coverage table is this gate's output now, because the hand-copied version had already started to
+    drift, and losing one wrapped function turns CI red until somebody re-records the number.
+    Four controls, exit codes read from the gate: renaming one call site
+    (`AddDependency` -> `AddDependencyTypo`) made the ruler print `ISteamUGC.called 96` and the
+    comparator answer "97 -> 96, tighten the baseline" (Ca); naming an uncalled function
+    (`RequestUGCDetails`) in a doc comment left the number at 97 (Cb), because comments are stripped
+    before matching -- without that strip, writing "we never call X" would *buy* coverage; putting
+    the same call inside a `#[cfg(test)] mod` made the ruler refuse with
+    "calls 1 interface function(s) only from test code" (Cc), since silently dropping it would be
+    the same blind spot pointed the other way; and a missing bindings file exits 2 with "not a
+    verdict" instead of printing zero coverage as a fact (Cd -- a first version let the
+    `FileNotFoundError` traceback escape as exit 1).
+    Building this ledger surfaced three prose defects in the doc it replaced: a ruler that matched
+    *header* names against binding names had reported `CreateQueryAllUGCRequest` as never called,
+    when the bindings reach it through `..._RequestPage` / `..._RequestCursor`; and four zero rows
+    had been explained as "structural" without evidence. The note now separates what a header says
+    (`isteamcontroller.h:2`: "The older ISteamController interface has been deprecated in favor of
+    ISteamInput") from what is simply unwrapped (`ISteamMatchmaking{Ping,Players,Rules,
+    ServerList}Response` and `ISteamNetworkingFakeUDPPort` -- zero name references under `src/`,
+    measured), and records that the server-list vtable the crate does hand-write
+    (`matchmaking_servers_callback!`, instantiated at lines 148/449/467/480) never calls those
+    interfaces' binding entry points.
   - `feature matrix` builds each optional feature alone (`raw-bindings`, `serde`,
     `image`, `futures`) plus the feature-free build, because `--all-features` hides a
     feature whose own `cfg` block rotted -- and the first person to hit that is a user
