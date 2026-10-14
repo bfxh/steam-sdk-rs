@@ -1,5 +1,7 @@
+target/
 wt-*/
 repro/
 _wip-backup-*/
 *.txt
+*.log
 __pycache__/

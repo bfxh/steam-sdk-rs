@@ -1,0 +1,73 @@
+name: Release
+
+# 打 tag（v大.小.补丁）即出发布物：两个 crate 的 .crate 包 + rustdoc 站点。
+# 不自动发 crates.io —— `steamworks` 这个名字的所有权不在本仓，发布只能由
+# 维护者用 `workflow_dispatch` 手动触发，并且必须自己带 CRATESIO_TOKEN。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  artifacts:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      # --locked：发布物必须和 CI 校验过的那张依赖图是同一张。
+      - name: Build
+        run: cargo build --release --locked --all-features
+
+      - name: Package crates
+        run: |
+          # --no-verify 跳过重新构建与编译期校验；本仓由 quality CI 负责编译正确性，
+          # 这里只要产物（.crate）本身完整、清单干净。
+          cargo package --list -p steamworks
+          cargo package --list -p steamworks-sys
+          cargo package --no-verify --allow-dirty -p steamworks
+          cargo package --no-verify --allow-dirty -p steamworks-sys
+
+      - name: Build rustdoc
+        run: cargo doc --no-deps --all-features --document-private-items
+
+      - name: Bundle rustdoc
+        run: tar -czf steamworks-doc.tar.gz -C target/doc .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            target/package/steamworks-*.crate
+            target/package/steamworks-sys-*.crate
+            steamworks-doc.tar.gz
+
+      - if: github.ref_type == 'tag'
+        name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            target/package/steamworks-*.crate \
+            target/package/steamworks-sys-*.crate \
+            steamworks-doc.tar.gz \
+            --title "steamworks $GITHUB_REF_NAME" \
+            --generate-notes

@@ -10,6 +10,8 @@ keywords = ["steam", "gamedev"]
 categories = ["games"]
 edition = "2021"
 rust-version = "1.80.0"
+# 发布物只带库本体：缺陷取证文档与 CI 配置不进 .crate。
+exclude = ["docs/", ".github/"]
 
 [features]
 default = []
