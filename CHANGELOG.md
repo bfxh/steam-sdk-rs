@@ -325,6 +325,12 @@ plus the callbacks the wrapper can deliver.
   (1355) and `networking_sockets.rs` (1314) -- and the first two are since gone below it, in the
   two entries further down; `networking_sockets.rs` (1314) and `friends/mod.rs` (1321, grown by a
   test since) are what the same rule has left to do.
+- `src/networking_sockets.rs` (1314) became a directory: `networking_sockets/connection.rs` (536)
+  holds `NetConnection` -- the per-peer handle, its send/query/close methods and its RAII drop --
+  and `networking_sockets/mod.rs` (789) keeps `NetworkingSockets`, `ListenSocket`, the inner
+  socket guard and `NetPollGroup`. Public paths are unchanged again (`pub use connection::*`),
+  with the same two witnesses as the other cuts: `type_surface` unmoved at 80 keys / 798 methods,
+  and the lib suite still reaching 118 tests.
 - `src/lib.rs` (1355) is split three ways: the identity types (`SteamId`, `Universe`,
   `AccountType`, `AccountId`, `GameId`) move to `src/identity.rs` (198) and are re-exported from
   the crate root, so every public path -- `steamworks::SteamId` included -- is unchanged; the
