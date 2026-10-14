@@ -229,7 +229,19 @@ plus the callbacks the wrapper can deliver.
   `cargo tree -p steamworks -e normal,build -i <crate>`, which only reaches the example members --
   so none of them is in a published `.crate`. Any new advisory turns CI red instead of printing a
   hint nobody is required to read.
-- Two more gates, both verifying something no test can see:
+- **Packaging gate** (`package_inventory.py` + `compare_paths.py`, registered list in
+  `scripts/ci/baselines/package_inventory.txt`): what actually goes into each `.crate` is now
+  compared against a reviewed file set, and a mismatch blocks both CI and a release. The
+  release job used to `cargo package --list` and print it, which is how a real defect survived
+  review: `steam_appid.txt` -- a local convenience file so the examples run against a Steam
+  client -- was inside the published crate. It stays tracked in the repository, and is now in
+  `[package] exclude`. Controls: dropping `steamworks/LICENSE-MIT` from the set reports
+  "stopped shipping" (rc=1) -- a missing licence file is a hole no test can see; a fabricated
+  extra file reports "ships now, did not before" (rc=1); a missing registered list names its
+  two causes (rc=1); a five-entry list is refused as theatre (rc=2). Registered inventory:
+  143 files (steamworks 69, steamworks-sys 74).
+
+- Two further gates, both verifying something no test can see:
   - **Vendored SDK manifest** -- 45 headers plus `steam_api.json` under
     `steamworks-sys/lib/steam/public/steam/` are hashed and compared against
     `scripts/ci/baselines/sdk_vendored.txt`. Editing a Valve header reddens no test: the
