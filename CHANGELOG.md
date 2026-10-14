@@ -94,10 +94,16 @@ plus the callbacks the wrapper can deliver.
   `sha1_hex()` (40 lowercase hex characters). The remaining four are registered with reasons in
   `docs/SuperSteam-Design.md`: two legacy proof-of-purchase key calls, `SetDlcContext`, and the
   array-out-parameter `GetInstalledDepots`.
-- `ISteamFriends` local-state surface, from 27 to 36 of its 78 functions: `persona_state`,
+- `ISteamFriends` local-state and clan surface, from 27 to 47 of its 78 functions: `persona_state`,
   `friend_relationship`, `friend_steam_level`, `rich_presence_keys` (the key names behind
   `Friend::rich_presence`), `set_in_game_voice_speaking`, `unread_priority_chat_count`,
-  `set_listen_for_friends_messages`, and `open_remote_play_together_invite_dialog`.
+  `set_listen_for_friends_messages`, `open_remote_play_together_invite_dialog`, plus clans:
+  `clan_count`, `clans`, `clan_name` / `clan_tag` (a `None` while Steam has not cached the text,
+  which is a different claim than "this clan has no name"), `clan_owner`, `clan_officer_count`,
+  `clan_officers`, `is_clan_public`, `is_clan_official_game_group`, `clan_chat_member_count` and
+  `is_clan_chat_admin`. Still open on this interface: the asynchronous pieces
+  (`RequestClanOfficerList`, `IsFollowing`, `GetFollowerCount`, clan activity counts) and the
+  chat-message read/reply pair.
 
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.

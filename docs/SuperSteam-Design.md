@@ -646,7 +646,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | 接口 | 绑定 | 已调 | 接口 | 绑定 | 已调 |
 |------|-----:|-----:|------|-----:|-----:|
 | ISteamUGC | 99 | 60 | ISteamMatchmaking | 38 | 28 |
-| ISteamFriends | 78 | **27 → 36** | ISteamUtils | 37 | **16 → 32** |
+| ISteamFriends | 78 | **27 → 47** | ISteamUtils | 37 | **16 → 32** |
 | ISteamRemoteStorage | 59 | **19 → 26** | ISteamApps | 33 | **16 → 29** |
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
@@ -703,8 +703,12 @@ Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空�
 所以那不是不可达。现在映射抽成 `persona_state_from`，未知名落到**新增的 `FriendState::Unknown`**；
 `FriendRelationship` 同理把 `Suggested_DEPRECATED` 与 `Max` 落到 `Unknown` 而不是伪装成活关系。
 ⚠ 对下游这是**给公共枚举加变体**（严格说破坏穷尽 match），故 CHANGELOG 单列披露。
-另外两个我一度列入本批、查证后剔除：`IsFollowing` 与 `GetFollowerCount` **返回 `SteamAPICall_t`（异步）**，
-不是 bool/int —— 归入"异步待补"，与 `GetClanActivityCounts` 等同批处理。
+另：同批次补上**公会（clan）同步面**（27→47 里的后 11 个调用）：`clan_count`/`clans`、
+`clan_name`/`clan_tag`（Steam 未缓存时返回 `None` 而不是空字符串——"没数据"和"没名字"是两回事）、
+`clan_owner`、`clan_officer_count`/`clan_officers`、`is_clan_public`/`is_clan_official_game_group`、
+`clan_chat_member_count`、`is_clan_chat_admin`。 officer 那两个的可用前提是先取回公会官员列表
+（`RequestClanOfficerList` 异步，**尚未封**，已记为待补）。
+`IsFollowing` 与 `GetFollowerCount` 都返回 `SteamAPICall_t`（异步），不是我原以为的 bool/int。
 `ISteamApps` 一行 2026-10-14 补到 **29/33**：DLC（数量、逐项列表含 `available` 归属位、安装/卸载、下载进度）、
 家庭共享借用位、`timed_trial`（**Steam 的 bool 才决定"是不是试用"，秒数 0 仍然是试用**，映射抽成
 `timed_trial_from` 以便钉住）、最早购买时间（0 → `None`）、`mark_content_corrupt`、

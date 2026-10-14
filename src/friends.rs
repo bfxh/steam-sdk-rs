@@ -304,6 +304,119 @@ impl Friends {
             )
         }
     }
+
+    /// How many of the user's groups Steam classifies as clans.
+    pub fn clan_count(&self) -> i32 {
+        unsafe { sys::SteamAPI_ISteamFriends_GetClanCount(self.friends) }
+    }
+
+    /// The user's clans, by index.
+    pub fn clans(&self) -> Vec<SteamId> {
+        let count = self.clan_count();
+        if count <= 0 {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        for index in 0..count {
+            let raw = unsafe { sys::SteamAPI_ISteamFriends_GetClanByIndex(self.friends, index) };
+            if raw != 0 {
+                out.push(SteamId::from_raw(raw));
+            }
+        }
+        out
+    }
+
+    /// A clan's full name, once Steam has it.
+    ///
+    /// Steam fills this in asynchronously, so right after sign-in it can still be
+    /// empty: `None` means "no string available", not "the clan is unnamed".
+    pub fn clan_name(&self, clan: SteamId) -> Option<String> {
+        unsafe {
+            steam_string(
+                sys::SteamAPI_ISteamFriends_GetClanName(self.friends, clan.raw()),
+                |s| s.to_string_lossy().into_owned(),
+            )
+        }
+    }
+
+    /// A clan's short tag as shown in the member list.
+    pub fn clan_tag(&self, clan: SteamId) -> Option<String> {
+        unsafe {
+            steam_string(
+                sys::SteamAPI_ISteamFriends_GetClanTag(self.friends, clan.raw()),
+                |s| s.to_string_lossy().into_owned(),
+            )
+        }
+    }
+
+    /// The clan's owner.
+    pub fn clan_owner(&self, clan: SteamId) -> SteamId {
+        unsafe {
+            SteamId::from_raw(sys::SteamAPI_ISteamFriends_GetClanOwner(
+                self.friends,
+                clan.raw(),
+            ))
+        }
+    }
+
+    /// Officer count, valid only after Steam delivered the clan officer list
+    /// (`RequestClanOfficerList`, which this wrapper does not expose yet).
+    pub fn clan_officer_count(&self, clan: SteamId) -> i32 {
+        unsafe { sys::SteamAPI_ISteamFriends_GetClanOfficerCount(self.friends, clan.raw()) }
+    }
+
+    /// The clan's officers, indexed like [`Friends::clan_officer_count`] reports.
+    pub fn clan_officers(&self, clan: SteamId) -> Vec<SteamId> {
+        let count = self.clan_officer_count(clan);
+        if count <= 0 {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        for index in 0..count {
+            let raw = unsafe {
+                sys::SteamAPI_ISteamFriends_GetClanOfficerByIndex(self.friends, clan.raw(), index)
+            };
+            if raw != 0 {
+                out.push(SteamId::from_raw(raw));
+            }
+        }
+        out
+    }
+
+    /// Whether the clan is joinable by anyone.
+    pub fn is_clan_public(&self, clan: SteamId) -> bool {
+        unsafe { sys::SteamAPI_ISteamFriends_IsClanPublic(self.friends, clan.raw()) }
+    }
+
+    /// Whether the clan is Valve-managed and tied to a game.
+    pub fn is_clan_official_game_group(&self, clan: SteamId) -> bool {
+        unsafe { sys::SteamAPI_ISteamFriends_IsClanOfficialGameGroup(self.friends, clan.raw()) }
+    }
+
+    /// Members in a clan's chat channel, before listing them with
+    /// `GetChatMemberByIndex` (not wrapped yet).
+    pub fn clan_chat_member_count(&self, clan_chat: SteamId) -> i32 {
+        unsafe { sys::SteamAPI_ISteamFriends_GetClanChatMemberCount(self.friends, clan_chat.raw()) }
+    }
+
+    /// Whether `user` can moderate `clan_chat`.
+    pub fn is_clan_chat_admin(&self, clan_chat: SteamId, user: SteamId) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamFriends_IsClanChatAdmin(self.friends, clan_chat.raw(), user.raw())
+        }
+    }
+}
+
+/// Copies a Steam-owned C string out before the caller's next query, treating a
+/// null pointer as "not available" instead of dereferencing it.
+unsafe fn steam_string<T>(
+    raw: *const std::os::raw::c_char,
+    read: impl FnOnce(&CStr) -> T,
+) -> Option<T> {
+    if raw.is_null() {
+        return None;
+    }
+    Some(read(CStr::from_ptr(raw)))
 }
 
 /// Information about a friend's current state in a game
@@ -642,6 +755,22 @@ fn relationship_from(relationship: sys::EFriendRelationship) -> FriendRelationsh
 mod state_mapping_tests {
     use super::*;
 
+    #[test]
+    fn steam_owned_strings_survive_a_null_answer() {
+        // A null answer is Steam saying "not cached yet"; reading it as an empty
+        // name would be a different claim than the one it made.
+        let null = std::ptr::null::<std::os::raw::c_char>();
+        assert_eq!(
+            unsafe { steam_string(null, |s| s.to_string_lossy().into_owned()) },
+            None
+        );
+
+        let name = CString::new("Delta Squad").unwrap();
+        assert_eq!(
+            unsafe { steam_string(name.as_ptr(), |s| s.to_string_lossy().into_owned()) }.as_deref(),
+            Some("Delta Squad")
+        );
+    }
     #[test]
     fn unknown_persona_state_is_not_a_panic() {
         // The previous mapping ended in `unreachable!()`, and Steam does answer
