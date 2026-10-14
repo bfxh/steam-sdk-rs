@@ -13,7 +13,8 @@ use steamworks_sys as sys;
 use sys::{EServerMode, ESteamAPIInitResult, SteamErrMsg};
 
 use core::ffi::c_void;
-use std::collections::HashMap;
+use std::cell::Cell;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Debug, Formatter};
 use std::sync::mpsc::Sender;
@@ -129,6 +130,108 @@ struct Callbacks {
     callbacks: Mutex<HashMap<i32, Box<dyn FnMut(*mut c_void) + Send + 'static>>>,
     call_results:
         Mutex<HashMap<sys::SteamAPICall_t, Box<dyn FnOnce(*mut c_void, bool) + Send + 'static>>>,
+    /// Registrations and removals that arrived while this thread was inside a
+    /// dispatch loop, and therefore could not take `callbacks` without
+    /// self-deadlock. Drained by [`Callbacks::drain`] once the lock is free.
+    deferred: Mutex<VecDeque<Box<dyn FnOnce(&Callbacks) + Send + 'static>>>,
+}
+
+impl Callbacks {
+    fn new() -> Self {
+        Callbacks {
+            callbacks: Mutex::new(HashMap::new()),
+            call_results: Mutex::new(HashMap::new()),
+            deferred: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    fn set_handler(&self, id: i32, handler: Box<dyn FnMut(*mut c_void) + Send + 'static>) {
+        self.callbacks.lock().unwrap().insert(id, handler);
+    }
+
+    fn remove_handler(&self, id: i32) {
+        // A poisoned lock here is reported rather than panicked on, because
+        // this runs from `CallbackHandle::drop`: panicking inside a Drop would
+        // turn a recoverable registry problem into an abort during unwinding.
+        match self.callbacks.lock() {
+            Ok(mut cb) => {
+                cb.remove(&id);
+            }
+            Err(err) => {
+                eprintln!("error while dropping callback: {:?}", err);
+            }
+        }
+    }
+
+    /// Run `op` against this registry, or queue it if `owner` is the context
+    /// this thread is currently dispatching callbacks for.
+    ///
+    /// Dispatch holds the `callbacks` lock while a user callback runs, and
+    /// `std::sync::Mutex` is not reentrant: a callback that registers or drops
+    /// a callback would otherwise block forever on a lock it already owns.
+    /// Deferring the mutation to the dispatch loop's drain point keeps the
+    /// ordering (queue is FIFO) without ever re-entering the lock.
+    ///
+    /// Only the *same* context is deferred. A second context (client plus
+    /// dedicated game server in one process) has its own lock, so registering
+    /// there must apply immediately rather than wait for a dispatch that may
+    /// never come.
+    fn run_or_defer(&self, owner: *const (), op: impl FnOnce(&Callbacks) + Send + 'static) {
+        if DISPATCHING.with(|flag| flag.get()) == owner {
+            self.deferred.lock().unwrap().push_back(Box::new(op));
+        } else {
+            op(self);
+        }
+    }
+
+    /// Apply everything queued during the current dispatch pass.
+    fn drain(&self) {
+        loop {
+            let op = self.deferred.lock().unwrap().pop_front();
+            match op {
+                Some(op) => op(self),
+                None => break,
+            }
+        }
+    }
+}
+
+thread_local! {
+    /// The dispatch-context identity of the `Inner` this thread is inside of,
+    /// or null when it is not inside a dispatch loop. Stored type-erased and
+    /// only ever compared, never dereferenced.
+    static DISPATCHING: Cell<*const ()> = const { Cell::new(std::ptr::null()) };
+}
+
+/// Marks the current thread as dispatching for `owner` until dropped.
+///
+/// `try_new` refuses to enter a second time for the same context, which is how
+/// a nested `run_callbacks()` from inside a callback turns into a no-op instead
+/// of a deadlock on the callback lock.
+struct DispatchGuard {
+    previous: *const (),
+}
+
+impl DispatchGuard {
+    fn new(owner: *const ()) -> Self {
+        let previous = DISPATCHING.with(|flag| flag.replace(owner));
+        DispatchGuard { previous }
+    }
+
+    /// Enter for `owner`, or return `None` if this thread is already
+    /// dispatching it.
+    fn try_new(owner: *const ()) -> Option<Self> {
+        if DISPATCHING.with(|flag| flag.get()) == owner {
+            return None;
+        }
+        Some(Self::new(owner))
+    }
+}
+
+impl Drop for DispatchGuard {
+    fn drop(&mut self) {
+        DISPATCHING.with(|flag| flag.set(self.previous));
+    }
 }
 
 impl Inner {
@@ -139,6 +242,10 @@ impl Inner {
     ///
     /// This should be called frequently (e.g. once per a frame)
     /// in order to reduce the latency between receiving events.
+    ///
+    /// Calling it from inside a callback is a no-op for this context: the
+    /// dispatch loop already running on this thread keeps pulling events from
+    /// the same queue, so nothing is missed and nothing re-enters the lock.
     pub fn run_callbacks(&self) {
         self.run_callbacks_raw(|cb_discrim, data| {
             let mut callbacks = self.callbacks.callbacks.lock().unwrap();
@@ -174,6 +281,15 @@ impl Inner {
     }
 
     fn run_callbacks_raw(&self, mut callback_handler: impl FnMut(i32, *mut c_void)) {
+        // The whole dispatch loop runs with this thread marked as dispatching
+        // for this context, so any registration or handle drop that a user
+        // callback triggers gets deferred instead of re-entering the lock.
+        // A nested dispatch of the same context returns here instead: the
+        // outer loop keeps draining the same pipe, so nothing is lost, whereas
+        // re-entering used to block on the callback lock forever.
+        let Some(_dispatch) = DispatchGuard::try_new(self as *const Inner as *const ()) else {
+            return;
+        };
         unsafe {
             let pipe = self.manager.get_pipe();
             sys::SteamAPI_ManualDispatch_RunFrame(pipe);
@@ -214,6 +330,12 @@ impl Inner {
                     callback_handler(callback.m_iCallback, callback.m_pubParam.cast());
                 }
                 sys::SteamAPI_ManualDispatch_FreeLastCallback(pipe);
+                // The handler's lock is released by now, so deferred
+                // registrations can take it. Draining per callback (rather
+                // than once at the end) means a callback registered from
+                // inside a callback can fire in the same dispatch pass it
+                // arrived in.
+                self.callbacks.drain();
             }
         }
     }
@@ -290,10 +412,7 @@ impl Client {
             sys::SteamAPI_ManualDispatch_Init();
             let client = Arc::new(Inner {
                 manager: Manager::Client,
-                callbacks: Callbacks {
-                    callbacks: Mutex::new(HashMap::new()),
-                    call_results: Mutex::new(HashMap::new()),
-                },
+                callbacks: Callbacks::new(),
                 networking_sockets_data: Mutex::new(NetworkingSocketsData {
                     sockets: Default::default(),
                     independent_connections: Default::default(),
@@ -934,5 +1053,135 @@ mod tests {
 
         let steamid = SteamId(76561198174976054);
         assert_eq!("STEAM_0:0:107355163", steamid.steamid32());
+    }
+
+    /// A second dispatch of the same context on the same thread is what used to
+    /// block on the callback lock; refusing entry is what makes it a no-op.
+    #[test]
+    fn nested_dispatch_of_same_context_is_refused() {
+        let owner = 0u8;
+        let other = 0u8;
+        let owner_ptr = &owner as *const u8 as *const ();
+        let other_ptr = &other as *const u8 as *const ();
+
+        let outer = DispatchGuard::try_new(owner_ptr).expect("first entry allowed");
+        assert!(
+            DispatchGuard::try_new(owner_ptr).is_none(),
+            "nested dispatch of the same context must be refused"
+        );
+        {
+            // A different context has its own lock, so it stays dispatchable.
+            let second = DispatchGuard::try_new(other_ptr).expect("other context allowed");
+            assert!(DispatchGuard::try_new(owner_ptr).is_some());
+            drop(second);
+        }
+        drop(outer);
+
+        // After the loop unwinds, the context is enterable again.
+        let again = DispatchGuard::try_new(owner_ptr).expect("re-entry after exit allowed");
+        drop(again);
+    }
+
+    fn recorder(order: &Arc<Mutex<Vec<u8>>>, n: u8) -> impl FnOnce(&Callbacks) + Send {
+        let order = Arc::clone(order);
+        move |_: &Callbacks| {
+            order.lock().unwrap().push(n);
+        }
+    }
+
+    /// The dispatch loop holds the callback lock while user code runs, and
+    /// `std::sync::Mutex` is not reentrant, so a callback that registers or
+    /// drops a handle has to be deferred instead of re-entering a lock it
+    /// already owns.
+    #[test]
+    fn deferral_is_per_context_and_drains_in_arrival_order() {
+        let cbs = Callbacks::new();
+        // Only the addresses are used, as opaque context identities.
+        let owner = 0u8;
+        let other = 0u8;
+        let owner_ptr = &owner as *const u8 as *const ();
+        let other_ptr = &other as *const u8 as *const ();
+
+        let order: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+
+        // Not inside a dispatch loop: the operation applies on the spot.
+        cbs.run_or_defer(owner_ptr, recorder(&order, 1));
+        assert_eq!(*order.lock().unwrap(), vec![1]);
+
+        {
+            let _outer = DispatchGuard::new(owner_ptr);
+
+            // Same context as the dispatch loop: queued, nothing run yet.
+            cbs.run_or_defer(owner_ptr, recorder(&order, 2));
+            // A different context owns a different lock, so it must not be
+            // made to wait for a dispatch loop it is not part of.
+            cbs.run_or_defer(other_ptr, recorder(&order, 3));
+            assert_eq!(*order.lock().unwrap(), vec![1, 3]);
+
+            {
+                let _inner = DispatchGuard::new(other_ptr);
+                // Nesting replaced the identity, so owner is no longer
+                // "this thread's dispatch" and this applies immediately.
+                cbs.run_or_defer(owner_ptr, recorder(&order, 4));
+                assert_eq!(*order.lock().unwrap(), vec![1, 3, 4]);
+            }
+
+            cbs.drain();
+            assert_eq!(*order.lock().unwrap(), vec![1, 3, 4, 2]);
+        }
+
+        // Leaving the guard restored the thread state.
+        cbs.run_or_defer(owner_ptr, recorder(&order, 5));
+        assert_eq!(*order.lock().unwrap(), vec![1, 3, 4, 2, 5]);
+    }
+
+    /// Deferring must not lose the registration: the drained operation writes
+    /// the same handler into the same map a direct call would have used.
+    #[test]
+    fn deferred_registration_lands_in_the_handler_map_and_fires() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cbs = Callbacks::new();
+        let owner = 0u8;
+        let owner_ptr = &owner as *const u8 as *const ();
+        let hits = Arc::new(AtomicUsize::new(0));
+
+        {
+            let _guard = DispatchGuard::new(owner_ptr);
+            let hits = Arc::clone(&hits);
+            cbs.run_or_defer(owner_ptr, move |callbacks| {
+                callbacks.set_handler(
+                    7,
+                    Box::new(move |_| {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                    }),
+                );
+            });
+            assert_eq!(
+                cbs.callbacks.lock().unwrap().len(),
+                0,
+                "queued registration applied early"
+            );
+
+            cbs.drain();
+        }
+
+        let mut map = cbs.callbacks.lock().unwrap();
+        let handler = map
+            .get_mut(&7)
+            .expect("drain should have installed the handler");
+        handler(std::ptr::null_mut());
+        drop(map);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+
+        // Removal defers the same way, which is what makes dropping a handle
+        // from inside a callback safe.
+        {
+            let _guard = DispatchGuard::new(owner_ptr);
+            cbs.run_or_defer(owner_ptr, |callbacks| callbacks.remove_handler(7));
+            assert_eq!(cbs.callbacks.lock().unwrap().len(), 1);
+            cbs.drain();
+        }
+        assert!(cbs.callbacks.lock().unwrap().is_empty());
     }
 }

@@ -140,10 +140,7 @@ impl Server {
             let server_raw = sys::SteamAPI_SteamGameServer_v015();
             let server = Arc::new(Inner {
                 manager: Manager::Server,
-                callbacks: Callbacks {
-                    callbacks: Mutex::new(HashMap::new()),
-                    call_results: Mutex::new(HashMap::new()),
-                },
+                callbacks: Callbacks::new(),
                 networking_sockets_data: Mutex::new(NetworkingSocketsData {
                     sockets: Default::default(),
                     independent_connections: Default::default(),

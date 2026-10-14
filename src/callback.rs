@@ -162,14 +162,15 @@ pub struct CallbackHandle {
 impl Drop for CallbackHandle {
     fn drop(&mut self) {
         if let Some(inner) = self.inner.upgrade() {
-            match inner.callbacks.callbacks.lock() {
-                Ok(mut cb) => {
-                    cb.remove(&self.id);
-                }
-                Err(err) => {
-                    eprintln!("error while dropping callback: {:?}", err);
-                }
-            }
+            let id = self.id;
+            // Deferred when this thread is dispatching for this context: the
+            // dispatch loop holds the callback lock while user code runs, and
+            // a handle dropped by that user code must not re-enter it.
+            inner
+                .callbacks
+                .run_or_defer(Arc::as_ptr(&inner).cast::<()>(), move |callbacks| {
+                    callbacks.remove_handler(id)
+                });
         }
     }
 }
@@ -194,15 +195,17 @@ where
     C: Callback,
     F: FnMut(C) + Send + 'static,
 {
-    {
-        inner.callbacks.callbacks.lock().unwrap().insert(
-            C::ID,
-            Box::new(move |param| {
-                let param = C::from_raw(param);
-                f(param)
-            }),
-        );
-    }
+    let handler = Box::new(move |param| {
+        let param = C::from_raw(param);
+        f(param)
+    });
+    // Registering from inside a callback of the same context is the common
+    // case that used to self-deadlock, so it goes through the queue.
+    inner
+        .callbacks
+        .run_or_defer(Arc::as_ptr(inner).cast::<()>(), move |callbacks| {
+            callbacks.set_handler(C::ID, handler)
+        });
     CallbackHandle {
         id: C::ID,
         inner: Arc::downgrade(inner),

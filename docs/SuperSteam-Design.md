@@ -29,7 +29,7 @@
 | # | 发现 | 证据 | 严重度 |
 |---|------|------|--------|
 | 1 | 同一回调类型重复注册会静默覆盖前一个；**陈旧 Handle drop 会按 ID 误杀新注册；内部自动注册与用户注册同表互杀** | src/callback.rs:198 `HashMap::insert`、callback.rs:167 `remove`（已复现，见 defect-01 文档） | 高 |
-| 2 | 可重入死锁：持锁运行用户闭包。**PR #259 已修复「回调内调 API」场景；仍存「回调内注册回调/嵌套派发/丢弃 Handle」+ 新发现「call_result 内链式调 API」共四种死锁** | Issue #253 + PR #259（已合并）；实测见 0.6 节与 defect-02 文档 | 高（**E 场景使影响面回升**） |
+| 2 | 可重入死锁：持锁运行用户闭包。**PR #259 已修复「回调内调 API」场景；仍存「回调内注册回调/嵌套派发/丢弃 Handle」+ 新发现「call_result 内链式调 API」共四种死锁**（**2026-10-14 更新：这四种已全部判死，见下方"缺陷 #2 状态"**） | Issue #253 + PR #259（已合并）；实测见 0.6 节与 defect-02 文档 | 高（**E 场景使影响面回升**） |
 | 3 | `apicall_result.resize(m_cubParam)` 无上限校验 + u32→i32 静默负数转换 | src/lib.rs:170/176（已实测，见 0.4 节） | 低 |
 | 4 | 接口指针仅 `debug_assert` 判空，release 下裸指针解引用 | `null_guard_test.rs` 实测：release 下 **Illegal instruction (退出码 132)** | 高（已复现） |
 | 5 | 77 处 `CString::new(...).unwrap()` 遇内嵌 NUL 直接 panic（原 73，漏 4 处跨行链式） | src/friends.rs:124 等 15 文件（已复现，双口径复核见 defect-05） | 高 |
@@ -38,6 +38,33 @@
 | 8 | 每个接口方法调用都克隆 `Arc<Inner>`（42 处 `self.inner.clone()`，口径见 0.5 节） | src/lib.rs:355 等（已实测，见 0.5 节） | **性能论据不成立** |
 | 9 | 20 个测试 / 14197 行；实测 `cargo test` **11 失败 7 通过 2 忽略**，失败全部因无 Steam 客户端 | 已实测（见 0.3 节） | 中 |
 | 10 | Steamworks.NET 每次字符串调用 `AllocHGlobal`，`SetStat` 慢问题 2016 年至今未修 | Steamworks.NET Issue #106 | 高（对比项） |
+
+### 缺陷 #2 状态（2026-10-14，四种自重入场景已闭合）
+
+改法是"同上下文延后 + 嵌套派发拒绝进入"，而不是去持锁运行用户闭包这件事本身：
+
+- **回调内注册回调 / 回调内丢弃 Handle** —— 派发循环持 `callbacks` 锁运行用户闭包，
+  同一线程再取同一把锁必自锁。现在注册与移除都走 `Callbacks::run_or_defer`：
+  如果本线程正为该上下文派发，操作进 FIFO 队列，由派发循环在每条回调
+  `FreeLastCallback` 之后 `drain()` 落地（所以"回调里注册的回调"在同一轮派发里就能生效，
+  也不会丢注册）。不同上下文（客户端与专用游戏服务器各一套锁）不延后，立即执行——
+  否则会等一场可能永远不来的派发。
+- **嵌套派发** —— `DispatchGuard::try_new` 对同一上下文第二次进入直接返回 `None`，
+  于是回调里再调 `run_callbacks()` 变成 no-op：外层循环本来就在抽同一条队列，
+  事件不会漏，而重入只会死锁。
+- **call_result 内链式调 API（场景 E）** —— 早先的"守卫作用域收缩"已修（把 handler
+  在锁内取出、锁外调用），本轮未改动该路径。
+
+**证据边界要写清**：以上由 3 个离线单测钉住（`deferral_is_per_context_and_drains_in_arrival_order`、
+`deferred_registration_lands_in_the_handler_map_and_fires`、`nested_dispatch_of_same_context_is_refused`），
+并且逐个做过变异验证——把 `run_or_defer` 改成永不延后、把 `try_new` 改成永不拒绝、
+把 `clamp_viewers` 的判据改掉，对应测试各自判红。**没有**做的是端到端实测：
+真正的派发循环要 `SteamAPI_ManualDispatch_*` 与真实 pipe，本机无 Steam 客户端跑不到，
+所以"接了真客户端就不再挂死"这一条目前只有机制级证据。
+
+**仍然存在的已知约束**（不是死锁，是阻塞）：别的线程在本线程派发期间注册回调，
+会等 `callbacks` 锁直到当前这条回调执行完——上界是单条回调的耗时。彻底消除要把
+派发改成无锁快照（见第 5 节目标形态）。
 
 ### 一处自我更正
 
