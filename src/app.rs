@@ -344,15 +344,77 @@ impl Apps {
     /// `Ok(false)` is Steam declining the branch name; a name containing an
     /// interior nul is refused as `InvalidParameter` before any call is made.
     pub fn set_active_beta(&self, branch: &str) -> Result<bool, SteamError> {
-        let branch = beta_branch_name(branch)?;
+        let branch = c_string_arg(branch)?;
         Ok(unsafe { sys::SteamAPI_ISteamApps_SetActiveBeta(self.apps, branch.as_ptr()) })
+    }
+
+    /// Asks Steam for the recorded size and SHA-1 of one of the app's files,
+    /// addressed the way Steam addresses it (the name is forwarded verbatim as a
+    /// C string; see the `ISteamApps` docs for what it is relative to).
+    ///
+    /// This is asynchronous: the answer arrives through `callback` as
+    /// `Result<FileDetails, SteamError>`, so a failure from Steam surfaces as an
+    /// `Err` carrying its `EResult` rather than as a zero-sized file. A path with
+    /// an interior nul is refused before any call is made.
+    pub fn file_details<F>(&self, path: &str, callback: F) -> Result<(), SteamError>
+    where
+        F: FnOnce(Result<FileDetails, SteamError>) + 'static + Send,
+    {
+        let path = c_string_arg(path)?;
+        let api_call = unsafe { sys::SteamAPI_ISteamApps_GetFileDetails(self.apps, path.as_ptr()) };
+        unsafe {
+            register_call_result::<sys::FileDetailsResult_t, _>(
+                &self._inner,
+                api_call,
+                move |v, io_error| {
+                    callback(if io_error {
+                        Err(SteamError::IOFailure)
+                    } else {
+                        to_steam_result(v.m_eResult).map(|()| FileDetails {
+                            size_bytes: v.m_ulFileSize,
+                            sha1: v.m_FileSHA,
+                            flags: v.m_unFlags,
+                        })
+                    })
+                },
+            );
+        }
+        Ok(())
     }
 }
 
-/// A beta branch name reaching Steam as a C string: an interior nul is a bad
+/// A string argument reaching Steam as a C string: an interior nul is a bad
 /// argument, not a panic.
-fn beta_branch_name(branch: &str) -> Result<CString, SteamError> {
-    CString::new(branch).map_err(|_| SteamError::InvalidParameter)
+fn c_string_arg(value: &str) -> Result<CString, SteamError> {
+    CString::new(value).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// Formats Steam's 20-byte SHA-1 field as lowercase hex.
+fn sha1_hex(sha: &[u8; 20]) -> String {
+    let mut out = String::with_capacity(40);
+    for byte in sha {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// One file's Steam-side record, from [`Apps::file_details`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileDetails {
+    /// Original file size in bytes, as Steam stored it.
+    pub size_bytes: u64,
+    /// Original file SHA-1 (20 bytes).
+    pub sha1: [u8; 20],
+    /// Steam's file-flags bitfield. The SDK header carries no description of
+    /// its bits, so it is passed through rather than interpreted.
+    pub flags: u32,
+}
+
+impl FileDetails {
+    /// The SHA-1 as 40 lowercase hex characters.
+    pub fn sha1_hex(&self) -> String {
+        sha1_hex(&self.sha1)
+    }
 }
 
 /// Reads a Steam fixed-size char buffer, stopping at the first nul so a buffer
@@ -453,12 +515,28 @@ mod tests {
 
     #[test]
     fn beta_branch_names_reject_interior_nul() {
-        // This is the guard `set_active_beta` actually runs through.
-        assert_eq!(beta_branch_name("public").unwrap().as_bytes(), b"public");
+        // This is the guard `set_active_beta` and `file_details` run through.
+        assert_eq!(c_string_arg("public").unwrap().as_bytes(), b"public");
         assert!(matches!(
-            beta_branch_name("beta\0branch"),
+            c_string_arg("beta\0branch"),
             Err(SteamError::InvalidParameter)
         ));
+    }
+
+    #[test]
+    fn sha1_is_printed_as_forty_lowercase_hex_bytes() {
+        let mut sha = [0u8; 20];
+        for (index, slot) in sha.iter_mut().enumerate() {
+            *slot = index as u8;
+        }
+        let hex = sha1_hex(&sha);
+        assert_eq!(hex.len(), 40);
+        assert_eq!(hex, "000102030405060708090a0b0c0d0e0f10111213");
+
+        // An all-zero digest still occupies 40 characters, not "0" or nothing.
+        assert_eq!(sha1_hex(&[0u8; 20]), "00".repeat(20));
+        // Upper case would not compare against Steam's own digests.
+        assert!(!hex.chars().any(|c| c.is_ascii_uppercase()));
     }
 }
 
