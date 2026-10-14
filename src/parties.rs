@@ -263,9 +263,9 @@ impl Parties {
                     } else {
                         to_steam_result(v.m_eResult).map(|()| JoinTicket {
                             beacon: BeaconId(v.m_ulBeaconID),
-                            owner: SteamId::from_raw(unsafe {
-                                v.m_SteamIDBeaconOwner.m_steamid.m_unAll64Bits
-                            }),
+                            owner: SteamId::from_raw(
+                                v.m_SteamIDBeaconOwner.m_steamid.m_unAll64Bits,
+                            ),
                             connect_string: fixed_string(&v.m_rgchConnectString),
                         })
                     });

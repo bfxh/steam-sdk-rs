@@ -28,6 +28,7 @@ pub use crate::callback::*;
 pub use crate::callback_stream::*;
 pub use crate::error::*;
 pub use crate::friends::*;
+pub use crate::html_surface::*;
 pub use crate::http::*;
 pub use crate::input::*;
 pub use crate::inventory::*;
@@ -56,6 +57,7 @@ mod app;
 mod callback_stream;
 mod error;
 mod friends;
+mod html_surface;
 mod http;
 mod input;
 mod inventory;
@@ -595,6 +597,20 @@ impl Client {
             debug_assert!(!parties.is_null());
             Parties {
                 parties,
+                _inner: self.inner.clone(),
+            }
+        }
+    }
+
+    /// Returns an accessor to the steam HTML surface interface
+    ///
+    /// Call [`HtmlSurface::init`] before creating any browser.
+    pub fn html_surface(&self) -> HtmlSurface {
+        unsafe {
+            let html = sys::SteamAPI_SteamHTMLSurface_v005();
+            debug_assert!(!html.is_null());
+            HtmlSurface {
+                html,
                 _inner: self.inner.clone(),
             }
         }

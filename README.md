@@ -28,6 +28,7 @@ the design notes all live here (no submodules).
 | `Music` | Wraps `ISteamMusic` — the user's own Steam music client. Volume is clamped into Steam's [0, 1] range, and an unrecognised playback state reports `Undefined` instead of guessing. Entry point `client.music()`. |
 | `Video` | Wraps `ISteamVideo`: broadcast state with viewer count, store-page opening, and Open Graph metadata reads that fail loudly when the caller's buffer is too small instead of returning truncated XML. Entry point `client.video()`. |
 | `Parties` | Wraps `ISteamParties`: beacon discovery and advertising, joining with the host's connect string, the reservation accept/decline pair, and the reservation and "updated" notifications. Entry point `client.parties()`. |
+| `HtmlSurface` | Wraps all 37 methods of `ISteamHTMLSurface` plus the navigation, dialog and link callbacks. `Browser` removes itself on drop, and the three "you MUST respond" callbacks are documented against their responses. Entry point `client.html_surface()`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this
