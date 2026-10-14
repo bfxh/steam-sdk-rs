@@ -42,8 +42,12 @@ steamworks/src/server.rs
 steamworks/src/server_stats.rs
 steamworks/src/timeline.rs
 steamworks/src/ugc/mod.rs
+steamworks/src/ugc/query.rs
+steamworks/src/ugc/read.rs
+steamworks/src/ugc/results.rs
 steamworks/src/ugc/types.rs
 steamworks/src/ugc/ugc_tests.rs
+steamworks/src/ugc/update.rs
 steamworks/src/user.rs
 steamworks/src/user_stats.rs
 steamworks/src/user_stats/stat_callback.rs
