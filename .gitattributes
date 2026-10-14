@@ -18,3 +18,8 @@ steamworks-sys/lib/** -text
 *.so binary
 *.dylib binary
 *.a binary
+
+# Gate scripts run on Linux runners and under bash here: a CR in a shebang or a
+# python line ending turns a working gate into "bad interpreter" or a silent parse miss.
+*.sh text eol=lf
+*.py text eol=lf
