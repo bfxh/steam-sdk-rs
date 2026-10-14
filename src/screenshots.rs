@@ -89,6 +89,192 @@ impl Screenshots {
             }
         }
     }
+
+    /// Adds a VR screenshot to the user's library from disk.
+    ///
+    /// `kind` says what the two files actually hold, because Steam presents
+    /// mono, stereo and panorama captures differently; the paths must be
+    /// absolute, which is what the existing library calls already require.
+    pub fn add_vr_screenshot_to_library(
+        &self,
+        kind: VRScreenshotKind,
+        filename: &Path,
+        vr_filename: &Path,
+    ) -> Result<ScreenshotHandle, ScreenshotLibraryAddError> {
+        let filename =
+            path_to_absolute_cstring(filename).ok_or(ScreenshotLibraryAddError::InvalidPath)?;
+        let vr_filename =
+            path_to_absolute_cstring(vr_filename).ok_or(ScreenshotLibraryAddError::InvalidPath)?;
+
+        unsafe {
+            let handle = sys::SteamAPI_ISteamScreenshots_AddVRScreenshotToLibrary(
+                self.screenshots,
+                kind.into(),
+                filename.as_ptr(),
+                vr_filename.as_ptr(),
+            );
+            if handle != sys::INVALID_SCREENSHOT_HANDLE {
+                Ok(handle)
+            } else {
+                Err(ScreenshotLibraryAddError::SavingFailed)
+            }
+        }
+    }
+
+    /// Writes raw RGB data straight into the user's screenshot library.
+    ///
+    /// This is the call a game makes in response to [`ScreenshotRequested`] when
+    /// screenshots are hooked with [`Screenshots::hook_screenshots`]. Steam copies
+    /// the buffer before returning, so `rgb` does not have to outlive the call.
+    /// The byte count Steam takes is a `u32`, so a buffer it cannot express is
+    /// rejected here rather than truncated.
+    pub fn write_screenshot(
+        &self,
+        rgb: &[u8],
+        width: i32,
+        height: i32,
+    ) -> Result<ScreenshotHandle, SteamError> {
+        let cub_rgb = screenshot_byte_count(rgb.len())?;
+        let handle = unsafe {
+            sys::SteamAPI_ISteamScreenshots_WriteScreenshot(
+                self.screenshots,
+                // Steam only reads `cub_rgb` bytes, but it takes a non-const
+                // pointer; an empty buffer gets an aligned address that is
+                // never read rather than a null one.
+                if rgb.is_empty() {
+                    std::ptr::NonNull::<u8>::dangling().as_ptr() as *mut c_void
+                } else {
+                    rgb.as_ptr() as *mut c_void
+                },
+                cub_rgb,
+                width,
+                height,
+            )
+        };
+        if handle == sys::INVALID_SCREENSHOT_HANDLE {
+            Err(SteamError::IOFailure)
+        } else {
+            Ok(handle)
+        }
+    }
+
+    /// Labels where in the game a screenshot was taken, shown to the user.
+    ///
+    /// Returns `Ok(false)` when Steam rejected the handle (for example a handle
+    /// from an earlier process), and `Err` only when the location could not be
+    /// handed to Steam as a string.
+    pub fn set_location(
+        &self,
+        screenshot: ScreenshotHandle,
+        location: &str,
+    ) -> Result<bool, SteamError> {
+        let location = CString::new(location).map_err(|_| SteamError::InvalidParameter)?;
+        Ok(unsafe {
+            sys::SteamAPI_ISteamScreenshots_SetLocation(
+                self.screenshots,
+                screenshot,
+                location.as_ptr(),
+            )
+        })
+    }
+
+    /// Tags a screenshot with another player, as in "screenshot taken with X".
+    pub fn tag_user(&self, screenshot: ScreenshotHandle, user: SteamId) -> bool {
+        unsafe { sys::SteamAPI_ISteamScreenshots_TagUser(self.screenshots, screenshot, user.raw()) }
+    }
+
+    /// Tags a screenshot with a workshop item so it shows up on that item's page.
+    pub fn tag_published_file(&self, screenshot: ScreenshotHandle, file: PublishedFileId) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamScreenshots_TagPublishedFile(self.screenshots, screenshot, file.0)
+        }
+    }
+}
+
+/// Steam sizes a raw screenshot with a `u32`; a buffer it cannot express is a
+/// bad argument, not something to clip to fit.
+fn screenshot_byte_count(len: usize) -> Result<u32, SteamError> {
+    u32::try_from(len).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// What kind of VR capture a pair of screenshot files holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VRScreenshotKind {
+    None,
+    Mono,
+    Stereo,
+    MonoCubemap,
+    MonoPanorama,
+    StereoPanorama,
+}
+
+impl From<VRScreenshotKind> for sys::EVRScreenshotType {
+    fn from(kind: VRScreenshotKind) -> Self {
+        match kind {
+            VRScreenshotKind::None => sys::EVRScreenshotType::k_EVRScreenshotType_None,
+            VRScreenshotKind::Mono => sys::EVRScreenshotType::k_EVRScreenshotType_Mono,
+            VRScreenshotKind::Stereo => sys::EVRScreenshotType::k_EVRScreenshotType_Stereo,
+            VRScreenshotKind::MonoCubemap => {
+                sys::EVRScreenshotType::k_EVRScreenshotType_MonoCubemap
+            }
+            VRScreenshotKind::MonoPanorama => {
+                sys::EVRScreenshotType::k_EVRScreenshotType_MonoPanorama
+            }
+            VRScreenshotKind::StereoPanorama => {
+                sys::EVRScreenshotType::k_EVRScreenshotType_StereoPanorama
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vr_kinds_map_onto_distinct_steam_variants() {
+        let kinds = [
+            VRScreenshotKind::None,
+            VRScreenshotKind::Mono,
+            VRScreenshotKind::Stereo,
+            VRScreenshotKind::MonoCubemap,
+            VRScreenshotKind::MonoPanorama,
+            VRScreenshotKind::StereoPanorama,
+        ];
+        let mapped: Vec<sys::EVRScreenshotType> = kinds.iter().copied().map(Into::into).collect();
+        for i in 0..mapped.len() {
+            for j in (i + 1)..mapped.len() {
+                assert_ne!(
+                    mapped[i], mapped[j],
+                    "{:?}/{:?} collide",
+                    kinds[i], kinds[j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn screenshot_byte_counts_steam_cannot_express_are_rejected() {
+        // Same boundary the wrapper uses: `write_screenshot` calls this before
+        // touching the FFI, so changing the guard fails here.
+        assert_eq!(screenshot_byte_count(0).unwrap(), 0);
+        assert_eq!(
+            screenshot_byte_count(usize::try_from(u32::MAX).unwrap()).unwrap(),
+            u32::MAX
+        );
+        for too_big in [
+            usize::try_from(u64::from(u32::MAX) + 1).unwrap(),
+            usize::MAX,
+        ] {
+            assert!(
+                matches!(
+                    screenshot_byte_count(too_big),
+                    Err(SteamError::InvalidParameter)
+                ),
+                "a {too_big} byte buffer must not be sent as a u32 count"
+            );
+        }
+    }
 }
 
 #[derive(Debug, Error)]

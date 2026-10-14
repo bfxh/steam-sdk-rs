@@ -651,7 +651,13 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInput | 48 | 18 | ISteamUserStats | 44 | 31 |
 | ISteamGameServer | 41 | 23 | ISteamNetworking | 22 | 6 |
 | ISteamRemotePlay | 20 | 7 | ISteamTimeline | 18 | **4 → 18** |
-| ISteamScreenshots | 9 | 4 | | | |
+| ISteamScreenshots | 9 | 4 → **9** | | | |
+
+`ISteamScreenshots` 也在 2026-10-14 补到 **9/9**：新增 `write_screenshot`（原始 RGB 缓冲，字节数按
+Steam 的 u32 口径校验，超限判 `InvalidParameter` 而不是截断；空缓冲给对齐悬垂指针而非 null）、
+`add_vr_screenshot_to_library`（6 种 `VRScreenshotKind` 各自映射到独立 Steam 变体）、
+`set_location` / `tag_user` / `tag_published_file`。两个测试同样做过变异验证
+（把守卫改成 `len as u32`、把 `StereoPanorama` 塌成 `Mono`，各自把对应测试打红）。
 
 `ISteamTimeline` 一行 2026-10-14 补到 **18/18**（整接口闭合）。补的时候发现并修掉一个**真参数顺序缺陷**：
 `add_timeline_event(icon, title, description, ..)` 原来按 `(icon, title, description)` 传给

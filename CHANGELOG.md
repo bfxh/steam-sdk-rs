@@ -62,6 +62,12 @@ plus the callbacks the wrapper can deliver.
   that must produce a value report `SteamError::Disabled` when the client is too old, instead of
   returning a handle from an API call that never happened; strings are checked for interior nuls
   before reaching Steam.
+- `ISteamScreenshots` completed -- 4 of its 9 functions were reachable; all 9 are now. Added:
+  `write_screenshot` (raw RGB buffer, with the byte count checked against the `u32` Steam takes, so
+  an oversized buffer is rejected instead of clipped, and an empty buffer passes an aligned
+  never-read address rather than null), `add_vr_screenshot_to_library` with the six
+  `VRScreenshotKind` variants, and the three tag calls `set_location`, `tag_user`,
+  `tag_published_file`.
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.
 
