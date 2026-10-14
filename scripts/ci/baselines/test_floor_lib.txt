@@ -1,1 +1,1 @@
-108  # lib tests reached with --all-features (93 passed + 15 ignored), measured 2026-10-15 after the Workshop answer cluster
+109  # lib tests reached with --all-features (94 passed + 15 ignored), measured 2026-10-15 with the dependency page

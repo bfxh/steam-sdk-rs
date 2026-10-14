@@ -29,6 +29,7 @@ pub enum CallbackResult {
     GameOverlayActivated(GameOverlayActivated),
     GamepadTextInputDismissed(GamepadTextInputDismissed),
     GameRichPresenceJoinRequested(GameRichPresenceJoinRequested),
+    GetAppDependenciesResult(GetAppDependenciesResult),
     GetUserItemVoteResult(GetUserItemVoteResult),
     GlobalStatsReceived(GlobalStatsReceived),
     LobbyChatMsg(LobbyChatMsg),
@@ -178,6 +179,9 @@ impl CallbackResult {
             }
             AddUGCDependencyResult::ID => {
                 Self::AddUGCDependencyResult(AddUGCDependencyResult::from_raw(data))
+            }
+            GetAppDependenciesResult::ID => {
+                Self::GetAppDependenciesResult(GetAppDependenciesResult::from_raw(data))
             }
             GetUserItemVoteResult::ID => {
                 Self::GetUserItemVoteResult(GetUserItemVoteResult::from_raw(data))
@@ -418,16 +422,19 @@ mod stream_coverage {
     #[test]
     fn the_two_parsers_see_the_whole_crate() {
         // Without these floors an empty parse would make both coverage tests
-        // below pass by looking at nothing.
+        // below pass by looking at nothing. Both numbers are measured, not rounded:
+        // 78 definitions minus 54 streamed is the 24-entry `CALLBACKS_NOT_IN_STREAM` list,
+        // so a matcher that starts missing whole files trips here rather than quietly
+        // lowering the debt.
         let defined = defined_callbacks();
         let streamed = streamed_callbacks();
         assert!(
-            defined.len() >= 60,
+            defined.len() >= 78,
             "only parsed {} callback definitions -- the matcher is broken",
             defined.len()
         );
         assert!(
-            streamed.len() >= 38,
+            streamed.len() >= 54,
             "only parsed {} CallbackResult variants -- the matcher is broken",
             streamed.len()
         );

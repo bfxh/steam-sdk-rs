@@ -6,10 +6,11 @@
 //! here is one callback for one call -- `register_call_result` fires once per
 //! `SteamAPICall_t`, which is what makes `Result<P, SteamError>` the honest shape.
 //!
-//! `ISteamUGC::GetAppDependencies` is deliberately absent. Its header note says the callback
-//! "may be called multiple times until all app dependencies have been returned"
-//! (`isteamugc.h:380-381`), and handing one answer to a `FnOnce` would report a partial list
-//! as the whole answer. It needs a streaming shape, not this file's shape.
+//! `ISteamUGC::GetAppDependencies` is deliberately absent as a one-shot wrapper. Its header
+//! note says the callback "may be called multiple times until all app dependencies have been
+//! returned" (`isteamugc.h:380-381`), and handing one answer to a `FnOnce` would report a
+//! partial list as the whole answer. Its pages are delivered as
+//! [`GetAppDependenciesResult`], which the callback stream carries.
 
 use super::*;
 
@@ -226,6 +227,53 @@ impl WorkshopEULAStatus {
 }
 
 impl_callback!(cb: WorkshopEULAStatus_t => WorkshopEULAStatus {
+    Self::from_answer(&cb)
+});
+
+/// One page of an item's app-dependency list.
+///
+/// Steam answers `GetAppDependencies` **more than once** when the list does not fit in one
+/// callback: `isteamugc.h:596-598` says "the result of a call to GetAppDependencies. Callback
+/// may be called multiple times until all app dependencies have been returned", and the struct
+/// carries both `m_nNumAppDependencies` ("number returned in this struct") and
+/// `m_nTotalNumAppDependencies` ("total found"). Accumulate pages until they add up.
+///
+/// That is why `GetAppDependencies` itself is not wrapped as a one-shot closure here -- the
+/// `FnOnce(Result<P, SteamError>)` shape used by every other method in this file would hand over
+/// the first page as though it were the whole list. Register this type with
+/// `Client::register_callback`, or read it off the callback stream, to see every page.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+pub struct GetAppDependenciesResult {
+    pub error: Option<SteamError>,
+    pub published_file_id: PublishedFileId,
+    /// The dependencies on this page, at most the 32 Steam's struct can hold.
+    pub app_ids: Vec<AppId>,
+    /// How many entries this page actually carries -- Steam's own count, clamped to what the
+    /// fixed array could hold, so an over-reported number cannot read past it.
+    pub dependencies_returned: u32,
+    pub total_dependencies: u32,
+}
+
+impl GetAppDependenciesResult {
+    fn from_answer(answer: &sys::GetAppDependenciesResult_t) -> Self {
+        let reported = answer.m_nNumAppDependencies as usize;
+        let taken = clamped_entries(reported, answer.m_rgAppIDs.len());
+        Self {
+            error: to_steam_result(answer.m_eResult).err(),
+            published_file_id: PublishedFileId(answer.m_nPublishedFileId),
+            app_ids: answer.m_rgAppIDs[..taken]
+                .iter()
+                .copied()
+                .map(AppId)
+                .collect(),
+            dependencies_returned: taken as u32,
+            total_dependencies: answer.m_nTotalNumAppDependencies,
+        }
+    }
+}
+
+impl_callback!(cb: GetAppDependenciesResult_t => GetAppDependenciesResult {
     Self::from_answer(&cb)
 });
 
@@ -508,5 +556,44 @@ mod answer_tests {
         assert_eq!(answer.published_file_id, PublishedFileId(51));
         add_request.m_bWasAddRequest = false;
         assert!(!UserFavoriteItemsListChanged::from_answer(&add_request).was_add_request);
+    }
+
+    #[test]
+    fn a_dependency_page_never_reads_past_the_array_steam_filled() {
+        let mut page = sys::GetAppDependenciesResult_t {
+            m_eResult: sys::EResult::k_EResultOK,
+            m_nPublishedFileId: 61,
+            m_rgAppIDs: [0; 32],
+            m_nNumAppDependencies: 2,
+            m_nTotalNumAppDependencies: 40,
+        };
+        page.m_rgAppIDs[0] = 7;
+        page.m_rgAppIDs[1] = 8;
+        let answer = GetAppDependenciesResult::from_answer(&page);
+        assert_eq!(answer.app_ids, vec![AppId(7), AppId(8)]);
+        assert_eq!(answer.dependencies_returned, 2);
+        assert_eq!(
+            answer.total_dependencies, 40,
+            "the page count and the total are different numbers"
+        );
+
+        // Steam's own count is not a bound: a report larger than the fixed array has to be
+        // clamped, or the slice reads past what the struct holds.
+        page.m_nNumAppDependencies = 33;
+        let answer = GetAppDependenciesResult::from_answer(&page);
+        assert_eq!(answer.app_ids.len(), 32);
+        assert_eq!(answer.dependencies_returned, 32);
+
+        // And the page reaches the stream, since that is the only way a caller sees the
+        // second and later pages.
+        let raw =
+            (&mut page as *mut sys::GetAppDependenciesResult_t).cast::<std::os::raw::c_void>();
+        match unsafe { CallbackResult::from_raw(GetAppDependenciesResult::ID, raw) } {
+            Some(CallbackResult::GetAppDependenciesResult(streamed)) => {
+                assert_eq!(streamed.published_file_id, PublishedFileId(61));
+                assert_eq!(streamed.app_ids.len(), 32);
+            }
+            other => panic!("GetAppDependenciesResult decoded as {other:?}"),
+        }
     }
 }

@@ -182,6 +182,19 @@ plus the callbacks the wrapper can deliver.
   of those to a `FnOnce` would present a partial list as the whole answer.
   `UGC::get_workshop_eula_status` also replaces the "this crate does not wrap yet" note on
   `show_workshop_eula`, which is now the pointer it always wanted to be.
+- `GetAppDependenciesResult` -- one page of an item's app dependencies, carried by the callback
+  stream. `GetAppDependencies` itself stays unwrapped as a one-shot call (see above), but its
+  answer was previously unreachable as a type: the struct is self-describing about pagination
+  (`isteamugc.h:604-607`: a fixed `AppId_t m_rgAppIDs[32]`, `m_nNumAppDependencies` "number
+  returned in this struct", `m_nTotalNumAppDependencies` "total found"), so the wrapper delivers
+  exactly that -- a page whose `app_ids` length is clamped to what the array can hold, with the
+  page count and the total kept apart. The clamp is not decoration: with the count trusted
+  directly, a reported 33 indexes past a 32-entry array, and control P1 reproduced that as a
+  panic at `src/ugc/answers.rs:265`; deleting the stream arm instead turned the same test red at
+  the `panic!("GetAppDependenciesResult decoded as ...")` line (P2).
+  The stream-coverage floors in `callback.rs` moved to their measured values (78 definitions,
+  54 streamed, the difference being the 24-entry debt list) so a matcher that starts skipping
+  files trips on the floor rather than lowering the debt quietly.
 
 - `examples/inventory.rs` and `examples/http.rs` (`71ce0e7`) — compile-checked by CI; neither has
   been run, since both need a live Steam client.

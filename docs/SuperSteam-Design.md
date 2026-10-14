@@ -821,7 +821,7 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 | 2b 更新侧 —— **已交** | `add_preview_file`（按值收 `EItemPreviewType`，`Unknown` 直接拒发）、`add_preview_video`、`update_preview_file/video`、`remove_preview`、`set_required_game_versions`（空串=该端不限，头文件原文）、`set_admin_query`、`set_allow_legacy_upload`、`show_workshop_eula` | 9 ✓ |
 | 2c 本地缓存/数组出参 —— **已交** | `downloaded_item_count`、`downloaded_items`、`mark_downloaded_item_as_unused`、`set_items_disabled_locally`、`set_subscriptions_load_order`、`user_content_descriptor_preferences` | 6 ✓ |
 | 2d 异步答案 —— **已交 9 个** | `Add/RemoveAppDependency`、`Add/RemoveDependency`、`Add/RemoveItemToFavorites`、`Get/SetUserItemVote`、`GetWorkshopEULAStatus` | 10 中的 9 |
-| 2d 余下 | `GetAppDependencies`（多次答案，形状未定，见下） | 1 |
+| 2d 余下 | `GetAppDependencies`：**页面类型已进流**（`GetAppDependenciesResult`），一次性包装**有意不做** | 1 |
 | 不补 | `RequestUGCDetails`（头文件明写 DEPRECATED，替代者 `CreateQueryUGCDetailsRequest` 已封） | 1 |
 
 2b/2c 补的时候顺手修掉两条**真缺陷**（都不是"顺手美化"）：
@@ -856,11 +856,20 @@ preview 的 URL 用 `k_cchPublishedFileURLMax = 256`、原始文件名用 `k_cch
   所以统一走 `answered(io_error, v.m_eResult, || 载荷)`：IO 失败 → `IOFailure`，Steam 拒绝 → 它自己的
   `SteamError`，其余 → 载荷。8 个回调全部进了 `CallbackResult`（不是只挂 `register_call_result`），
   这样流式 API 也收得到。
-- **`GetAppDependencies` 仍然没做，而且不能按上面的形状做**。头文件原文是
+- **`GetAppDependencies` 的一次性包装有意不做，但它的页面已经能拿到**。头文件原文是
   "note that whatever callback you register for `GetAppDependenciesResult_t` may be called multiple
-  times until all app dependencies have been returned"（`isteamugc.h:380-381`）—— 一个分页流。
-  拿 `FnOnce` 接它就是把"部分列表"当成"完整列表"交给调用方，这一条写在 `answers.rs` 的模块注释里，
-  不在代码里假装解决。要做的是 `FnMut`+终止条件，或一个"收到 empty 为止"的收拢 API —— **待定**。
+  times until all app dependencies have been returned"（`isteamugc.h:380-381`）。
+  结构体自己也说了分页怎么读：`m_rgAppIDs[32]` 是固定数组、`m_nNumAppDependencies` 注为
+  "number returned in this struct"、`m_nTotalNumAppDependencies` 注为 "total found"
+  （`isteamugc.h:604-607`）。所以本仓交出的是一页一个 `GetAppDependenciesResult`
+  （`app_ids` 按 Steam 报的数**夹到数组长度**，`dependencies_returned` / `total_dependencies`
+  两个数分开保留），并且进了 `CallbackResult`，调用方用 `register_callback` 或回调流就能收全。
+  拿 `FnOnce` 接第一页当"完整列表"是不做的东西，写在 `answers.rs` 的模块注释里。
+  要不要再包一层"收拢到齐了再回调"？做得到（终止条件就是累加条数 == `total_dependencies`），
+  但要动派发：`call_results` 现在是**命中即摘除**（`src/lib.rs:322-323`），多次答案得让条目留在表里，
+  而那张表正是 2026-10-13 修过自死锁的地方（回调内注册/丢弃/嵌套派发）；
+  另一半代价是语义：真到不齐（Steam 少发一页）时，"等齐再回调"的闭包就**永远不触发**。
+  两个代价都摊开了，结论是**先不做**，不改派发、不引入永不触发的形状。
 
 2d 的 5 条变异复算（`E:/tmp/answers_mutants*.sh`，读数一律取自门禁自身而不是管道尾）：
 `answered` 的 io 分支改成 `if false` ⇒ M1 判红；`voted_down` 抄 `m_bVotedUp` ⇒ **第一版判绿**，
