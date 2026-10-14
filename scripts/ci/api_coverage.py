@@ -102,6 +102,18 @@ def main(bindings_path=BINDINGS, source_root=SOURCE_ROOT):
     called = {interface: set() for interface in declared}
     for path in sorted(source_root.rglob("*.rs")):
         raw = path.read_text(encoding="utf-8", errors="replace")
+        # A file that is itself test material (`ugc_tests.rs`, `lib_tests.rs`, `tests.rs`) is
+        # not a wrapper, so it is skipped whole. `test_only_calls` above cannot see those: they
+        # carry no `#[cfg(test)]` inside, because the attribute sits on the `mod` declaration.
+        if re.search(r"(^|_)(tests?|probe)\.rs$", path.name):
+            if CALLED.search(strip_comments(raw)):
+                print(
+                    f"::error:: {path} is test material but calls a Steam interface -- decide "
+                    "which side it belongs to before trusting the ledger",
+                    file=sys.stderr,
+                )
+                return 2
+            continue
         source = code_only(raw)
         for interface, name in CALLED.findall(source):
             if interface in called:

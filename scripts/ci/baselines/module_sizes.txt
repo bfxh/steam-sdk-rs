@@ -1,5 +1,4 @@
 src/networking_types/mod.rs 1735
-src/lib.rs 1355
 src/friends/mod.rs 1321
 src/networking_sockets.rs 1314
 src/matchmaking.rs 1297
@@ -7,6 +6,7 @@ src/inventory.rs 966
 src/user_stats.rs 868
 src/html_surface.rs 842
 src/server.rs 821
+src/lib.rs 814
 src/remote_storage.rs 713
 src/utils.rs 700
 src/ugc/answers.rs 599
@@ -25,6 +25,7 @@ src/ugc/results.rs 473
 src/user.rs 468
 src/networking_messages.rs 372
 src/ugc/update.rs 371
+src/lib_tests.rs 354
 src/screenshots.rs 329
 src/server_stats.rs 309
 src/user_stats/stats.rs 276
@@ -33,6 +34,7 @@ src/input.rs 248
 src/networking_utils.rs 242
 src/friends/chat.rs 216
 src/safe_ugc.rs 216
+src/identity.rs 198
 src/parental.rs 191
 src/remote_play.rs 180
 src/ugc/ugc_tests.rs 178

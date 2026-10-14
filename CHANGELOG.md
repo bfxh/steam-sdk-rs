@@ -292,6 +292,20 @@ plus the callbacks the wrapper can deliver.
   (`src/networking_types.rs`) were both named before anything was recorded.
   Three files are still above 1300 lines -- `networking_types/mod.rs` (1733), `lib.rs` (1355) and
   `networking_sockets.rs` (1314) -- and are next under the same rule.
+- `src/lib.rs` (1355) is split three ways: the identity types (`SteamId`, `Universe`,
+  `AccountType`, `AccountId`, `GameId`) move to `src/identity.rs` (198) and are re-exported from
+  the crate root, so every public path -- `steamworks::SteamId` included -- is unchanged; the
+  root's own tests move to `src/lib_tests.rs` (354); and what is left in `lib.rs` (814) is the
+  client, the interface getters and the callback dispatcher. Two independent checks say nothing
+  was lost in the move: `type_surface` still reports the same 79 keys and 786 inherent methods, and the
+  lib suite still reaches exactly 109 tests -- the same count the floor was tightened to before
+  the split, which is the evidence that no test was orphaned by the cut.
+- Building that split found a hole in the coverage ledger shipped in the same session: the
+  `#[cfg(test)]` guard only recognised test modules written *inside* a file, so a test moved to
+  `lib_tests.rs` would have had its Steam calls counted as wrapper coverage. Test-named files
+  (`*_tests.rs`, `tests.rs`) are now skipped as a whole, and a test file that calls an interface
+  function makes the ruler refuse instead of shrugging -- measured today at the same 576 / 913,
+  so the rule changes no number that CI has already registered.
 
 - `Cargo.lock` is committed and every build step runs `--locked`, so dependency drift fails the
   gate instead of silently changing the graph (`477870d`).

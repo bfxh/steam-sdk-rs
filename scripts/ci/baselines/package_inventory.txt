@@ -21,9 +21,11 @@ steamworks/src/friends/chat.rs
 steamworks/src/friends/mod.rs
 steamworks/src/html_surface.rs
 steamworks/src/http.rs
+steamworks/src/identity.rs
 steamworks/src/input.rs
 steamworks/src/inventory.rs
 steamworks/src/lib.rs
+steamworks/src/lib_tests.rs
 steamworks/src/matchmaking.rs
 steamworks/src/matchmaking_servers.rs
 steamworks/src/music.rs
