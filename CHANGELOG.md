@@ -99,7 +99,17 @@ plus the callbacks the wrapper can deliver.
 - `release.yml` builds both crates and the rustdoc site from the locked graph and attaches them
   to a GitHub Release on a `v*` tag (`b7fc121`). It does **not** publish to crates.io: the
   `steamworks` name belongs to the original author, so that remains a maintainer action.
-- Advisory tools (udeps / geiger / audit) are now installed as their own step (`fdb6a12`).
+- Advisory tools (udeps / geiger / audit) are installed as their own step, so a missing
+  subcommand can no longer be swallowed (`fdb6a12`), and each one must now *answer*: udeps has to
+  show it read the dependency graph and reach a conclusion line, geiger and audit have to produce a
+  parseable non-empty report, and audit's advisory database must be populated and under 30 days old.
+  A vacuous "green" is a failure, not a pass.
+- `cargo audit` is now **blocking** (`--deny warnings`) with exactly six registered exceptions:
+  RUSTSEC-2021-0019, -2020-0097, -2025-0051 (xcb), -2025-0035 (macroquad), -2022-0056 (clipboard),
+  -2026-0192 (ttf-parser). All six sit on the `examples/*` dependency chain -- verified with
+  `cargo tree -p steamworks -e normal,build -i <crate>`, which only reaches the example members --
+  so none of them is in a published `.crate`. Any new advisory turns CI red instead of printing a
+  hint nobody is required to read.
 
 ### Fixed
 

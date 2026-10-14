@@ -150,11 +150,73 @@ jobs:
           # `error: no such command: geiger` 被吞掉了。
           cargo install cargo-udeps cargo-geiger cargo-audit --locked
 
+      # 三条都是"发现内容不挡 PR"，但**必须给出判定**。原先的 `|| true`
+      # 让 runner 上 `no such command` 这种"根本没跑"也被吞成绿（实测发生过）。
+      # 现在每一步都要求拿到结构性结论：udeps 要读到依赖图、geiger 与 audit 要产出可解析的 JSON。
       - name: udeps (dead dependencies)
-        run: cargo +nightly udeps --all-targets --all-features || true
+        run: |
+          set -uo pipefail
+          out=$(cargo +nightly udeps --all-targets --all-features 2>&1) || true
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q "Loading depinfo" || { echo "::error::udeps 没有读到依赖图，判定为空"; exit 1; }
+          printf '%s\n' "$out" | grep -qiE "All deps seem to have been used|unused" || { echo "::error::udeps 没有结论行"; exit 1; }
 
       - name: geiger (unsafe code counter)
-        run: cargo geiger --all-features || true
+        run: |
+          set -uo pipefail
+          # 解释器不在就必须判红：早先一个本地版检查用 `2>/dev/null` 把
+          # "python3: command not found" 吞掉，于是 JSON 分支静默失效、
+          # 退化成 grep 兜底 —— 门看着在跑，其实没判。
+          command -v python3 >/dev/null || { echo "::error::python3 缺失，geiger 判定无法核验"; exit 1; }
+          cargo geiger --all-features --output-format Json > geiger.json || true
+          # 判定形式两种都认（Json 是主路，表格是兜底），但**必须有内容**：
+          # 空文件、只有进度噪音、或工具没跑，都判红。
+          if python3 -c 'import json,sys;sys.exit(0 if json.load(open("geiger.json")) else 1)'; then
+            echo "geiger verdict: 可解析的非空 JSON 报告"
+            wc -c geiger.json
+          elif grep -qi "unsafe" geiger.json; then
+            echo "geiger verdict: 表格形式报告"
+            grep -ai "steamworks" geiger.json | tail -4
+          else
+            echo "::error::geiger 没有给出判定（报告为空或不可解析）"
+            exit 1
+          fi
 
       - name: audit (vulnerability scan)
-        run: cargo audit || true
+        run: |
+          set -uo pipefail
+          command -v python3 >/dev/null || { echo "::error::python3 缺失，audit 判定无法核验"; exit 1; }
+          # 这道门现在是**判红**的：`--deny warnings` 让任何 advisory 都算失败，
+          # 唯一例外是下面逐条登记过的 6 条——它们全部来自 examples/* 的 macroquad
+          # 依赖链（`cargo tree -p steamworks -e normal,build -i <包>` 实测只回到
+          # chat-example 等示例成员，或在本平台图上根本不可达），不在发布的 .crate 里。
+          # 新增依赖若引入新 advisory，这里会红，而不是继续"提示"。
+          cargo audit --json --deny warnings \
+            --ignore RUSTSEC-2021-0019 \
+            --ignore RUSTSEC-2020-0097 \
+            --ignore RUSTSEC-2025-0051 \
+            --ignore RUSTSEC-2025-0035 \
+            --ignore RUSTSEC-2022-0056 \
+            --ignore RUSTSEC-2026-0192 > audit.json
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::error::cargo audit 判红（退出码 $code）：出现了未登记的新 advisory"
+            python3 -c 'import json;d=json.load(open("audit.json"));print(json.dumps({"vulnerabilities":d["vulnerabilities"]["count"],"warnings":{k:len(v) for k,v in d["warnings"].items()}},ensure_ascii=False))' || true
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, sys, datetime
+          report = json.load(open("audit.json"))
+          db = report["database"]
+          count = db["advisory-count"]
+          updated = datetime.datetime.fromisoformat(db["last-updated"].replace("Z", "+00:00"))
+          age_days = (datetime.datetime.now(updated.tzinfo) - updated).days
+          print(f"advisory DB: {count} entries, last updated {updated:%Y-%m-%d} ({age_days}d ago)")
+          print(f"unignored vulnerabilities: {report['vulnerabilities']['count']}, "
+                f"warnings: {sum(len(v) for v in report['warnings'].values())}")
+          # 判定成立的前提：库是齐的、也是新的。空库或陈旧库都不算"扫过了"。
+          if count < 500:
+              print("::error::advisory 数据库条目异常少，判定不可信"); sys.exit(1)
+          if age_days > 30:
+              print("::error::advisory 数据库超过 30 天没更新，判定不可信"); sys.exit(1)
+          PY
