@@ -229,6 +229,18 @@ plus the callbacks the wrapper can deliver.
   `cargo tree -p steamworks -e normal,build -i <crate>`, which only reaches the example members --
   so none of them is in a published `.crate`. Any new advisory turns CI red instead of printing a
   hint nobody is required to read.
+- **Workflow self-check** (`workflow_inputs.py`, plus a shrink-only count of shell escape
+  hatches registered at the measured 10). Three invariants this repository has each violated
+  once: a run step pointing at a file that is not tracked (the `*.txt` and clone-before-commit
+  incidents -- green on the writing machine, red everywhere else), `permissions:` interpolating
+  `${{ ... }}` (it zeroed every non-dispatch run of `rebuild-bindings.yml`), and a job without
+  `timeout-minutes`. Building the gate exposed a hole in the gate: YAML parses
+  `contents: ${{ github.ref_type == 'tag' && 'write' || 'read' }}` down to the string `write`,
+  so the first version -- written against the parsed document -- passed a control that should
+  have failed it. It now scans raw text and names file plus line; malformed YAML is reported as
+  "does not parse" rather than as a traceback, because a crash is not a verdict. The gate caught
+  its own new scripts while they were still untracked, before the commit landed.
+
 - **Packaging gate** (`package_inventory.py` + `compare_paths.py`, registered list in
   `scripts/ci/baselines/package_inventory.txt`): what actually goes into each `.crate` is now
   compared against a reviewed file set, and a mismatch blocks both CI and a release. The
