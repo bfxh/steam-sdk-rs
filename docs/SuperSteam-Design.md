@@ -540,6 +540,10 @@ impl Drop for Inner {
 
 ### 6.1 当前缺口（实证：宽口径 34 个访问器接口，封装 23 个，缺口 11）
 
+> **本节数字是 2026-10-12 的历史快照**（写于补齐之前）。缺口闭合后的**复算尺见 6.1b**；
+> 两节口径不同（本节=头文件里的接口访问器，6.1b=生成绑定里的 `SteamAPI_*_vNNN` 函数），
+> 不要跨节拿数字互相减。
+
 > **深挖修正（defect-07，双重纠错）**：原写「29 个接口，封装 14，缺失 15」——**分母和分子都错**：
 > 1. 分母 29 用窄正则漏了 5 个 `_SteamAPI_` 中缀命名的接口（NetworkingMessages/Sockets/Utils + GameServer 侧 2 个），宽口径实为 **34**；
 > 2. 分子 14 漏算了 GameServer 侧 6 个访问器封装（server.rs + networking 服务器变体），宽口径实为 **23**；
@@ -570,6 +574,38 @@ impl Drop for Inner {
 - **GameServer 全套**是给服务器开发者用的，不做服务器则低。
 
 注：Steamworks.NET 覆盖近全量（含上述冷门接口），这是它相对 steamworks-rs 的明确优势，SuperSteam 必须补齐。
+
+### 6.1b 缺口闭合后的复算（2026-10-14）
+
+上表写于补齐之前，现在缺口已经闭合，所以重量一次并把尺留在纸上。这次的尺不数头文件里的
+接口，而是数**生成绑定里的访问器函数**——只有真的存在可调用符号，才谈得上"缺不缺"：
+
+```bash
+grep -ohE "SteamAPI_[A-Za-z]+_v[0-9]+" steamworks-sys/src/windows_bindings.rs | sort -u   # 29 个访问器
+grep -ohE "SteamAPI_[A-Za-z]+_v[0-9]+" src/ -r | sort -u                                   # 28 个被调用
+comm -23 /tmp/acc_all.txt /tmp/acc_used.txt                                                # 差集
+```
+
+差集只剩一项：`SteamAPI_SteamController_v008`。也就是说 6.1 表里的 11 项缺口中，除
+ISteamController 外**全部已封装并可从 `Client`/`Server` 取到**；Controller 是主动不接
+（ISteamInput 已取代它，头文件注释明言），属于选择而非遗漏。
+
+**两条对 6.1 的实测更正**（不改上表历史数字，更正记在这里）：
+
+1. 表里 `ISteamGameServer*（HTTP/Inventory/Stats）` 记成"只缺这三个"，是按 C++ 头文件的宏访问器算的。
+   生成绑定里它们是三个**独立可调用函数**（`SteamAPI_SteamGameServerHTTP_v003`、
+   `SteamAPI_SteamGameServerInventory_v003`、`SteamAPI_SteamGameServerStats_v001`）；补齐后
+   `Server::http()` / `Server::inventory()` 直接复用客户端那两套包装类型，`Server::stats()` 用
+   `src/server_stats.rs`。没有新增接口族，只有新增访问器调用。
+2. 表里 ISteamHTMLSurface 的方法数（37 严/39 宽）成立，但**不含 `RunFrame`**：本 SDK 版本的
+   `steamworks-sys/lib/steam/public/steam/isteamhtmlsurface.h` 里搜不到 `RunFrame`（整文件 39 处
+   `virtual`，`grep -n RunFrame` 为空）。所以包装层不能照搬"每帧调用一次"的客户端惯例，
+   `src/html_surface.rs` 也没有发明这个方法。
+
+**这把尺的盲区要一并说清**（否则会误读成"覆盖率 28/34＝82%"）：访问器函数只有 29 个 ≠ 接口只有 29 个。
+ISteamNetworkingMessages / ISteamNetworkingSockets / ISteamNetworkingUtils / ISteamClient 这几族没有
+`SteamAPI_X_vNNN` 形式的访问器（绑定里是 `_SteamAPI_` 中缀或指针传递），它们的方法在 `src/` 里确实被调用，
+但上面的正则看不见。所以 6.1 的"34 个接口"与本节的"29 个访问器"是两个分母，不能互相减。
 
 ---
 
