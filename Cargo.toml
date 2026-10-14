@@ -15,6 +15,10 @@ exclude = [
   # 文档与工作流不是 crate 内容。
   "docs/",
   ".github/",
+  # 门禁脚本是仓库的工程设施，不是 crate 内容：跟着 .crate 发给用户只会
+  # 让发布物里出现跑在 CI 上的工具（第一版基线就是在它们已泄漏进去之后录的，
+  # 于是把泄漏钉成了"正常"——见 CHANGELOG）。
+  "scripts/",
   # 本地跑示例时让 Steam 认出库的 app id（`cargo run --example ...`）。
   # 它被 git 跟踪是开发便利，打进 .crate 就是把一次本机运行的痕迹发给用户。
   "steam_appid.txt",
