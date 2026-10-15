@@ -46,9 +46,15 @@ steamworks/src/matchmaking_servers.rs
 steamworks/src/music.rs
 steamworks/src/networking.rs
 steamworks/src/networking_messages.rs
+steamworks/src/networking_sockets/auth.rs
+steamworks/src/networking_sockets/connect.rs
 steamworks/src/networking_sockets/connection.rs
 steamworks/src/networking_sockets/fake_udp.rs
+steamworks/src/networking_sockets/listen.rs
+steamworks/src/networking_sockets/listen_socket.rs
 steamworks/src/networking_sockets/mod.rs
+steamworks/src/networking_sockets/poll_group.rs
+steamworks/src/networking_sockets/status.rs
 steamworks/src/networking_sockets_callback.rs
 steamworks/src/networking_types/addresses.rs
 steamworks/src/networking_types/config.rs

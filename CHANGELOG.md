@@ -445,7 +445,7 @@ plus the callbacks the wrapper can deliver.
   `receive_messages` clamps Steam's returned count with `received_count` before using it as a length:
   a negative `int` would wrap to an enormous `usize`, and a count above the batch size would claim
   slots nobody offered. **Worth recording as an observation about the existing code**: `NetPollGroup`'s
-  sibling (`src/networking_sockets/mod.rs:588-604`) does `... as usize; set_len(count)` with no such
+  sibling (`src/networking_sockets/poll_group.rs:67` today; the coordinate was re-measured by content when that code moved out of the module root) does `... as usize; set_len(count)` with no such
   clamp, so the same hazard is live there today. It is not fixed in this commit -- it is a different
   surface, and changing a hot path that games already use deserves its own measurement rather than
   riding along as a drive-by.
@@ -642,6 +642,34 @@ plus the callbacks the wrapper can deliver.
   exposure is measured and hypothetical -- that module holds 0 direct `SteamAPI_*` call sites, so
   coverage could not inflate from it -- but the shape is what the gate reads, and `test_only_calls` is
   the tripwire that says so.
+- `src/networking_sockets/mod.rs` (791 lines, the last module root still carrying its own
+  implementation) became wiring plus six children beside the `connection.rs` and `fake_udp.rs` that
+  were already there: `mod.rs` 259 (the imports, the `NetworkingSockets` struct and its `Send`/`Sync`
+  claims, `send_messages`, `InvalidHandle` and the inline test module), `listen.rs` 120 (the three ways
+  to open a listening socket), `listen_socket.rs` 122 (the socket handle, its three event reads and its
+  accepting send), `poll_group.rs` 102 (`InnerSocket`, `NetPollGroup` with its `Drop`, the batched
+  receive, and the method that mints a group), `status.rs` 98 (connection info, realtime status, lane
+  configuration), `connect.rs` 92 (IP and P2P connects), `auth.rs` 49 (`init_authentication` and
+  `get_authentication_status`). `NetworkingSockets`' 398-line `impl` is now seven blocks by concern; the
+  crate's largest file is `src/lib.rs` at 814.
+  28 items, 0 unclaimed lines, witness 730 non-blank before / **1** lost (`NetPollGroup::handle`, now
+  `pub(super)` because `connection.rs` attaches a connection to a group through it) / 39 added, 38 of
+  them module headers, wiring and impl braces. `api_coverage` (639 of 913) and `type_surface`
+  (`NetworkingSockets` 13, `ListenSocket` 4, `NetPollGroup` 1 measured, each at its registered value)
+  compare green against the pre-split
+  baselines; `module_sizes` (98 entries, 26,953 lines registered) and `package_inventory` (113 shipped
+  files) were re-recorded.
+  The one number I got wrong here was the impl's closing line: I wrote 435 from the earlier method
+  listing instead of reading it, and the truth is 426 -- so the block that should have ended at the
+  impl's `}` swallowed it, took `ListenSocket`'s eight doc lines (428-435) with it, and left the root
+  with an
+  unmatched `}` at line 261. The probe still said "0 holes", because everything had been claimed -- by
+  the wrong block. Two fixes followed the incident: the generator now asserts the opener line literally
+  reads `impl NetworkingSockets {` and the closer is exactly `}`, so a recalled boundary cannot be used
+  again, and the FakeUDPPort unit's citation of the old module root's 588-604 range -- a fourth
+  `set_len` pointer, naming a file that this same change shrank to 259 lines -- was re-anchored by
+  content to `src/networking_sockets/poll_group.rs:67`, the
+  line the unclamped `as usize; set_len(count)` actually sits on today.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
