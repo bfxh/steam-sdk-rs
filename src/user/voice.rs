@@ -141,7 +141,7 @@ fn voice_len(requested: usize) -> u32 {
 /// Steam was told (`voice_len`, always `<= buffer.len()`) can never exceed it, so a count above
 /// `capacity` would mean Steam ignored a size argument we already know it was handed. Trusting the
 /// number further would hand the caller bytes nobody wrote.
-fn written_bytes(written: u32, capacity: usize) -> usize {
+pub(crate) fn written_bytes(written: u32, capacity: usize) -> usize {
     (written as usize).min(capacity)
 }
 

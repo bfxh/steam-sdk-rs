@@ -657,7 +657,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
-| ISteamUser |   26 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
+| ISteamUser |   28 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
@@ -670,10 +670,10 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
 
-**总计 630 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 632 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
- 与语音簇五个 21→26，见 §6.1d）。这张表现在由 CI 的
+ 与语音簇五个 21→26，再补两个出参协议件 26→28，见 §6.1d）。这张表现在由 CI 的
 `interface coverage stays at its registered ledger` 一步复算：尺子是
 `scripts/ci/api_coverage.py`，基线是 `scripts/ci/baselines/api_coverage.txt`，
 每个接口两条数（`declared` / `called`）**双向**判红 —— 少包一个函数、或 SDK 升级悄悄换了
@@ -809,17 +809,15 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法走 lossy（不 panic）。
 ③ 发送侧内嵌 NUL 判 `Err(SteamError::InvalidParameter)`，与 Steam 自己的拒绝 `Ok(false)` 分两级。
 
-`ISteamUser` 补到 26/33 之后（2026-10-16 把下表原来登记的四个 `STEAM_CALL_RESULT` 异步调用接进了
-`register_call_result`，同日再把语音簇五个封进 `src/user/voice.rs`），剩下的 7 个仍按"判过不封"和
-"要先定契约"分开登记，判据一律指到 `isteamuser.h` 行号：
+`ISteamUser` 补到 28/33 之后（2026-10-16 依次补进：四个 `STEAM_CALL_RESULT` 异步调用走
+`register_call_result`、语音簇五个进 `src/user/voice.rs`、两个出参协议件进 `src/user/buffers.rs`），
+剩下的 5 个仍按"判过不封"和"要先定契约"分开登记，判据一律指到 `isteamuser.h` 行号：
 
 | 未封方法 | 判据 / 前置条件 |
 |---|---|
 | `GetHSteamUser`（h:24） | 头文件 h:22-23 明写 "this is only used internally by the API, and by a few select interfaces that support multi-user"。把内部句柄开放给游戏代码只加不安全面、不加能力，**有意不封** |
 | `InitiateGameConnection_DEPRECATED`（h:53） | h:51 "DEPRECATED! This function will be removed from the SDK in an upcoming version."，**有意不封**（与本仓 `RequestUGCDetails` 同一先例） |
 | `TerminateGameConnection_DEPRECATED`（h:60） | h:58 同上，**有意不封** |
-| `GetUserDataFolder`（h:69） | `bool GetUserDataFolder(char *pchBuffer, int cubBuffer)`，同上：调用方缓冲 + 长度语义未定 |
-| `GetEncryptedAppTicket`（h:173） | h:170-172 定义了一次调用两用的协议（返回 false 时 `*pcbTicket` 是所需大小；传 `pTicket=NULL, cbMaxTicket=0` 探长度）。要封就得同时给出"探长度"和"取数据"两条路，否则调用方只能裸指针玩 |
 | `AdvertiseGame`（h:159）/ `TrackAppUsageEvent`（h:65） | `AdvertiseGame(CSteamID, uint32 unIPServer, uint16 usPortServer)` 要先定 IP/端口的 Rust 表示（本仓有 `SteamIpAddr`，但那是 networking 那族的中转类型，别顺手复用错语义）；`TrackAppUsageEvent(CGameID, int eAppUsageEvent, const char *pchExtraInfo = "")` 的 `eAppUsageEvent` 在这份绑定里没有对应枚举，且有裸字符串入参（内嵌 NUL 要走 `InvalidParameter`，不能 `unwrap`） |
 
 同一张表原来的第 8 行（`RequestStoreAuthURL` h:194 / `RequestEncryptedAppTicket` h:165 /
@@ -834,8 +832,8 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 `RTime32` 语义（0＝"没说"，不是 1970）；`duration_control` 的 `m_progress` 与 `m_notification`
 是两个不同的词表（`steamclientpublic.h` 里 `EDurationControlProgress` 把 0..2 定义为进度、3..5 定义为
 "该退出了"），因此没有合并成一个三选枚举，两边各带一个 `Unknown` 兜底臂；
-`request_encrypted_app_ticket` 只交付"就绪"信号，票本体仍要 `GetEncryptedAppTicket` 的出参协议——
-所以那一行留在上表没动，空 `app_data` 也要给 Steam 一个非空指针，沿用 `write_file` 的
+`request_encrypted_app_ticket` 只交付"就绪"信号，票本体走 `GetEncryptedAppTicket` 的出参协议——
+该行本轮也已被封（见下面第 6 段），空 `app_data` 也要给 Steam 一个非空指针，沿用 `write_file` 的
 `NonNull::<u8>::dangling()` 写法。`m_eResult` 一律经 `to_steam_result`，IO 失败回 `IOFailure`。
 两个兜底臂今天用现有头文件构造不出来（给 C 枚举造未声明的判别式是 UB，不是复现；实测这两个枚举
 Windows 绑成 `repr(i32)`、其余三个平台绑成 `repr(u32)`，两个方向结论一样），
@@ -866,13 +864,38 @@ h:83、`GetVoice` h:106、`DecompressVoice` h:114）**本轮已封**，落地在
 `Unknown` 兜底臂同上：今天构造不出来，只登记不写假测试。`decode_voice` 故意不复用
 `decode_voice_into`——后者会丢弃字节数，而缓冲不够时那个数正是下一次分配的唯一输入。
 
+表里原来的 `GetUserDataFolder`（h:69）与 `GetEncryptedAppTicket`（h:173）两行**本轮已封**，落在
+`src/user/buffers.rs`。这两件当初登记的理由是同一句"调用方缓冲 + 长度语义未定"，而头文件只把
+**票**那一件说清楚了（h:167-172：返回 false 时 `*pcbTicket` 就是所需大小；传
+`pTicket=NULL, cbMaxTicket=0` 探长度，"if a ticket is available, *pcbTicket will contain the size
+needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文件从头到尾没解释 false
+是什么意思**。于是两件的契约分别这么定：
+
+1. `encrypted_app_ticket()` 照头文件走两遍：NULL/0 探一次 → 按报回的数分配 → 再取一次。
+   探到 0 就是"还没票"→ `InvalidState`（这既不是调用方的错也不该重试到永远）；报回的数超过
+   `MAX_TICKET_BYTES`（1 MiB）→ `InvalidParameter` 而**不是**照那个数分配；第二遍仍然 false →
+   `InvalidState`，写清楚"协议没收敛是 Steam 那边的事"。取回的字节数照语音簇同一把尺夹到缓冲
+   容量（共用 `voice::written_bytes`，不再写第二份）。
+2. `user_data_folder()` 的失败检测**不依赖 Steam 那个没定义的 bool**：本仓给一个 32 KiB 缓冲
+   （头文件自己举的例子 `C:\Program Files\Steam\userdata\<SteamID>\<AppID>\local` 远短于此，
+   32 KiB 也已是 Windows 260 字符路径上限的百倍），若整块缓冲被填满而**内部没有 NUL**，就判定被
+   截断并返回错误——因为截出来的字符串仍然"看着像一条路径"，静默交给调用方会让游戏把存档写到
+   它没选的地方。Steam 回 false 也一律报 `InvalidState`，不替它编造含义。
+3. `cubBuffer` 是 `int`，所以长度先过 `i32::try_from`；反方向（截断）会让 Steam 以为缓冲比实际更大。
+4. 路径按本仓读定长缓冲的既有口径 lossy 解码（`steam_out_string`），并**在文档里写明**不可解字节
+   会变成 U+FFFD、因此不保证字节级往返——而不是让调用方以为拿到的是原始字节。
+
+4 个测试、4 只变异（去掉 NUL 守卫、把 `int` 长度改成截断、把探到 0 当成大小、去掉票上限），
+每只都判到对应测试红、文件逐字节还原。
+
 
 **这里也记一条判据教训**：上面这些"未封"里没有一个是用"名字看起来像旧的/内部用的"当理由的——
 `GetHSteamUser` 的不封依据是头文件那句话，两个 `_DEPRECATED` 的依据是 h:51/h:58 的原文，
-其余 4 个的障碍都在签名里看得见：2 个是出参/缓冲协议（`GetUserDataFolder` 的调用方缓冲 +
-长度语义、`GetEncryptedAppTicket` 的一调两用探长度协议），2 个是参数表示未定（`AdvertiseGame` 的
-IP/端口、`TrackAppUsageEvent` 那个没有对应枚举的 `eAppUsageEvent`）。原来"随时可封但不出半套"的
-`Start`/`StopVoiceRecording` 已随整簇一起封完，半套的顾虑不再成立。
+其余 2 个的障碍在签名里看得见，都是**参数表示未定**：`AdvertiseGame` 的 IP/端口（绑定给
+`uint32 unIPServer` + `uint16 usPortServer`，本仓那对中转类型 `SteamIpAddr` 属 networking 一族，
+语义不同不能顺手复用）、`TrackAppUsageEvent` 的 `int eAppUsageEvent`（这份绑定里**没有对应枚举**，
+加一个就得凭猜定值域）。两个出参协议件本轮已按下面第 6 段那条口径封完并移出这一档；原来
+"随时可封但不出半套"的 `Start`/`StopVoiceRecording` 也随语音簇整簇封完，半套的顾虑不再成立。
 判"要不要封"读签名和头文件，不读命名。
 
 `ISteamInput` 补到 44/48（2026-10-15 加 `EnableDeviceCallbacks` + `DeviceConnected` /

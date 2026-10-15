@@ -1,4 +1,4 @@
-# counts: {'steamworks': 71, 'steamworks-sys': 74}
+# counts: {'steamworks': 72, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -61,6 +61,7 @@ steamworks/src/ugc/ugc_tests.rs
 steamworks/src/ugc/update.rs
 steamworks/src/user/answers.rs
 steamworks/src/user/auth.rs
+steamworks/src/user/buffers.rs
 steamworks/src/user/callbacks.rs
 steamworks/src/user/duration.rs
 steamworks/src/user/mod.rs

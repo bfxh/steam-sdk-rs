@@ -30,7 +30,7 @@ src/ugc/update.rs 404
 src/friends/friend.rs 401
 src/user/duration.rs 393
 src/networking_types/end.rs 384
-src/user/mod.rs 373
+src/user/mod.rs 374
 src/networking_messages.rs 372
 src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
@@ -42,6 +42,7 @@ src/safe_ugc.rs 269
 src/networking.rs 257
 src/user/auth.rs 244
 src/friends/chat.rs 216
+src/user/buffers.rs 206
 src/identity.rs 198
 src/parental.rs 191
 src/remote_play.rs 180

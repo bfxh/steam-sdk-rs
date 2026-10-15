@@ -3,6 +3,9 @@ use crate::networking_types::NetworkingIdentity;
 
 mod answers;
 mod auth;
+// Exports nothing of its own: both wrappers in it are methods on `User`, so it is declared rather
+// than globbed out.
+mod buffers;
 mod callbacks;
 mod duration;
 mod voice;
@@ -282,15 +285,13 @@ impl User {
     /// Asks for an encrypted app ticket whose body carries `app_data`.
     ///
     /// The answer is the readiness signal only: the ticket bytes themselves come from
-    /// `GetEncryptedAppTicket`, which is not wrapped here because its out-parameter protocol
+    /// [`User::encrypted_app_ticket`], which runs the two-pass out-parameter protocol
     /// ("If no ticket is available, or your buffer is too small, returns false... you can pass
     /// pTicket=NULL and cbMaxTicket=0" to learn the size, then allocate and ask again,
-    /// `isteamuser.h:167-173`) needs a buffer contract first -- see
-    /// `docs/SuperSteam-Design.md` 6.1d. The header marks this call itself "asynchronous, you must
-    /// wait for the ticket to be completed by the server" (`isteamuser.h:163`), which is what the
-    /// callback below is for. An empty `app_data` still has to hand Steam a non-null pointer, so it
-    /// gets an aligned, never-dereferenced address, the same way `RemoteStorage::write_file`
-    /// handles it.
+    /// `isteamuser.h:167-173`). The header marks this call itself "asynchronous, you must wait for
+    /// the ticket to be completed by the server" (`isteamuser.h:163`), which is what the callback
+    /// below is for. An empty `app_data` still has to hand Steam a non-null pointer, so it gets an
+    /// aligned, never-dereferenced address, the same way `RemoteStorage::write_file` handles it.
     pub fn request_encrypted_app_ticket<F>(&self, app_data: &[u8], cb: F)
     where
         F: FnOnce(Result<(), SteamError>) + 'static + Send,

@@ -358,6 +358,37 @@ plus the callbacks the wrapper can deliver.
   `written_bytes` also compared against the length we had declared, which is always `<=` the
   capacity, so no input any caller can produce told the two bounds apart -- the redundant term was
   deleted instead of being covered by a case only a >4 GiB buffer could reach.
+- `ISteamUser`'s two remaining out-parameter calls, 26 -> 28 of its 33 (total 632 of 913), in the
+  new `src/user/buffers.rs`: `user_data_folder()` and `encrypted_app_ticket()`. The register held
+  both behind the same phrase -- "caller buffer plus undefined length semantics" -- and the headers
+  only settle it for one of them. `GetEncryptedAppTicket` documents its own two-pass protocol
+  ("If no ticket is available, or your buffer is too small, returns false. Upon exit, *pcbTicket
+  will be either the size of the ticket copied into your buffer (if true was returned), or the size
+  needed (if false was returned)... you can pass pTicket=NULL and cbMaxTicket=0",
+  `isteamuser.h:167-172`), so `encrypted_app_ticket` follows it literally: probe, allocate exactly
+  the reported size, fetch; a probe reporting zero is `InvalidState` ("no ticket yet", which is
+  timing and not the caller's fault), a reported size above `MAX_TICKET_BYTES` (1 MiB) is
+  `InvalidParameter` rather than a huge allocation, and a second round that still refuses after being handed its own number is
+  `InvalidState` -- the protocol not converging is Steam's problem to explain, not a licence to
+  retry forever. The fetched count goes through the same clamp the voice cluster uses, shared as
+  `voice::written_bytes` rather than written out a second time.
+  `GetUserDataFolder` is the opposite case: it returns a bare `bool` and the header never says what
+  `false` means (`isteamuser.h:67-69`), so the wrapper does not invent an interpretation. It gives
+  Steam a 32 KiB buffer -- the example Steam itself prints, `"C:\Progam Files\Steam\userdata\
+  <SteamID>\<AppID>\local"`, is a fraction of that and 32 KiB is already >100x Windows' 260-char
+  path limit -- and detects the failure mode Steam cannot be trusted to describe: if the buffer
+  comes back full with **no NUL inside it**, the path was cut, and that is an error rather than a
+  string. The reasoning is that a truncated path still *reads* like a path, and handing one back
+  would let a game write its saves somewhere it did not choose. A `false` from Steam is reported as
+  `InvalidState` with nothing inferred beyond "not granted"; `cubBuffer` being an `int` goes through
+  `i32::try_from` first (the other direction advertises room the buffer does not have); and the
+  bytes are decoded lossily like every other fixed Steam buffer in this crate, with the docs saying
+  plainly that an undecodable byte becomes U+FFFD and the result is therefore not byte-round-trip
+  exact. `request_encrypted_app_ticket`'s doc, which pointed at an unwrapped getter, now links
+  [`User::encrypted_app_ticket`] -- that sentence went stale the moment this unit existed.
+  Four tests, four mutation controls (no terminator guard, `int` length truncated instead of
+  refused, a zero probe treated as a size, the ticket cap removed), each turning its test red and
+  the file restored byte for byte.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
