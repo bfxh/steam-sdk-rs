@@ -245,6 +245,21 @@ jobs:
       - name: referenced files, timeouts and permissions
         run: python3 scripts/ci/workflow_inputs.py
 
+      # workflow_inputs.py 刻意不跑 actionlint(不想在跑批中途拉第三方二进制),
+      # 但它只查"这个仓库自己栽过的三类坑"。workflow 的 YAML 结构、表达式、
+      # 上下文拼写错误(动作名写错、`on:` 结构错、矩阵/`if:` 表达式错)在 push
+      # 之前没有任何地方判——写坏一个 workflow 要到 push 触发才第一次显形。
+      # 这一步用官方 release 二进制补上:版本 pin 死、从 GitHub 官方 release 下载、
+      # 不经过任何第三方安装脚本;取不到二进制或检查失败都判红,而不是跳过。
+      # runner 标签白名单见 `.github/actionlint.yaml`(ubuntu-22.04-arm)。
+      - name: actionlint (workflow syntax)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp
+          /tmp/actionlint -color
+
       - name: shell escape hatches may only shrink
         run: |
           set -uo pipefail

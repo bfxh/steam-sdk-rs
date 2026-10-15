@@ -1,5 +1,8 @@
 # steamworks
 
+[![CI](https://github.com/bfxh/steam-sdk-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/bfxh/steam-sdk-rs/actions/workflows/ci.yml)
+[![Quality extra](https://github.com/bfxh/steam-sdk-rs/actions/workflows/quality-extra.yml/badge.svg)](https://github.com/bfxh/steam-sdk-rs/actions/workflows/quality-extra.yml)
+
 Rust bindings to the [Steamworks SDK](https://partner.steamgames.com/doc/sdk), forked from
 [Noxime/steamworks-rs](https://github.com/Noxime/steamworks-rs) and developed independently.
 

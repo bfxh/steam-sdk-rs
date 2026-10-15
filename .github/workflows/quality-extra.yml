@@ -5,6 +5,12 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # 每周一 02:30 UTC(北京 10:30)自动重跑一遍审计三件套。advisory 数据库
+    # 每天更新,新漏洞出现后如果仓库恰好没有 push,audit 就再也不会看到它——
+    # 定时跑让"无人推送"不成为"无人知晓"。schedule 事件下 `github.ref` 是
+    # 默认分支,concurrency 的 cancel-in-progress: false 语义照旧。
+    - cron: "30 2 * * 1"
 
 env:
   CARGO_TERM_COLOR: always

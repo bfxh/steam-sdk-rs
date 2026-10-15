@@ -1,0 +1,32 @@
+# 依赖更新全自动跟踪,两个生态各一条线,每周一发 PR,不自动合并:
+#   - github-actions:actions/checkout、Swatinem/rust-cache 这类第三方动作的版本更新。
+#     dtolnay/rust-toolchain 保持 @master 不动——那是上游官方推荐的滚动用法,
+#     动作的 major 版本更新由这条线负责提出。
+#   - cargo:主 Cargo.toml 就是 workspace 根,examples 与 steamworks-sys 都在同一张
+#     依赖图里,一个 directory 覆盖全仓。Cargo.lock 已入库,PR 会带着 lock 变更走
+#     CI,`--locked` 的构建门照常判。`cargo audit`(quality-extra)只扫"已知漏洞",
+#     不扫"有新版可用",这条线补的正是后者。
+# PR 和手写提交走同一套门禁:不开 auto-merge,升级依赖也要过完整的 CI。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:30"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: ci
