@@ -5,11 +5,13 @@ mod answers;
 mod auth;
 mod callbacks;
 mod duration;
+mod voice;
 
 pub use answers::*;
 pub use auth::*;
 pub use callbacks::*;
 pub use duration::*;
+pub use voice::*;
 
 /// Access to the steam user interface
 pub struct User {

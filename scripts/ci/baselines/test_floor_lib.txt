@@ -1,1 +1,1 @@
-142  # lib tests reached with --all-features, measured 2026-10-16 with the duration-control read mappings (4 tests added)
+146  # lib tests reached with --all-features, measured 2026-10-16 with the voice cluster (4 tests added)

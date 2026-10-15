@@ -25,12 +25,13 @@ src/networking_utils.rs 513
 src/parties.rs 499
 src/ugc/results.rs 473
 src/ugc/query.rs 464
+src/user/voice.rs 437
 src/ugc/update.rs 404
 src/friends/friend.rs 401
-src/user/duration.rs 391
+src/user/duration.rs 393
 src/networking_types/end.rs 384
+src/user/mod.rs 373
 src/networking_messages.rs 372
-src/user/mod.rs 371
 src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329

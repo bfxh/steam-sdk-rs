@@ -107,8 +107,10 @@ pub enum DurationControlProgress {
     ///
     /// Not reachable with today's headers: every code the vendored enum declares is named above,
     /// and the wildcard only exists because the sys enum is `#[non_exhaustive]`. There is no test
-    /// for it -- fabricating a discriminant for a `#[repr(i32)]` enum is undefined behaviour, not a
-    /// reproduction, so the honest guard is the panic-site ledger.
+    /// for it -- fabricating a discriminant for the C enum behind `EDurationControlProgress`
+    /// (measured: `#[repr(i32)]` on Windows, `#[repr(u32)]` on the other three platform bindings) is
+    /// undefined behaviour either way, not a reproduction, so the honest guard is the panic-site
+    /// ledger.
     Unknown,
 }
 

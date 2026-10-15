@@ -6,11 +6,11 @@ Browser 33
 QueryHandle 33
 Apps 29
 Client 29
+User 29
 Matchmaking 28
 Utils 28
 UserStats 24
 UpdateHandle 22
-User 22
 Inventory 21
 QueryResults 21
 Timeline 18

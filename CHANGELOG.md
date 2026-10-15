@@ -315,13 +315,49 @@ plus the callbacks the wrapper can deliver.
   `request_encrypted_app_ticket` delivers readiness only -- the ticket bytes need
   `GetEncryptedAppTicket`'s two-pass out-parameter protocol (`isteamuser.h:167-173`), which stays
   unwrapped and in the register above. Both read-direction enums carry an `Unknown` arm no test can
-  reach without fabricating a discriminant for a `#[repr(i32)]` enum, which is why the arm is
+  reach without fabricating a discriminant for the C enum behind them (`#[repr(i32)]` on Windows and
+  `#[repr(u32)]` on the other three platform bindings -- undefined behaviour either way), which is
+  why the arm is
   documented as unreachable-with-today's-headers and left to the panic-site ledger rather than
   faked. Four tests pin what is reachable (142 lib tests, floor raised from 138): every declared
   code lands on its own variant, no two codes collide, and every struct field arrives in the slot
   named for it. Each was mutation-checked -- progress 3h answering FiveHours, notification 1Hour
   collapsing onto `None`, `m_csecsRemaining` copied into `seconds_today`, a dropped timestamp -- and
   each turned its test red, with the file restored byte for byte.
+- `ISteamUser`'s voice cluster, 21 -> 26 of its 33 (total 630 of 913), in the new `src/user/voice.rs`:
+  `start_voice_recording`, `stop_voice_recording`, `available_compressed_voice`,
+  `read_compressed_voice_into` / `read_compressed_voice`, `decode_voice_into` / `decode_voice`. The
+  register's precondition for this cluster was a buffer contract, and the headers carry most of it,
+  so the shape follows theirs rather than a guess. The deprecated uncompressed arguments are **not
+  exposed at all** -- `isteamuser.h:96-97` tells most applications to leave them NULL/zero and
+  `:90-92` says fetching uncompressed audio "will cause GetVoice to discard any leftover compressed
+  audio", so putting them in the signature would hand callers a way to lose data silently. The two
+  grow loops differ on purpose because only one has a number to grow by: `DecompressVoice` promises
+  "*nBytesWritten will be set to the required buffer size, and k_EVoiceResultBufferTooSmall is
+  returned. It is suggested to start with a 20kb buffer" (`isteamuser.h:111-113`), so `decode_voice`
+  starts there and uses that figure as a floor; `GetVoice` documents no such answer, so
+  `read_compressed_voice` can only double -- at most four times, and never past `MAX_VOICE_BYTES`
+  (1 MiB), where the outcome is a reported `BufferTooSmall` instead of an unbounded allocation.
+  Capture is polled per frame ("at least once per frame, and preferably every few milliseconds",
+  `isteamuser.h:100-102`), so the primitives take a caller-owned buffer and the `Vec` versions are
+  built on them; `decode_voice` re-issues the FFI call rather than sitting on `decode_voice_into`,
+  because the helper discards the byte count and on a refusal that count is the only input the next
+  attempt has. `stop_voice_recording` returns nothing: "the system will keep recording for a little
+  bit after this function is called" (`isteamuser.h:74-76`), so the drain is observed as
+  `VoiceError::NotRecording` on the reader instead of being asserted at the call.
+  `VoiceError` maps the nine non-`OK` codes of `EVoiceResult` (`steamclientpublic.h:151-163`) -- a
+  declaration with no comments, so each variant's sentence is the name read plainly and the file
+  says so rather than dressing it up as quoted prose; its `Unknown` arm is the same
+  documented-as-unreachable, un-faked case as the two above it. Two trust rules: `voice_len` clamps
+  the length Steam is told *down* only (the other direction truncates and advertises more room than
+  the buffer holds), and `written_bytes` believes Steam's count only as far as the buffer allows.
+  Four tests, five mutation controls -- NoData answering `NotRecording`, truncation instead of
+  clamping, the count trusted outright, the capture loop uncapped, and Steam's reported size taken
+  as the whole answer, each turned its test red and the file came back byte for byte. One control
+  did **not** kill at first, and the fix went to the function rather than the test:
+  `written_bytes` also compared against the length we had declared, which is always `<=` the
+  capacity, so no input any caller can produce told the two bounds apart -- the redundant term was
+  deleted instead of being covered by a case only a >4 GiB buffer could reach.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
