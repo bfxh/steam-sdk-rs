@@ -452,6 +452,34 @@ plus the callbacks the wrapper can deliver.
   Three tests, four mutation controls: the copied ceiling drifting from the header, the maximum not
   enforced, a negative count trusted, and the batch clamp removed -- each turned its test red, files
   restored byte for byte.
+- No API change, one structure change: `src/matchmaking.rs` was the largest file left in the crate
+  (1339 lines) and the last big module still in single-file form, so it became a directory module --
+  `src/matchmaking/mod.rs` 478 (`Matchmaking`, `LobbyType`, `LobbyId`, the lobby lifecycle and the
+  game-server pair, plus the two `#[ignore]`d manual tests), `filters.rs` 314 (the lobby-list filter
+  vocabulary and the key-length rule), `chat.rs` 280 (chat send/paging plus the entry and member
+  enums with the flag test), `queries.rs` 205 (the `add_*_filter` / `set_*` builder chain), and
+  `callbacks.rs` 111 (the five payloads Steam fires). The biggest impl -- `Matchmaking`'s own, 17
+  methods -- is now four `impl Matchmaking` blocks, which is the same shape the voice, buffers and
+  passthrough files of `src/user/` already use.
+  Public paths are unchanged (`mod matchmaking;` at `src/lib.rs:69` reaches the directory
+  unchanged, and the existing `pub use crate::matchmaking::*;` at `src/lib.rs:37` keeps every item
+  at its old path -- both numbers re-read from the file, because the first draft of this line named a
+  line number remembered from an earlier grep and it was wrong), and the type-surface and coverage ledgers
+  confirmed it: both compare green against the *previous* values, so no key was added, removed or
+  grown. `lib` tests are still 153 (138 passed + 15 ignored) -- nothing was dropped or silently
+  renamed by the move.
+  The witness for "moved, not lost" is a line-level multiset difference between
+  `git show HEAD:src/matchmaking.rs` and the five new files: 1247 non-blank source lines before, and
+  exactly 5 lost, all of them the two intended edits -- the four lines of the
+  `use std::{ fmt::Display, net::{Ipv4Addr, SocketAddrV4} }` block (now `use std::net::{...}`, since
+  `Display` moved to `filters.rs`) and the `fn chat_member_state_change` line, widened to
+  `pub(crate)` because `callbacks.rs` needs it and the split put the two in different files. 32 lines
+  are new: the five module headers, the `mod`/`pub use` wiring, and the impl braces.
+  Two of the gate's findings during this work are worth keeping: `pub use queries::*;` was refused by
+  the compiler as an unused import -- that file exports no items, being only a second `impl` block --
+  so it is declared without a glob, and the splitter initially leaked `impl Matchmaking {` itself
+  into the previous item's body, producing a file with three impl openers and two closers, which is
+  what `cargo check` (not the eye) caught.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

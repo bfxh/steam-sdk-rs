@@ -1,4 +1,3 @@
-src/matchmaking.rs 1339
 src/networking_types/mod.rs 1100
 src/inventory.rs 966
 src/user_stats.rs 868
@@ -23,6 +22,7 @@ src/callback.rs 543
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
 src/parties.rs 499
+src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user/voice.rs 437
@@ -36,7 +36,9 @@ src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
 src/networking_sockets/fake_udp.rs 317
+src/matchmaking/filters.rs 314
 src/server_stats.rs 309
+src/matchmaking/chat.rs 280
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
@@ -44,6 +46,7 @@ src/networking.rs 257
 src/user/auth.rs 244
 src/friends/chat.rs 216
 src/user/buffers.rs 206
+src/matchmaking/queries.rs 205
 src/identity.rs 198
 src/parental.rs 191
 src/remote_play.rs 180
@@ -53,6 +56,7 @@ src/user_stats/stat_callback.rs 151
 src/ugc/read.rs 142
 src/video.rs 122
 src/networking_sockets_callback.rs 117
+src/matchmaking/callbacks.rs 111
 src/callback_stream.rs 84
 src/user/passthrough.rs 69
 src/user/answers.rs 62
