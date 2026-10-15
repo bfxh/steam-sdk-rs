@@ -1,11 +1,11 @@
 src/matchmaking.rs 1339
-src/friends/mod.rs 1321
 src/networking_types/mod.rs 1100
 src/inventory.rs 966
 src/user_stats.rs 868
 src/html_surface.rs 842
 src/server.rs 821
 src/lib.rs 814
+src/friends/mod.rs 790
 src/networking_sockets/mod.rs 789
 src/remote_storage.rs 713
 src/utils.rs 700
@@ -26,6 +26,7 @@ src/parties.rs 499
 src/ugc/query.rs 487
 src/user.rs 483
 src/ugc/results.rs 473
+src/friends/friend.rs 401
 src/networking_types/end.rs 384
 src/ugc/update.rs 374
 src/networking_messages.rs 372
@@ -42,6 +43,7 @@ src/identity.rs 198
 src/parental.rs 191
 src/remote_play.rs 180
 src/music.rs 163
+src/friends/callbacks.rs 155
 src/user_stats/stat_callback.rs 151
 src/ugc/read.rs 142
 src/video.rs 122

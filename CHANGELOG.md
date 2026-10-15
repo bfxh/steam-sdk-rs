@@ -367,6 +367,19 @@ plus the callbacks the wrapper can deliver.
   socket guard and `NetPollGroup`. Public paths are unchanged again (`pub use connection::*`),
   with the same two witnesses as the other cuts: `type_surface` unmoved at 80 keys / 798 methods,
   and the lib suite still reaching 118 tests.
+- `src/friends/mod.rs` (1321) closes the last of those three: `friends/callbacks.rs` (155) takes
+  the ten callback payloads and their `impl_callback!` bridges, `friends/friend.rs` (401) takes
+  `Friend` together with the `FriendState` / `FriendRelationship` vocabularies and the mapping
+  tests that pin them, and `friends/mod.rs` (790) is left with the `ISteamFriends` accessor.
+  Public paths are unchanged again (`pub use callbacks::*`, `pub use friend::*`); the only shapes
+  that had to move are `Friend`'s construction, which goes through a new `pub(crate) fn new`
+  because its fields stay private, and three module-internal helpers (`steam_string`,
+  `persona_state_from`, `relationship_from`) that became `pub(crate)` so the parent can still
+  reach them -- none of the three is reachable from outside the crate, so `type_surface` is
+  byte-identical at 80 keys / 823 methods and the lib suite still reaches 123 tests
+  (108 passed + 15 ignored). The coverage ledger is unchanged at 612 of 913, the size ruler named
+  all 3 of its disagreements before anything was recorded (two unregistered new keys plus the
+  stale 1321), and packaging gained exactly the 2 new sources.
 - `src/lib.rs` (1355) is split three ways: the identity types (`SteamId`, `Universe`,
   `AccountType`, `AccountId`, `GameId`) move to `src/identity.rs` (198) and are re-exported from
   the crate root, so every public path -- `steamworks::SteamId` included -- is unchanged; the

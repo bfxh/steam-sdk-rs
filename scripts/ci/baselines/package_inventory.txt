@@ -17,7 +17,9 @@ steamworks/src/app.rs
 steamworks/src/callback.rs
 steamworks/src/callback_stream.rs
 steamworks/src/error.rs
+steamworks/src/friends/callbacks.rs
 steamworks/src/friends/chat.rs
+steamworks/src/friends/friend.rs
 steamworks/src/friends/mod.rs
 steamworks/src/html_surface.rs
 steamworks/src/http.rs
