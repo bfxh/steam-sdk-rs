@@ -658,7 +658,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
-| ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
+| ISteamNetworkingSockets |   26 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
@@ -668,9 +668,9 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
 | ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
-| ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
+| ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 634 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 639 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -686,16 +686,26 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
   interface has been deprecated in favor of ISteamInput"，而 `ISteamInput` 本仓已包 18 个。
   `ISteamClient` —— 绑定给它生成 33 个入口，本仓一个都不调：接口指针一律来自扁平 C API 的
   `SteamAPI_Steam<Name>_vNNN()` 全局函数（`lib.rs` 24 处 + `server.rs` 8 处，均带 null 守卫）。
-- **真缺口，不是结构性豁免**：`ISteamMatchmaking{Ping,Players,Rules,ServerList}Response`
+- **当时是真缺口，不是结构性豁免**：`ISteamMatchmaking{Ping,Players,Rules,ServerList}Response`
   （2~3 个入口各一）与 `ISteamNetworkingFakeUDPPort`（4 个）。判据是**内容尺而不是名字猜测**：
   `grep -rn "PlayersResponse\|PingResponse\|RulesResponse\|ServerListResponse" src/` 与
   `grep -rn "FakeUDPPort\|CreateFakeUDPPort" src/` 实测**零命中** —— 本仓连这些名字都没出现过，
   所以它们是没做，不是"做了但不占这些入口"的误读。
+  **2026-10-16 复算**：`ISteamNetworkingFakeUDPPort` 四个入口连同工厂已全部封进
+  `src/networking_sockets/fake_udp.rs`（`FakeUDPPort` 4/4、`ISteamNetworkingSockets` 25→26），
+  上面那句 `grep` 从今天起不再零命中，所以把它标成"当时"。四个 `*Response` 仍读 0，原因见下段
+  ——那是接收侧已实现、台账只数"本仓主动调用"的口径问题，不是缺口。
   需要区分的是：`matchmaking_servers.rs` 确实**实现了**这四类服务端回调 ——
   `matchmaking_servers_callback!`（该文件第 8 行）在 148 / 449 / 467 / 480 行以
   `ServerList` / `Ping` / `PlayerDetails` / `ServerRules` 实例化，手写 `extern "C"` vtable
   交给 Steam 回调进来。但那套实现**一次都没有调用**绑定给这四个接口生成的入口函数，
   所以台账读 0：这里 0 的含义是"入口没被调"，不是"接口不存在于本仓"。
+
+FakeIP 那一族现在只剩**分配侧**没包，四个都在 `isteamnetworkingsockets.h`，逐个实测过
+`declared=1 / called=0`：`BeginAsyncRequestFakeIP`（h:862）、`GetFakeIP`（h:867，出参是
+`SteamNetworkingFakeIPResult_t *`）、`CreateListenSocketP2PFakeIP`（h:878）、
+`GetRemoteFakeIPForConnection`（h:895，出参是 `SteamNetworkingIPAddr *`）。`fake_udp.rs` 里
+`create_fake_udp_port` 的文档指回这一段，就是为了让"票从哪来"这条边界有人看见而不是被假装跳过。
 
 这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
 方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了

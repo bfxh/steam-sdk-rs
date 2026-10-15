@@ -415,6 +415,43 @@ plus the callbacks the wrapper can deliver.
   a fake client would produce an assertion no mutation could kill. The lock is the coverage ledger --
   `ISteamUser.called` drops if the FFI call disappears, and that gate judges in both directions --
   which is the same treatment the five account-state predicates got.
+- `ISteamNetworkingFakeUDPPort` — the ad-hoc datagram port of the FakeIP system, previously one of
+  the four "0 of N" rows the design doc §6.1c called a real gap rather than a structural exemption.
+  `NetworkingSockets::create_fake_udp_port(idx) -> Option<FakeUDPPort>` plus `send_to_fake_ip`,
+  `receive_messages`, `schedule_cleanup` and `destroy`, in the new `src/networking_sockets/fake_udp.rs`.
+  `ISteamNetworkingFakeUDPPort.called` 0 -> 4, `ISteamNetworkingSockets.called` 25 -> 26, total 639 of
+  913.
+  **No `Drop`, and that is the API decision most worth reading.** Steam's own factory comment says a
+  server port obtained twice is the *same* object and "this object is not reference counted"
+  (`isteamnetworkingsockets.h:906-908`). An automatic `DestroyFakeUDPPort` in `Drop` would therefore
+  kill a handle some other live wrapper is still using -- a use-after-free with a polite RAII face.
+  So disposal is `destroy(self)`, taking the value: Rust can then hand out no second destroy from one
+  wrapper, and the two-wrappers-for-one-index aliasing stays where it is visible. The same comment is
+  why `receive_messages` takes `&mut self`: "this function call is not threadsafe with respect to any
+  other method of this interface. (However, in general all other operations are threadsafe...)"
+  (`steamnetworkingfakeip.h:33-35`) -- exclusivity is how Rust says that, and `&self` is kept for the
+  operations Steam allows to run concurrently.
+  Two documented numbers became checked ones: `FAKE_UDP_RECOMMENDED_MTU` (1200, a recommendation and
+  deliberately *not* enforced -- refusing above it would invent a rule Steam does not have) and
+  `FAKE_UDP_MAX_MESSAGE_BYTES` (4096, "Messages larger than this size are not allowed and cannot be
+  sent", `steamnetworkingfakeip.h:18-19`), which the wrapper refuses locally instead of spending a
+  call. The first test reads both constants back out of the vendored header at run time, so a future
+  SDK bump that changes them turns the test red rather than leaving a stale copy in Rust -- and that
+  test earned its place immediately: the parser's first version matched only a line *prefix* and the
+  header writes `constexpr int <name> = <value>;`, so it reported "not found" for a header that does
+  define them. Reading at run time with `env!("CARGO_MANIFEST_DIR")` and skipping out loud follows the
+  existing `generated_bindings_expose_the_same_api_on_every_platform` (`src/lib_tests.rs:288-301`),
+  because a packaged crate does not carry the `-sys` headers.
+  `receive_messages` clamps Steam's returned count with `received_count` before using it as a length:
+  a negative `int` would wrap to an enormous `usize`, and a count above the batch size would claim
+  slots nobody offered. **Worth recording as an observation about the existing code**: `NetPollGroup`'s
+  sibling (`src/networking_sockets/mod.rs:588-604`) does `... as usize; set_len(count)` with no such
+  clamp, so the same hazard is live there today. It is not fixed in this commit -- it is a different
+  surface, and changing a hot path that games already use deserves its own measurement rather than
+  riding along as a drive-by.
+  Three tests, four mutation controls: the copied ceiling drifting from the header, the maximum not
+  enforced, a negative count trusted, and the batch clamp removed -- each turned its test red, files
+  restored byte for byte.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

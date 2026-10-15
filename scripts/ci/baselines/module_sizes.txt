@@ -6,8 +6,8 @@ src/html_surface.rs 842
 src/server.rs 821
 src/lib.rs 814
 src/remote_storage.rs 792
+src/networking_sockets/mod.rs 791
 src/friends/mod.rs 790
-src/networking_sockets/mod.rs 789
 src/input.rs 725
 src/utils.rs 710
 src/error.rs 603
@@ -36,6 +36,7 @@ src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
 src/server_stats.rs 309
+src/networking_sockets/fake_udp.rs 304
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269

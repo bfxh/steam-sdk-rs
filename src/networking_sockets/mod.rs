@@ -21,8 +21,10 @@ use crate::networking_types::{AppNetConnectionEnd, NetConnectionEvent};
 use steamworks_sys as sys;
 
 mod connection;
+mod fake_udp;
 
 pub use connection::*;
+pub use fake_udp::*;
 
 /// Access to the steam networking sockets interface
 pub struct NetworkingSockets {
