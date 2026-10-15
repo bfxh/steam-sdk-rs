@@ -13,9 +13,9 @@ UpdateHandle 22
 Inventory 21
 QueryResults 21
 Timeline 18
+User 18
 NetConnection 16
 NetworkingUtils 16
-User 15
 Friend 14
 NetworkingMessage 14
 NetConnectionRealTimeInfo 13

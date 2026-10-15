@@ -657,7 +657,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   43 |  48 | ISteamMatchmakingServers |   14 |  17 |
-| ISteamUser |   14 | 33 | ISteamMatchmakingPingResponse |    0 |   2 |
+| ISteamUser |   17 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
@@ -670,8 +670,8 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
 
-**总计 617 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
- glyph/origin 簇 35→43，最后补 ISteamUser 五个账号状态谓词 9→14）。这张表现在由 CI 的
+**总计 620 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+ glyph/origin 簇 35→43，最后补 ISteamUser 14→17：五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）。这张表现在由 CI 的
 `interface coverage stays at its registered ledger` 一步复算：尺子是
 `scripts/ci/api_coverage.py`，基线是 `scripts/ci/baselines/api_coverage.txt`，
 每个接口两条数（`declared` / `called`）**双向**判红 —— 少包一个函数、或 SDK 升级悄悄换了
@@ -806,6 +806,27 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 这样 `capacity as i32` 是无损转换（变异：去掉夹取，`usize::MAX` 那条断言判红）；
 Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法走 lossy（不 panic）。
 ③ 发送侧内嵌 NUL 判 `Err(SteamError::InvalidParameter)`，与 Steam 自己的拒绝 `Ok(false)` 分两级。
+
+`ISteamUser` 补到 17/33 之后，剩下 16 个先按"判过不封"和"要先定契约"分开登记，判据一律指到 `isteamuser.h` 行号：
+
+| 未封方法 | 判据 / 前置条件 |
+|---|---|
+| `GetHSteamUser`（h:24） | 头文件 h:22-23 明写 "this is only used internally by the API, and by a few select interfaces that support multi-user"。把内部句柄开放给游戏代码只加不安全面、不加能力，**有意不封** |
+| `InitiateGameConnection_DEPRECATED`（h:53） | h:51 "DEPRECATED! This function will be removed from the SDK in an upcoming version."，**有意不封**（与本仓 `RequestUGCDetails` 同一先例） |
+| `TerminateGameConnection_DEPRECATED`（h:60） | h:58 同上，**有意不封** |
+| `StartVoiceRecording`（h:72）/ `StopVoiceRecording`（h:77） | 无参 `void`，随时可封；归在语音簇一起判，因为单独封这两个只给半套 API（录制起来却读不到数据） |
+| `GetAvailableVoice`（h:83）/ `GetVoice`（h:106）/ `DecompressVoice`（h:114） | `EVoiceResult` + 出参式：`GetVoice(bWantCompressed, void *pDestBuffer, uint32 cbDestBufferSize, uint32 *nBytesWritten, …)`。要先定"缓冲谁分配多大、Steam 写了几个字节、缓冲不足回什么"，并按本仓既有纪律处理（不信 Steam 报回的计数、按有效变体起手，见 `clamped_entries` / `steam_out_string`）。这是**能写出 UB 的一类**，不给契就不封 |
+| `GetUserDataFolder`（h:69） | `bool GetUserDataFolder(char *pchBuffer, int cubBuffer)`，同上：调用方缓冲 + 长度语义未定 |
+| `GetEncryptedAppTicket`（h:173） | h:170-172 定义了一次调用两用的协议（返回 false 时 `*pcbTicket` 是所需大小；传 `pTicket=NULL, cbMaxTicket=0` 探长度）。要封就得同时给出"探长度"和"取数据"两条路，否则调用方只能裸指针玩 |
+| `RequestEncryptedAppTicket`（h:165）/ `GetMarketEligibility`（h:209）/ `GetDurationControl`（h:213）/ `RequestStoreAuthURL`（h:194） | 四个都带 `STEAM_CALL_RESULT(...)` 标注、返回 `SteamAPICall_t`，必须接 `register_call_result` 派发并加对应回调结构，不是单行转发 |
+| `AdvertiseGame`（h:159）/ `TrackAppUsageEvent`（h:65） | `AdvertiseGame(CSteamID, uint32 unIPServer, uint16 usPortServer)` 要先定 IP/端口的 Rust 表示（本仓有 `SteamIpAddr`，但那是 networking 那族的中转类型，别顺手复用错语义）；`TrackAppUsageEvent(CGameID, int eAppUsageEvent, const char *pchExtraInfo = "")` 的 `eAppUsageEvent` 在这份绑定里没有对应枚举，且有裸字符串入参（内嵌 NUL 要走 `InvalidParameter`，不能 `unwrap`） |
+
+**这里也记一条判据教训**：上面这些"未封"里没有一个是用"名字看起来像旧的/内部用的"当理由的——
+`GetHSteamUser` 的不封依据是头文件那句话，两个 `_DEPRECATED` 的依据是 h:51/h:58 的原文，
+其余 13 个的障碍都在签名里看得见：9 个是出参/缓冲或 `STEAM_CALL_RESULT` 异步协议，
+2 个是参数表示未定（`AdvertiseGame` 的 IP/端口、`TrackAppUsageEvent` 那个没有对应枚举的
+`eAppUsageEvent`），剩下 2 个（`Start`/`StopVoiceRecording`）确实随时可封，不封的理由是不想
+单独给出半套语音 API。判"要不要封"读签名和头文件，不读命名——
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

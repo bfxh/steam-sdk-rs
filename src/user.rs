@@ -201,6 +201,75 @@ impl User {
             }
         }
     }
+
+    /// Tells the Steam China duration-control system what the game's online state is now.
+    ///
+    /// `isteamuser.h:215-217` states the purpose directly: it "will prevent offline gameplay time
+    /// from counting against a user's playtime limits", so a game that never calls it charges the
+    /// player for single-player time. Returns whether Steam accepted the change.
+    pub fn set_duration_control_online_state(&self, state: DurationControlOnlineState) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BSetDurationControlOnlineState(self.user, state.into()) }
+    }
+
+    /// The sample rate Steam's voice decoder considers optimal, in Hz.
+    ///
+    /// Read the header before using it (`isteamuser.h:120-122`): Valve writes that you "may find
+    /// that you get the best audio output quality when you ignore this function and use the
+    /// native sample rate of your audio output device, which is usually 48000 or 44100".
+    pub fn voice_optimal_sample_rate(&self) -> u32 {
+        unsafe { sys::SteamAPI_ISteamUser_GetVoiceOptimalSampleRate(self.user) }
+    }
+
+    /// The user's trading-card badge level for one card series of this game.
+    ///
+    /// Both numbers come from `isteamuser.h:175-177`: series is 1 when the game has only one set
+    /// of cards, and a user can hold two badges per series -- regular, which tops out at 5, and
+    /// foil, which tops out at 1.
+    pub fn game_badge_level(&self, series: i32, foil: bool) -> i32 {
+        unsafe {
+            sys::SteamAPI_ISteamUser_GetGameBadgeLevel(
+                self.user,
+                series as ::std::os::raw::c_int,
+                foil,
+            )
+        }
+    }
+}
+
+/// How long the game says the player is playing, for the Steam China duration-control system.
+///
+/// The four states are `steamclientpublic.h:462-465` and the comments there are the definition;
+/// `Invalid` is Steam's own "nil value", listed here because passing it is what clears a state.
+/// Input-only: nothing comes back through this type, so it needs no fallback variant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DurationControlOnlineState {
+    /// Nil value (`k_EDurationControlOnlineState_Invalid`).
+    Invalid,
+    /// "currently in offline play - single-player, offline co-op, etc."
+    Offline,
+    /// "currently in online play"
+    Online,
+    /// "currently in online play and requests not to be interrupted"
+    OnlineHighPriority,
+}
+
+impl From<DurationControlOnlineState> for sys::EDurationControlOnlineState {
+    fn from(state: DurationControlOnlineState) -> Self {
+        match state {
+            DurationControlOnlineState::Invalid => {
+                sys::EDurationControlOnlineState::k_EDurationControlOnlineState_Invalid
+            }
+            DurationControlOnlineState::Offline => {
+                sys::EDurationControlOnlineState::k_EDurationControlOnlineState_Offline
+            }
+            DurationControlOnlineState::Online => {
+                sys::EDurationControlOnlineState::k_EDurationControlOnlineState_Online
+            }
+            DurationControlOnlineState::OnlineHighPriority => {
+                sys::EDurationControlOnlineState::k_EDurationControlOnlineState_OnlineHighPri
+            }
+        }
+    }
 }
 
 /// Errors from `begin_authentication_session`
@@ -509,4 +578,43 @@ pub enum UserHasLicense {
     DoesNotHaveLicense,
     /// The user has not been authenticated.
     NoAuth,
+}
+
+/// The duration-control mapping is what stands between a game's claim about the current session
+/// and what the playtime system records, so the four arms are pinned instead of trusted: each
+/// name must reach its own Steam code, and no two may reach the same one.
+#[cfg(test)]
+mod duration_control_tests {
+    use super::*;
+
+    #[test]
+    fn each_online_state_reaches_its_own_steam_code() {
+        use sys::EDurationControlOnlineState as S;
+        let named = [
+            (
+                DurationControlOnlineState::Invalid,
+                S::k_EDurationControlOnlineState_Invalid,
+            ),
+            (
+                DurationControlOnlineState::Offline,
+                S::k_EDurationControlOnlineState_Offline,
+            ),
+            (
+                DurationControlOnlineState::Online,
+                S::k_EDurationControlOnlineState_Online,
+            ),
+            (
+                DurationControlOnlineState::OnlineHighPriority,
+                S::k_EDurationControlOnlineState_OnlineHighPri,
+            ),
+        ];
+        for (ours, theirs) in named {
+            assert_eq!(S::from(ours), theirs);
+        }
+        for i in 0..named.len() {
+            for j in (i + 1)..named.len() {
+                assert_ne!(S::from(named[i].0), S::from(named[j].0));
+            }
+        }
+    }
 }

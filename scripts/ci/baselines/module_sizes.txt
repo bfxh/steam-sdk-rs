@@ -10,6 +10,7 @@ src/friends/mod.rs 790
 src/networking_sockets/mod.rs 789
 src/utils.rs 700
 src/input.rs 636
+src/user.rs 620
 src/error.rs 603
 src/ugc/answers.rs 599
 src/ugc/mod.rs 595
@@ -22,7 +23,6 @@ src/app.rs 550
 src/callback.rs 539
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
-src/user.rs 512
 src/parties.rs 499
 src/ugc/query.rs 487
 src/ugc/results.rs 473

@@ -60,7 +60,7 @@ ISteamRemoteStorage.called 26
 ISteamScreenshots.called 9
 ISteamTimeline.called 18
 ISteamUGC.called 97
-ISteamUser.called 14
+ISteamUser.called 17
 ISteamUserStats.called 31
 ISteamUtils.called 32
 ISteamVideo.called 3

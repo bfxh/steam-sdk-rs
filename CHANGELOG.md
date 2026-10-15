@@ -275,6 +275,25 @@ plus the callbacks the wrapper can deliver.
   not guessable: `BIsBehindNAT` is "only valid once the user has connected to steam (i.e a
   SteamServersConnected_t has been issued)" and "may not catch all forms of NAT"
   (`isteamuser.h:152-153`), so `false` is not evidence of a direct connection.
+- `ISteamUser` duration control, badge level and voice sample rate, 14 -> 17 of its 33:
+  `set_duration_control_online_state` with a new input-only `DurationControlOnlineState` enum
+  (`Invalid` / `Offline` / `Online` / `OnlineHighPriority`, the four codes and their meanings are
+  `steamclientpublic.h:462-465`), `game_badge_level(series, foil)` and
+  `voice_optimal_sample_rate()`. The duration-control arms are the one part with logic, so that
+  mapping is pinned by a test and mutation-checked twice -- Offline sharing Invalid's code, and
+  OnlineHighPriority sending plain Online, each turn it red and the file restored byte-for-byte.
+  The equality table is what kills both; the pairwise-distinctness loop the test also carries is
+  implied by it and cannot fire on its own, kept as a statement of intent rather than counted as a
+  second lock. The other three are single-line forwards and got no test, for the reason in the
+  entry above. `DurationControlOnlineState` needs no `Unknown` arm: it is input-only, so nothing
+  Steam invents can arrive through it.
+- Deliberately **not** wrapped on `ISteamUser`, each judged against the header rather than the
+  name, with the register in `docs/SuperSteam-Design.md` §6.1d: `GetHSteamUser` ("only used
+  internally by the API", `isteamuser.h:22-23`), `InitiateGameConnection_DEPRECATED` and
+  `TerminateGameConnection_DEPRECATED` ("will be removed from the SDK in an upcoming version",
+  `isteamuser.h:51`/`:58`). The remaining 13 are blocked on contracts the headers show -- out
+  parameters and buffer sizes for the voice cluster, `STEAM_CALL_RESULT` dispatch for four async
+  calls, and an unrepresented `eAppUsageEvent` -- not on a preference.
 
 ### Added — CI and release automation
 
