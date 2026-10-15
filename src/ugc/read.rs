@@ -29,7 +29,7 @@ pub(super) fn tag_group_strings<S: AsRef<str>>(groups: &[S]) -> Result<Vec<CStri
 /// Reads a Steam out-string without trusting its terminator: the answer is cut at
 /// the first nul inside the buffer this side owns, so an answer that fills the
 /// whole buffer cannot make the read run past it.
-pub(super) fn steam_out_string(buffer: &[c_char]) -> String {
+pub(crate) fn steam_out_string(buffer: &[c_char]) -> String {
     let end = buffer
         .iter()
         .position(|byte| *byte == 0)

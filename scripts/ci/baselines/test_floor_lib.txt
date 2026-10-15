@@ -1,1 +1,1 @@
-138  # lib tests reached with --all-features, measured 2026-10-15 with the fallible query builder (1 test added)
+142  # lib tests reached with --all-features, measured 2026-10-16 with the duration-control read mappings (4 tests added)

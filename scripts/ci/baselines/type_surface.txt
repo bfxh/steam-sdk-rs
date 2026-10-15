@@ -10,10 +10,10 @@ Matchmaking 28
 Utils 28
 UserStats 24
 UpdateHandle 22
+User 22
 Inventory 21
 QueryResults 21
 Timeline 18
-User 18
 NetConnection 16
 NetworkingUtils 16
 Friend 14

@@ -21,6 +21,9 @@ mod update;
 pub use answers::*;
 pub use query::*;
 pub use read::*;
+// Reused by `user.rs` for Steam's fixed-size inline char buffers; the glob above only
+// carries public items, and this one is deliberately not public.
+pub(crate) use read::steam_out_string;
 pub use results::*;
 pub use types::*;
 pub use update::*;

@@ -293,7 +293,35 @@ plus the callbacks the wrapper can deliver.
   `TerminateGameConnection_DEPRECATED` ("will be removed from the SDK in an upcoming version",
   `isteamuser.h:51`/`:58`). The remaining 13 are blocked on contracts the headers show -- out
   parameters and buffer sizes for the voice cluster, `STEAM_CALL_RESULT` dispatch for four async
-  calls, and an unrepresented `eAppUsageEvent` -- not on a preference.
+  calls, and an unrepresented `eAppUsageEvent` -- not on a preference. (Four of those 13 have since
+  been wrapped; see the next entry. Count re-measured: 12 un-wrapped today.)
+- `ISteamUser`'s four `STEAM_CALL_RESULT` calls, 17 -> 21 of its 33 (total 625 of 913), and the
+  split that came with them: `request_store_auth_url`, `request_encrypted_app_ticket`,
+  `market_eligibility` and `duration_control` go through the crate's existing
+  `register_call_result` dispatch, so a caller gets a handle-scoped one-shot callback instead of a
+  `SteamAPICall_t` to match up by hand. `src/user.rs` was 620 lines against a registered ceiling of
+  620, so it was split before the surface grew: `src/user/mod.rs` keeps `User` and its methods
+  (371), `auth.rs` the ticket vocabulary and the two `#[ignore]`d manual tests (244), `duration.rs`
+  the duration-control types together with the tests that pin them (391), `callbacks.rs` the four
+  payloads (61), `answers.rs` the licence and market verdicts (62). Public paths unchanged.
+  New types: `MarketEligibility`, `DurationControl`, `DurationControlProgress`,
+  `DurationControlNotification`. Three decisions came out of the headers rather than the names:
+  `EMarketNotAllowedReasonFlags` is forwarded as the raw bitfield Steam declares it --
+  `(1 << 0)`..`(1 << 3)`, `steamclientpublic.h:362-377` -- because a Rust mirror would have to drop
+  a combination or present two reasons as one; `m_progress` and `m_notification` stay two enums
+  because `steamclientpublic.h:426-454` keeps them two, and `isteamuser.h:416` pins what this call
+  can ever see ("always k_EDurationControlNotification_None for API calls"); `m_szURL` is cut at the
+  first NUL *inside its own* 512-byte buffer (`isteamuser.h:378`) instead of trusting a terminator.
+  `request_encrypted_app_ticket` delivers readiness only -- the ticket bytes need
+  `GetEncryptedAppTicket`'s two-pass out-parameter protocol (`isteamuser.h:167-173`), which stays
+  unwrapped and in the register above. Both read-direction enums carry an `Unknown` arm no test can
+  reach without fabricating a discriminant for a `#[repr(i32)]` enum, which is why the arm is
+  documented as unreachable-with-today's-headers and left to the panic-site ledger rather than
+  faked. Four tests pin what is reachable (142 lib tests, floor raised from 138): every declared
+  code lands on its own variant, no two codes collide, and every struct field arrives in the slot
+  named for it. Each was mutation-checked -- progress 3h answering FiveHours, notification 1Hour
+  collapsing onto `None`, `m_csecsRemaining` copied into `seconds_today`, a dropped timestamp -- and
+  each turned its test red, with the file restored byte for byte.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

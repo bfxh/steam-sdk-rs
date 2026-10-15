@@ -10,10 +10,9 @@ src/friends/mod.rs 790
 src/networking_sockets/mod.rs 789
 src/input.rs 725
 src/utils.rs 710
-src/user.rs 620
 src/error.rs 603
 src/ugc/answers.rs 599
-src/ugc/mod.rs 595
+src/ugc/mod.rs 598
 src/matchmaking_servers.rs 580
 src/timeline.rs 578
 src/http.rs 566
@@ -28,8 +27,10 @@ src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/ugc/update.rs 404
 src/friends/friend.rs 401
+src/user/duration.rs 391
 src/networking_types/end.rs 384
 src/networking_messages.rs 372
+src/user/mod.rs 371
 src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
@@ -38,6 +39,7 @@ src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
 src/networking.rs 257
+src/user/auth.rs 244
 src/friends/chat.rs 216
 src/identity.rs 198
 src/parental.rs 191
@@ -49,3 +51,5 @@ src/ugc/read.rs 142
 src/video.rs 122
 src/networking_sockets_callback.rs 117
 src/callback_stream.rs 84
+src/user/answers.rs 62
+src/user/callbacks.rs 61
