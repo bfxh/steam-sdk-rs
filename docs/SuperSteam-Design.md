@@ -656,7 +656,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
-| ISteamInput |   43 |  48 | ISteamMatchmakingServers |   14 |  17 |
+| ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   17 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
@@ -670,8 +670,9 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
 
-**总计 620 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
- glyph/origin 簇 35→43，最后补 ISteamUser 14→17：五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）。这张表现在由 CI 的
+**总计 621 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+ glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
+ 与 ISteamInput 设备回调 43→44）。这张表现在由 CI 的
 `interface coverage stays at its registered ledger` 一步复算：尺子是
 `scripts/ci/api_coverage.py`，基线是 `scripts/ci/baselines/api_coverage.txt`，
 每个接口两条数（`declared` / `called`）**双向**判红 —— 少包一个函数、或 SDK 升级悄悄换了
@@ -826,7 +827,19 @@ Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法�
 其余 13 个的障碍都在签名里看得见：9 个是出参/缓冲或 `STEAM_CALL_RESULT` 异步协议，
 2 个是参数表示未定（`AdvertiseGame` 的 IP/端口、`TrackAppUsageEvent` 那个没有对应枚举的
 `eAppUsageEvent`），剩下 2 个（`Start`/`StopVoiceRecording`）确实随时可封，不封的理由是不想
-单独给出半套语音 API。判"要不要封"读签名和头文件，不读命名——
+单独给出半套语音 API。判"要不要封"读签名和头文件，不读命名。
+
+`ISteamInput` 补到 44/48（2026-10-15 加 `EnableDeviceCallbacks` + `DeviceConnected` /
+`DeviceDisconnected` 两个载荷，见 §6.1 下方实现）之后，剩下 4 个同样逐个判过：
+
+| 未封方法 | 判据（读绑定与头文件，不靠猜） |
+|---|---|
+| `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11771` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
+| `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11774`）——裸 C 函数指针回调，头文件 h:872 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
+| `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+
+顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 `src/lib.rs:170` 的 `resize` 行为"里的
+`resize` 现在在 `src/lib.rs:308`（拆分后行号漂移，本轮按内容重测；原句描述的行为本身没变）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

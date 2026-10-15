@@ -8,8 +8,8 @@ src/lib.rs 814
 src/remote_storage.rs 792
 src/friends/mod.rs 790
 src/networking_sockets/mod.rs 789
+src/input.rs 725
 src/utils.rs 700
-src/input.rs 636
 src/user.rs 620
 src/error.rs 603
 src/ugc/answers.rs 599
@@ -20,7 +20,7 @@ src/http.rs 566
 src/ugc/types.rs 559
 src/networking_types/config.rs 551
 src/app.rs 550
-src/callback.rs 539
+src/callback.rs 543
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
 src/parties.rs 499

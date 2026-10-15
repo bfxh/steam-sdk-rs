@@ -21,6 +21,8 @@ pub enum CallbackResult {
     AddUGCDependencyResult(AddUGCDependencyResult),
     AuthSessionTicketResponse(AuthSessionTicketResponse),
     ClanChatMessageReceived(ClanChatMessageReceived),
+    DeviceConnected(DeviceConnected),
+    DeviceDisconnected(DeviceDisconnected),
     DownloadItemResult(DownloadItemResult),
     FloatingGamepadTextInputDismissed(FloatingGamepadTextInputDismissed),
     FriendChatMessageReceived(FriendChatMessageReceived),
@@ -85,6 +87,8 @@ impl CallbackResult {
             ClanChatMessageReceived::ID => {
                 Self::ClanChatMessageReceived(ClanChatMessageReceived::from_raw(data))
             }
+            DeviceConnected::ID => Self::DeviceConnected(DeviceConnected::from_raw(data)),
+            DeviceDisconnected::ID => Self::DeviceDisconnected(DeviceDisconnected::from_raw(data)),
             DownloadItemResult::ID => Self::DownloadItemResult(DownloadItemResult::from_raw(data)),
             FloatingGamepadTextInputDismissed::ID => Self::FloatingGamepadTextInputDismissed(
                 FloatingGamepadTextInputDismissed::from_raw(data),
@@ -423,18 +427,18 @@ mod stream_coverage {
     fn the_two_parsers_see_the_whole_crate() {
         // Without these floors an empty parse would make both coverage tests
         // below pass by looking at nothing. Both numbers are measured, not rounded:
-        // 78 definitions minus 54 streamed is the 24-entry `CALLBACKS_NOT_IN_STREAM` list,
+        // 80 definitions minus 56 streamed is the 24-entry `CALLBACKS_NOT_IN_STREAM` list,
         // so a matcher that starts missing whole files trips here rather than quietly
         // lowering the debt.
         let defined = defined_callbacks();
         let streamed = streamed_callbacks();
         assert!(
-            defined.len() >= 78,
+            defined.len() >= 80,
             "only parsed {} callback definitions -- the matcher is broken",
             defined.len()
         );
         assert!(
-            streamed.len() >= 54,
+            streamed.len() >= 56,
             "only parsed {} CallbackResult variants -- the matcher is broken",
             streamed.len()
         );

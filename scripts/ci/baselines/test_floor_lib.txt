@@ -1,1 +1,1 @@
-130  # lib tests reached with --all-features, measured 2026-10-15 with the duration-control mapping test
+133  # lib tests reached with --all-features (118 passed + 15 ignored), measured 2026-10-15 with the device-callback cluster

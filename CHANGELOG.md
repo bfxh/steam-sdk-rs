@@ -294,6 +294,35 @@ plus the callbacks the wrapper can deliver.
   `isteamuser.h:51`/`:58`). The remaining 13 are blocked on contracts the headers show -- out
   parameters and buffer sizes for the voice cluster, `STEAM_CALL_RESULT` dispatch for four async
   calls, and an unrepresented `eAppUsageEvent` -- not on a preference.
+- `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
+  and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
+  stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
+  of 913. `isteaminput.h:852-854` is quoted in the docs because it promises more than the name:
+  enabling makes "each controller that is already connected ... generate a device connected
+  callback", so the caller receives the current roster as events, not only the plug-ins after it.
+  Registering them in `CallbackResult` rather than in `CALLBACKS_NOT_IN_STREAM` was forced by the
+  crate's own test `every_callback_is_streamable_or_listed_as_debt`, which refuses a longer debt
+  list -- and the way it got my attention is worth recording: I had run
+  `cargo test --lib device_callback`, seen three green tests, and treated that as the suite
+  passing. It was not. The filter had excluded the debt test from ever running, and the full
+  lib-suite floor gate is what turned red. A filtered green says only that the filtered tests
+  passed.
+  Three tests, shaped by what can actually be observed: the two payloads are one `u64` each, so
+  swapping which Steam struct a payload decodes moves the same bytes and reads back the same
+  number -- value assertions cannot see that crossing. The callback id can, so
+  `the_two_device_callbacks_keep_their_own_steam_callback_ids` pins both ids against the
+  `steamworks_sys` constants and asserts they differ. Controls: decode the connected payload from
+  the disconnected struct -> the id test goes red and nothing else does, which is the point of
+  having it; drop the handle instead of copying it -> the value test goes red. Both files restored
+  byte-for-byte.
+- The callback-parser floors in `src/callback.rs` were tightened to the measured truth instead of
+  left wider than reality: 80 definitions, 56 streamed, still exactly the 24-entry debt list.
+  A plain `grep -c impl_callback!` says 82, and the extra two are the macro's own documentation,
+  which the matcher skips on purpose -- so the registered numbers are the ruler's, not the
+  shallowest count available.
+
+Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80), `src/input.rs`
+636 -> 725, `src/callback.rs` 539 -> 543, lib test floor 130 -> 133.
 
 ### Added — CI and release automation
 
