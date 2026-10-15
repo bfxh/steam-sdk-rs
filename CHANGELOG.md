@@ -265,6 +265,16 @@ plus the callbacks the wrapper can deliver.
   newer Steam can name an origin this crate has never heard of, and forwarding it unchanged is the
   only answer that cannot lose or mislabel it. The header's own contract is cited in the docs
   (`isteaminput.h:1003-1005`).
+- `ISteamUser` account-state predicates, from 9 called functions to 14 of its 33
+  (`src/user.rs`): `is_behind_nat`, `is_phone_verified`, `is_two_factor_enabled`,
+  `is_phone_identifying`, `is_phone_requiring_verification`. These are five one-line forwards with
+  no branch to test, so no test was invented for them: the lock is the coverage ledger, where
+  dropping any call moves `ISteamUser.called` and the gate judges that in both directions. Stated
+  plainly rather than buried -- a negated return value would survive today's suite, because there
+  is nothing offline that can observe it. What the wrappers add is the header's contract, which is
+  not guessable: `BIsBehindNAT` is "only valid once the user has connected to steam (i.e a
+  SteamServersConnected_t has been issued)" and "may not catch all forms of NAT"
+  (`isteamuser.h:152-153`), so `false` is not evidence of a direct connection.
 
 ### Added — CI and release automation
 

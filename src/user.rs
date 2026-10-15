@@ -25,6 +25,35 @@ impl User {
         unsafe { sys::SteamAPI_ISteamUser_BLoggedOn(self.user) }
     }
 
+    /// Whether this user looks like they are behind a NAT device.
+    ///
+    /// Two limits come straight from `isteamuser.h:152-153`: it is only valid once the user has
+    /// connected to Steam (i.e. after a `SteamServersConnected_t` has been issued), and it "may
+    /// not catch all forms of NAT". So `false` is not evidence of a public connection.
+    pub fn is_behind_nat(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BIsBehindNAT(self.user) }
+    }
+
+    /// Whether the account's phone number is verified (`isteamuser.h:196`).
+    pub fn is_phone_verified(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BIsPhoneVerified(self.user) }
+    }
+
+    /// Whether the account has two-factor authentication enabled (`isteamuser.h:199`).
+    pub fn is_two_factor_enabled(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BIsTwoFactorEnabled(self.user) }
+    }
+
+    /// Whether the account's phone number is currently identifying (`isteamuser.h:202`).
+    pub fn is_phone_identifying(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BIsPhoneIdentifying(self.user) }
+    }
+
+    /// Whether the account's phone number is awaiting (re)verification (`isteamuser.h:205`).
+    pub fn is_phone_requiring_verification(&self) -> bool {
+        unsafe { sys::SteamAPI_ISteamUser_BIsPhoneRequiringVerification(self.user) }
+    }
+
     /// Retrieve an authentication session ticket that can be sent
     /// to an entity that wishes to verify you.
     ///

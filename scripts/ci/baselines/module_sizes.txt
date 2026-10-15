@@ -22,9 +22,9 @@ src/app.rs 550
 src/callback.rs 539
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
+src/user.rs 512
 src/parties.rs 499
 src/ugc/query.rs 487
-src/user.rs 483
 src/ugc/results.rs 473
 src/friends/friend.rs 401
 src/ugc/update.rs 395
