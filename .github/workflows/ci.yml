@@ -251,6 +251,27 @@ jobs:
           python3 scripts/ci/shell_hatches.py > "$RUNNER_TEMP/hatches.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/shell_hatches.txt "$RUNNER_TEMP/hatches.txt"
 
+      # 本仓的门**就是文件**。已经发生过两次：门随的基线被 `.gitignore` 的 `*.txt` 吞掉，于是
+      # CI 判的是只存在于写它那台机器上的文件；以及账本合法变空（panic 位点到 0）后，
+      # "0 处违规"和"测量根本没落地"看起来一模一样。这条门逐个查：被跟踪、非空（除非显式
+      # 豁免并写明理由）、且有一个真的提到它的读者；豁免理由配上一个已经非空的账本 = 判红。
+      # 实测：10 个账本、1 条豁免、10 条读者声明；首版夹具差点自己骗过它——我是往 READERS
+      # *追加*而不是*替换*，于是真仓的 10 条账本全被判成"已不存在"，那条红什么也没证明。
+      - name: ledgers are tracked, populated and read
+        run: python3 scripts/ci/baseline_files.py
+
+      # 每道门都要能判红，否则它就只是一行日志。这条步在临时目录里给每把尺子造一份**必然违规**
+      # 的夹具，断言它报红/报"没判定"；真实工作树完全不碰。
+      # 它的由来是一条实测教训，不是洁癖：文档指针尺把 4 条**本来正确**的引用判成死路径，
+      # 因为它在更长的正确路径里匹配到了后缀——那种错只会表现为"门有发现"，永远不会表现为"门坏了"。
+      # 现有覆盖（实测 29 条断言全过）：compare_baseline 的双向判定与 `#scanned` 标记规则、
+      # panic 尺端到端判红 + 扫描数地板、doc_pointers 的 4 类违规与空扫描地板、
+      # baseline_files 的 5 类违规与地板、api_coverage 喂错输入必须退出 2 而不是报 0 覆盖。
+      # 未覆盖项写在脚本自己的 docstring 里（clippy_gate / test_floor / workflow_inputs /
+      # package_inventory / sdk_vendored 需要真构建或整仓夹具），登记为不覆盖，不假装全绿。
+      - name: every gate can still judge red
+        run: python3 scripts/ci/canaries.py
+
   packaging:
     name: packaging inventory
     runs-on: ubuntu-latest

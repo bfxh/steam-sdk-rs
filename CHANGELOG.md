@@ -326,6 +326,39 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`ledgers are tracked, populated and read`** (`scripts/ci/baseline_files.py`). This repo's gates
+  *are* files, and two failure modes had already happened once each: a shipped gate whose baseline
+  was swallowed by a `*.txt` ignore rule (so CI judged against a file that existed only on the
+  machine that wrote it), and a ledger that legitimately went empty (the panic-site target is zero),
+  after which "0 violations" and "the measurement never landed" print the same thing. The gate
+  checks four properties per ledger: tracked by git; non-empty unless it carries a declared excuse
+  with a reason; a declared reader whose own text names it (literally or through the parameterised
+  prefix it builds); and a non-vacuous inventory (floor of 10 ledgers, measured today -- 10 files,
+  1 excuse, 10 readers). An excuse attached to a ledger that has since gained content is red, so the
+  exemption cannot be kept alive by habit, and a reader entry naming a ledger that no longer exists
+  is red in the other direction.
+- **`every gate can still judge red`** (`scripts/ci/canaries.py`, 29 assertions today). A gate that
+  cannot fail is a log line. Each canary copies a ruler into a throwaway temp tree at the same
+  relative position it occupies in the repository -- so the ruler's own root discovery points at the
+  fixture, not the checkout -- builds the violating case, and asserts the exit code it should give.
+  The real working tree is never mutated. This was not written out of purity: the documentation
+  pointer ruler reported four *correct* citations as dead paths, because it matched a suffix inside a
+  longer correct path -- an error that presents as the gate finding things, never as the gate being
+  broken, and therefore invisible to every other step. Coverage: the comparator's both-direction
+  judgement plus the `#scanned` marker rule (growth, shrink, new key, vanished key, matching pass,
+  empty-with-marker pass, empty-without-marker refused); the panic ruler end-to-end (a fixture
+  `unreachable!()` becomes a record, the comparator turns it red, and too-few-scanned-sources
+  exits 2 rather than reporting a clean tree); the pointer ruler's four violation classes plus its
+  vacuous-scan floor; the ledger gate's five violation classes plus its floor; and `api_coverage.py`
+  refusing a wrong input path with exit 2 instead of announcing zero coverage. What it does not
+  cover is listed in the script's own docstring rather than counted as green: `clippy_gate.py` and
+  `test_floor.sh` need a real cargo build to fail meaningfully, and `workflow_inputs.py`,
+  `package_inventory.py` and `sdk_vendored.py` would need a fixture the size of the repo.
+  Building it caught two bugs in the canary itself, both of which had it passing for the wrong
+  reason: injecting the fixture's reader map with `+=` instead of replacing the block left the ten
+  real ledgers judged as "no longer exists", and appending the ghost-reader statement after
+  `sys.exit(main())` meant it could never run.
+
 - **`quality-extra` no longer cancels itself.** The advisory job (udeps / geiger / audit) moved to
   its own file, `.github/workflows/quality-extra.yml`, with `concurrency.cancel-in-progress: false`.
   The reason is measured, not assumed: on `ci.yml` the workflow-level concurrency cancelled every
