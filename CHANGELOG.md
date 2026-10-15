@@ -505,6 +505,28 @@ plus the callbacks the wrapper can deliver.
   also answered rather than ignored: `pub use addresses::*;` re-exported nothing public, since that
   child holds only the crate-internal `SteamIpAddr`, so it is now `pub(crate) use`, no broader than
   the item.
+- `src/inventory.rs` (966 lines, the largest file left in the crate) became `src/inventory/`:
+  `result.rs` 338 (`InventoryResult` with its `Drop`, the batch `InventoryUpdateHandle`, and the one
+  private helper every request funnels through), `items.rs` 204 (`ItemDef`, `ItemInstanceId`,
+  `ItemDetail`, the flag helper and the flag/id tests), `prices.rs` 132, `actions.rs` 121 (consume,
+  exchange, transfer, trade, drop), `definitions.rs` 101, `mod.rs` 83 and `callbacks.rs` 44. The
+  22 methods on `Inventory` are now six `impl Inventory` blocks by concern rather than one list.
+  Both behavioural ledgers were re-run against the *pre-split* baselines and hold: `api_coverage`
+  (639 called of 913, unchanged) and `type_surface`, which counts `Inventory` at 21 inherent `pub fn`
+  before and after -- so the ruler aggregates per type across files rather than per file, and a split
+  cannot hide surface by spreading it out. `lib` tests are still 153 (138 + 15 ignored).
+  Witness: 890 non-blank lines before, 5 lost, and every one of them is a declaration that had to
+  widen -- `InventoryResult::{inv, handle}`, `InventoryUpdateHandle::{inv, handle}`,
+  `start_result` and `read_property_buffer`, each now `pub(super)` with the reason beside it, because
+  the split put a reader in a sibling file (the two handle structs are built by `mod.rs` and
+  `definitions.rs`, and all 21 requests go through `start_result` from three different files).
+  Nothing else moved: 41 lines are new, all module headers and the widened declarations.
+  Two wiring findings repeat earlier ones and are worth having in one place: `pub use actions::*;` and
+  `pub use definitions::*;` were refused as unused imports because those files export no items of
+  their own (they hold only extra `impl` blocks), so they are declared without a glob; and
+  `use std::os::raw::c_char;`, copied into every child by the generator, was dropped from the four
+  that do not name `c_char` -- trimmed only after `cargo check` came back without errors, per the
+  rule the networking_types split bought.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

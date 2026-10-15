@@ -25,7 +25,13 @@ steamworks/src/html_surface.rs
 steamworks/src/http.rs
 steamworks/src/identity.rs
 steamworks/src/input.rs
-steamworks/src/inventory.rs
+steamworks/src/inventory/actions.rs
+steamworks/src/inventory/callbacks.rs
+steamworks/src/inventory/definitions.rs
+steamworks/src/inventory/items.rs
+steamworks/src/inventory/mod.rs
+steamworks/src/inventory/prices.rs
+steamworks/src/inventory/result.rs
 steamworks/src/lib.rs
 steamworks/src/lib_tests.rs
 steamworks/src/matchmaking/callbacks.rs

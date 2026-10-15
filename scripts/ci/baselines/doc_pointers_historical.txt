@@ -4,6 +4,7 @@
 # shrinks -- `doc_pointers.py` judges an entry nobody cites as red.
 # <doc> <token-as-cited>
 CHANGELOG.md src/friends.rs
+CHANGELOG.md src/inventory.rs
 CHANGELOG.md src/networking_sockets.rs
 CHANGELOG.md src/networking_types.rs
 CHANGELOG.md src/ugc.rs
