@@ -154,23 +154,23 @@ impl FakeUDPPort {
             return Vec::new();
         }
         if self.message_buffer.capacity() < batch_size {
+            // Same reasoning as `NetPollGroup`: the buffer is drained below, so `len` is 0 and
+            // `reserve` guarantees capacity for the whole batch.
             self.message_buffer.reserve(batch_size);
         }
-        let messages: Vec<*mut sys::SteamNetworkingMessage_t> = unsafe {
-            let mut out = vec![std::ptr::null_mut(); batch_size];
+        self.message_buffer.clear();
+        unsafe {
             let raw = sys::SteamAPI_ISteamNetworkingFakeUDPPort_ReceiveMessages(
                 self.port,
-                out.as_mut_ptr(),
+                self.message_buffer.as_mut_ptr(),
                 batch_size as ::std::os::raw::c_int,
             );
-            let count = received_count(raw, batch_size);
-            // The slots Steam did not fill still hold null; only the filled prefix may become
-            // owned messages.
-            out.truncate(count);
-            out
-        };
-        messages
-            .into_iter()
+            // Only the slots Steam actually filled may become owned messages; a clamped count
+            // keeps a bad answer from turning into a length this side never allocated.
+            self.message_buffer.set_len(received_count(raw, batch_size));
+        }
+        self.message_buffer
+            .drain(..)
             .map(|message| NetworkingMessage {
                 message,
                 _inner: self.inner.clone(),
@@ -270,7 +270,20 @@ mod fake_udp_tests {
             ),
             FAKE_UDP_MAX_MESSAGE_BYTES
         );
-        assert!(FAKE_UDP_RECOMMENDED_MTU < FAKE_UDP_MAX_MESSAGE_BYTES);
+        // Compared on the numbers read out of the header, not on the Rust constants: an assert
+        // between two constants cannot fail for any reason except someone editing it.
+        let mtu = header_constant(
+            &header,
+            "k_cbSteamNetworkingSocketsFakeUDPPortRecommendedMTU",
+        );
+        let max = header_constant(
+            &header,
+            "k_cbSteamNetworkingSocketsFakeUDPPortMaxMessageSize",
+        );
+        assert!(
+            mtu < max,
+            "the recommended MTU must sit under the hard maximum"
+        );
     }
 
     #[test]

@@ -35,8 +35,8 @@ src/networking_messages.rs 372
 src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
+src/networking_sockets/fake_udp.rs 317
 src/server_stats.rs 309
-src/networking_sockets/fake_udp.rs 304
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
