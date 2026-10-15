@@ -38,7 +38,7 @@ src/user_stats/global_stats.rs 280
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
-src/networking_sockets/mod.rs 259
+src/networking_sockets/mod.rs 260
 src/networking.rs 257
 src/html_surface/callbacks.rs 247
 src/remote_storage/files.rs 247
@@ -88,6 +88,7 @@ src/friends/overlay.rs 88
 src/friends/list.rs 85
 src/callback_stream.rs 84
 src/inventory/mod.rs 83
+src/networking_sockets/fake_ip.rs 82
 src/friends/rich_presence.rs 77
 src/friends/mod.rs 70
 src/user/passthrough.rs 69

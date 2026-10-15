@@ -16,10 +16,10 @@ QueryResults 21
 Timeline 18
 NetConnection 16
 NetworkingUtils 16
+NetworkingSockets 15
 Friend 14
 NetworkingMessage 14
 NetConnectionRealTimeInfo 13
-NetworkingSockets 13
 NetworkingIdentity 12
 Parties 12
 HttpRequest 11

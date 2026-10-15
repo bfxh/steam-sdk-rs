@@ -57,6 +57,7 @@ steamworks/src/networking_messages.rs
 steamworks/src/networking_sockets/auth.rs
 steamworks/src/networking_sockets/connect.rs
 steamworks/src/networking_sockets/connection.rs
+steamworks/src/networking_sockets/fake_ip.rs
 steamworks/src/networking_sockets/fake_udp.rs
 steamworks/src/networking_sockets/listen.rs
 steamworks/src/networking_sockets/listen_socket.rs

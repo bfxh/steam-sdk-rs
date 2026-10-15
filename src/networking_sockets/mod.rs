@@ -21,6 +21,7 @@ use crate::networking_types::{AppNetConnectionEnd, NetConnectionEvent};
 use steamworks_sys as sys;
 
 mod connection;
+mod fake_ip;
 mod fake_udp;
 
 pub use connection::*;
