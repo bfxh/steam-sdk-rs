@@ -7,6 +7,7 @@ CHANGELOG.md src/friends.rs
 CHANGELOG.md src/networking_sockets.rs
 CHANGELOG.md src/networking_types.rs
 CHANGELOG.md src/ugc.rs
+CHANGELOG.md src/user.rs
 docs/SuperSteam-Design.md src/friends.rs
 docs/SuperSteam-Design.md src/friends.rs:124
 docs/SuperSteam-Design.md src/friends.rs:412/433/454
