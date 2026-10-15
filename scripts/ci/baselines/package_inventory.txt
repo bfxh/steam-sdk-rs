@@ -19,8 +19,16 @@ steamworks/src/callback_stream.rs
 steamworks/src/error.rs
 steamworks/src/friends/callbacks.rs
 steamworks/src/friends/chat.rs
+steamworks/src/friends/clan_chat.rs
+steamworks/src/friends/clans.rs
+steamworks/src/friends/flags.rs
+steamworks/src/friends/followers.rs
 steamworks/src/friends/friend.rs
+steamworks/src/friends/list.rs
+steamworks/src/friends/messages.rs
 steamworks/src/friends/mod.rs
+steamworks/src/friends/overlay.rs
+steamworks/src/friends/rich_presence.rs
 steamworks/src/html_surface/browser.rs
 steamworks/src/html_surface/callbacks.rs
 steamworks/src/html_surface/keys.rs

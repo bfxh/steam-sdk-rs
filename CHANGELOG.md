@@ -670,6 +670,31 @@ plus the callbacks the wrapper can deliver.
   `set_len` pointer, naming a file that this same change shrank to 259 lines -- was re-anchored by
   content to `src/networking_sockets/poll_group.rs:67`, the
   line the unclamped `as usize; set_len(count)` actually sits on today.
+- `src/friends/mod.rs` (790 lines, the last module root still holding its own implementation) became
+  wiring plus eight children beside the `callbacks.rs`, `chat.rs` and `friend.rs` already there:
+  `clans.rs` 174 (count, roster, name, tag, owner, officers, the two public/official flags, chat member
+  counts and the activity feed), `clan_chat.rs` 157 (join and leave, the roster, sending and reading,
+  and the three window-state calls), `followers.rs` 91 (the three asynchronous asks), `overlay.rs` 88
+  (the overlay dialogs and invites, with the `OverlayToStoreFlag` this crate models), `list.rs` 85 (the
+  rosters, one lookup by id, the fill-in request, persona state, relationship and Steam level),
+  `rich_presence.rs` 77, `messages.rs` 60 and `flags.rs` 50 (the two `bitflags!` vocabularies), with
+  `mod.rs` down to 70 lines of header, wiring and the four calls that have no topic of their own.
+  `Friends`' single 719-line `impl` held 48 `pub fn` (counted: `sed -n '72,790p' | grep -c '^    pub fn '`),
+  which is exactly the `type_surface` entry for `Friends` -- the 14 methods in `friend.rs` belong to the
+  `Friend` handle, a different type. Those 48 are now spread over nine `impl Friends` blocks grouped by
+  what they ask Steam for.
+  52 items, 0 unclaimed lines, and the cleanest witness of the series: 736 non-blank lines before, **0**
+  lost, 51 added, and none of those 51 is anything but a module header, a `use super::*;`, a `mod` or
+  `pub use` line, or an `impl` brace. Nothing had to widen, because the two things the children needed
+  from the root were already reachable: `Friends`' fields are `pub(crate)`, and the root's own
+  `use chat::{chat_buffer_len, chat_entry_type_from, chat_text};` hands those helpers down through each
+  child's `use super::*`. `api_coverage` (`ISteamFriends` 63, total 639 of 913) and `type_surface`
+  (`Friends` 48) compare green against the pre-split baselines; `module_sizes` (106 entries, 27,015
+  lines) and `package_inventory` (121 shipped files, 12 of them under `src/friends/`) were re-recorded.
+  After seven splits the ranking has changed shape: the only file still above 800 lines is `src/lib.rs`
+  (814) -- the crate root, where the module declarations live -- and the next two are `src/input.rs` 725
+  and `src/utils.rs` 710, single-file modules rather than module roots, so root-splitting stops here
+  unless one of them grows again.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
