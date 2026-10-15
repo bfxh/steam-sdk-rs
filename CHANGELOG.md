@@ -326,6 +326,25 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **Workflow syntax is now checked by `actionlint`.** `workflow_inputs.py` deliberately does not
+  run actionlint (no third-party binary mid-run), but it only covers the three failure classes this
+  repo has already hit. Structural mistakes — a misspelled action, a malformed `on:` block, a broken
+  matrix or `if:` expression — used to surface only on the first push that triggered the broken
+  workflow. The `workflows` self-check job now fetches the pinned official release binary
+  (v1.7.12, from GitHub's own release page, no third-party install script) and lints
+  `.github/workflows/`; a failed fetch or a red lint fails the job. `.github/actionlint.yaml`
+  registers `ubuntu-22.04-arm` so the known GitHub-hosted runner is not reported as unknown.
+- **Dependabot now tracks both ecosystems weekly** (`.github/dependabot.yml`). Two lines:
+  `github-actions` for third-party action major updates (`dtolnay/rust-toolchain@master` stays —
+  that is its upstream-recommended rolling usage), and `cargo` against the workspace root, which is
+  one directory for the whole graph including `steamworks-sys` and the examples. `cargo audit` only
+  sees *known* vulnerabilities; this line surfaces *new versions*. PRs are never auto-merged: a
+  dependency bump walks the same CI gates as a hand-written commit.
+- **`quality-extra` runs on a weekly schedule too.** The advisory database updates daily; without
+  any push, a new advisory was never re-checked. The workflow now also triggers every Monday
+  02:30 UTC, keeping `cancel-in-progress: false` semantics (on `schedule`, `github.ref` is the
+  default branch, so the concurrency group is well-defined).
+
 - **`ledgers are tracked, populated and read`** (`scripts/ci/baseline_files.py`). This repo's gates
   *are* files, and two failure modes had already happened once each: a shipped gate whose baseline
   was swallowed by a `*.txt` ignore rule (so CI judged against a file that existed only on the

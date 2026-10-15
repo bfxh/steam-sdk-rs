@@ -1,0 +1,8 @@
+# actionlint 的 runner 标签白名单。
+# `ubuntu-22.04-arm` 是 GitHub 托管的 ARM64 runner,但不在 actionlint 内置的
+# 已知标签表里;不声明的话,rebuild-bindings.yml 的 matrix 会稳定误报
+# "runs-on 'ubuntu-22.04-arm' is unknown"。声明为自定义标签后,语法检查
+# 只看见真实错误,不再被一个已知平台的名称带偏。
+self-hosted-runner:
+  labels:
+    - ubuntu-22.04-arm
