@@ -558,6 +558,30 @@ plus the callbacks the wrapper can deliver.
   was `cargo check --locked --all-targets` rather than a reading of the generated text. The struct's
   own doc line was also wrong before this commit and is fixed in it: it read "Access to the steam user
   interface", which is `User`'s interface (`ISteamUser`), not this one's; it now says user stats.
+- `src/html_surface.rs` (842 lines) became `src/html_surface/`: `browser.rs` 352 (the `Browser`
+  handle, its `Send`/`Sync` claims, its 33 methods as one `impl` block, and the `Drop` that removes
+  the browser on the Steam side), `callbacks.rs` 247 (the twelve notification payloads, each moved
+  together with the `impl_callback!` that registers it), `mod.rs` 206 (the `HtmlSurface` interface,
+  the two shared string helpers `cstr` and `owned`, `impl HtmlSurface`, and the test module), and
+  `keys.rs` 63 (the mouse-button and key-modifier vocabularies with their raw mappings). The crate's
+  largest file is now `src/server.rs` at 821.
+  This split moved whole top-level items and cut nothing open -- every anchor is a `pub struct`,
+  `impl`, `unsafe impl`, `fn` or `mod`, so a block and its braces travel together and the generator
+  never re-wraps a method list. 25 items, 0 unclaimed lines out of 842, and the witness is again a
+  line-level multiset difference: 762 non-blank lines before, **4** lost, and all four are the
+  declarations that had to widen -- `Browser::{html, handle}` and both `as_raw` methods became
+  `pub(super)`, with the reason written beside each -- and 25 added lines are headers, wiring and
+  those four replacements plus their comments. `api_coverage` (639 of 913) and `type_surface`
+  (`HtmlSurface` 6, `Browser` 33) both compare green against the *pre-split* baselines.
+  Two measured facts about visibility came out of the error list, and both corrected what I had
+  assumed. A parent module is *not* allowed to initialise a child's private fields: `mod.rs` builds a
+  `Browser` in three places (the handle-0 placeholder in `create_browser`, `browser_from_handle`, and
+  the callback that fills it in), and all three went E0451 once the struct moved down a level. And the
+  first `cargo check` did not tell me that: it reported 12 `E0624 method as_raw is private` errors and
+  **no** field errors, because a struct literal that already failed on another count was not audited
+  for field privacy as well. The widening list was therefore incomplete until the first fix landed and
+  the same tree was checked again -- so "the errors say what must widen" is only true one fix at a
+  time, and the set is not known until a check comes back without errors.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

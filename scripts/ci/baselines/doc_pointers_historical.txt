@@ -11,6 +11,7 @@ CHANGELOG.md src/ugc.rs
 CHANGELOG.md src/matchmaking.rs
 CHANGELOG.md src/user.rs
 CHANGELOG.md src/user_stats.rs
+CHANGELOG.md src/html_surface.rs
 docs/SuperSteam-Design.md src/friends.rs
 docs/SuperSteam-Design.md src/friends.rs:124
 docs/SuperSteam-Design.md src/friends.rs:412/433/454

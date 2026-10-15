@@ -1,4 +1,3 @@
-src/html_surface.rs 842
 src/server.rs 821
 src/lib.rs 814
 src/remote_storage.rs 792
@@ -31,6 +30,7 @@ src/user_stats/leaderboard.rs 384
 src/user/mod.rs 375
 src/networking_messages.rs 372
 src/lib_tests.rs 354
+src/html_surface/browser.rs 352
 src/inventory/result.rs 338
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
@@ -43,10 +43,12 @@ src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
 src/networking.rs 257
+src/html_surface/callbacks.rs 247
 src/networking_types/addresses.rs 246
 src/user/auth.rs 244
 src/friends/chat.rs 216
 src/networking_types/events.rs 212
+src/html_surface/mod.rs 206
 src/networking_types/message.rs 206
 src/user/buffers.rs 206
 src/matchmaking/queries.rs 205
@@ -71,6 +73,7 @@ src/user_stats/achievements.rs 90
 src/callback_stream.rs 84
 src/inventory/mod.rs 83
 src/user/passthrough.rs 69
+src/html_surface/keys.rs 63
 src/user/answers.rs 62
 src/user/callbacks.rs 61
 src/inventory/callbacks.rs 44

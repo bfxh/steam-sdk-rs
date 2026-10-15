@@ -1,4 +1,3 @@
-# counts: {'steamworks': 93, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -22,7 +21,10 @@ steamworks/src/friends/callbacks.rs
 steamworks/src/friends/chat.rs
 steamworks/src/friends/friend.rs
 steamworks/src/friends/mod.rs
-steamworks/src/html_surface.rs
+steamworks/src/html_surface/browser.rs
+steamworks/src/html_surface/callbacks.rs
+steamworks/src/html_surface/keys.rs
+steamworks/src/html_surface/mod.rs
 steamworks/src/http.rs
 steamworks/src/identity.rs
 steamworks/src/input.rs
