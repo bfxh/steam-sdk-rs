@@ -30,7 +30,7 @@ src/ugc/update.rs 404
 src/friends/friend.rs 401
 src/user/duration.rs 393
 src/networking_types/end.rs 384
-src/user/mod.rs 374
+src/user/mod.rs 375
 src/networking_messages.rs 372
 src/lib_tests.rs 354
 src/ugc/ugc_tests.rs 331
@@ -53,5 +53,6 @@ src/ugc/read.rs 142
 src/video.rs 122
 src/networking_sockets_callback.rs 117
 src/callback_stream.rs 84
+src/user/passthrough.rs 69
 src/user/answers.rs 62
 src/user/callbacks.rs 61

@@ -8,6 +8,7 @@ mod auth;
 mod buffers;
 mod callbacks;
 mod duration;
+mod passthrough;
 mod voice;
 
 pub use answers::*;

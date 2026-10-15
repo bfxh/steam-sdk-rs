@@ -389,6 +389,32 @@ plus the callbacks the wrapper can deliver.
   Four tests, four mutation controls (no terminator guard, `int` length truncated instead of
   refused, a zero probe treated as a size, the ticket cap removed), each turning its test red and
   the file restored byte for byte.
+- `ISteamUser` is now at 30 of its 33 declared functions (total 634 of 913) with the last two
+  parameter-vocabulary cases wrapped in the new `src/user/passthrough.rs`: `advertise_game(SteamId,
+  Ipv4Addr, u16)` and `track_app_usage_event(GameId, i32, &str) -> Result<(), SteamError>`.
+  `AdvertiseGame`'s `uint32 unIPServer` is the interesting one, because the header describes it as
+  "the IP address of the game server" and then says *nothing* about byte order
+  (`isteamuser.h:156-158`). Rather than invent a rule, the wrapper takes the one this crate already
+  uses at both ends and can be checked against itself: `MatchmakingServers::ping_server` sends
+  `ip.into()` outward (`src/matchmaking_servers.rs:447-458`) and the server-list reader turns an
+  address Steam reported back with `Ipv4Addr::from(raw.m_NetAdr.m_unIP)` (`:213`). Those round-trip,
+  and measured on this host `u32::from(addr) == addr.to_bits()` -- first octet most significant, so
+  `192.168.1.1` is `0xC0A80101`, the shape Steam itself hands back. The doc says all of that,
+  including that the call returns nothing (`void`) so an unreachable address is still "accepted", and
+  that a caller reading the word order differently should take `sys::SteamAPI_ISteamUser_AdvertiseGame`
+  on purpose -- a deliberate choice beats a wrapper guessing.
+  `TrackAppUsageEvent` is the opposite shape: `eAppUsageEvent` is a bare `int` and this SDK ships no
+  `EAppUsageEvent` to name its values, so the number is forwarded unchanged and **no Rust enum is
+  invented** -- a table of names this binding cannot check is the same mistake as the
+  write-direction placeholders. The header's only remark is "used by only a few games to track usage
+  events" under its own `// Legacy functions` banner (h:63-64), and the string argument goes through
+  the crate's shared `c_string_arg`, so an interior NUL becomes `InvalidParameter` instead of a panic
+  or a truncated note.
+  Neither method carries a test, and that is stated rather than hidden: `advertise_game` is one
+  forward with no branch to take, and `track_app_usage_event`'s only branch needs a live `Client`, so
+  a fake client would produce an assertion no mutation could kill. The lock is the coverage ledger --
+  `ISteamUser.called` drops if the FFI call disappears, and that gate judges in both directions --
+  which is the same treatment the five account-state predicates got.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
