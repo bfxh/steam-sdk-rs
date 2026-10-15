@@ -95,15 +95,22 @@ impl UpdateHandle {
         self
     }
 
-    pub fn visibility(self, visibility: remote_storage::PublishedFileVisibility) -> Self {
-        unsafe {
-            assert!(sys::SteamAPI_ISteamUGC_SetItemVisibility(
-                self.ugc,
-                self.handle,
-                visibility.into()
-            ));
+    /// Sets the item's visibility.
+    ///
+    /// A visibility Steam was not told about (`Unknown`, read back from a newer client) fails
+    /// with `SteamError::InvalidParameter` before the call is made, so the item keeps the
+    /// visibility it already has instead of getting a substituted one.
+    pub fn visibility(
+        self,
+        visibility: remote_storage::PublishedFileVisibility,
+    ) -> Result<Self, SteamError> {
+        let visibility = sys::ERemoteStoragePublishedFileVisibility::try_from(visibility)?;
+        let ok =
+            unsafe { sys::SteamAPI_ISteamUGC_SetItemVisibility(self.ugc, self.handle, visibility) };
+        if !ok {
+            return Err(SteamError::InvalidParameter);
         }
-        self
+        Ok(self)
     }
 
     pub fn tags<S: AsRef<str>>(self, tags: Vec<S>, allow_admin_tags: bool) -> Self {
@@ -145,26 +152,40 @@ impl UpdateHandle {
         self
     }
 
-    pub fn add_content_descriptor(self, desc_id: UGCContentDescriptorID) -> Self {
-        unsafe {
-            assert!(sys::SteamAPI_ISteamUGC_AddContentDescriptor(
-                self.ugc,
-                self.handle,
-                desc_id.into(),
-            ));
+    /// Adds a content descriptor to the item.
+    ///
+    /// `Unknown` (a descriptor this binding does not name) fails with
+    /// `SteamError::InvalidParameter` before the call rather than being tagged under some other
+    /// descriptor's number, and a descriptor Steam refuses fails with the same error after it.
+    pub fn add_content_descriptor(
+        self,
+        desc_id: UGCContentDescriptorID,
+    ) -> Result<Self, SteamError> {
+        let desc_id = sys::EUGCContentDescriptorID::try_from(desc_id)?;
+        let ok =
+            unsafe { sys::SteamAPI_ISteamUGC_AddContentDescriptor(self.ugc, self.handle, desc_id) };
+        if !ok {
+            return Err(SteamError::InvalidParameter);
         }
-        self
+        Ok(self)
     }
 
-    pub fn remove_content_descriptor(self, desc_id: UGCContentDescriptorID) -> Self {
-        unsafe {
-            assert!(sys::SteamAPI_ISteamUGC_RemoveContentDescriptor(
-                self.ugc,
-                self.handle,
-                desc_id.into()
-            ));
+    /// Removes a content descriptor from the item.
+    ///
+    /// Fails for `Unknown` and for a removal Steam refuses, both as
+    /// `SteamError::InvalidParameter` -- the same reason as [`Self::add_content_descriptor`].
+    pub fn remove_content_descriptor(
+        self,
+        desc_id: UGCContentDescriptorID,
+    ) -> Result<Self, SteamError> {
+        let desc_id = sys::EUGCContentDescriptorID::try_from(desc_id)?;
+        let ok = unsafe {
+            sys::SteamAPI_ISteamUGC_RemoveContentDescriptor(self.ugc, self.handle, desc_id)
+        };
+        if !ok {
+            return Err(SteamError::InvalidParameter);
         }
-        self
+        Ok(self)
     }
 
     pub fn remove_all_key_value_tags(self) -> Self {

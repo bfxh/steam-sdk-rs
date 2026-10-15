@@ -15,6 +15,17 @@ pub enum PublishedFileVisibility {
     FriendsOnly,
     Private,
     Unlisted,
+
+    /// A visibility this binding does not name.
+    ///
+    /// `ERemoteStoragePublishedFileVisibility` is `#[non_exhaustive]` and the vendored headers
+    /// stop at `...Unlisted = 3`, so a Steam newer than this SDK can answer 4 or above. The
+    /// fallback arm used to reach `unreachable!()`, which panicked inside the caller's process
+    /// while reading an item back.
+    ///
+    /// Read-only. Sending it back refuses with [`SteamError::InvalidParameter`] rather than
+    /// inventing a code: see the `TryFrom` below.
+    Unknown,
 }
 
 impl From<sys::ERemoteStoragePublishedFileVisibility> for PublishedFileVisibility {
@@ -24,19 +35,40 @@ impl From<sys::ERemoteStoragePublishedFileVisibility> for PublishedFileVisibilit
             sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityFriendsOnly => PublishedFileVisibility::FriendsOnly,
             sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityPrivate => PublishedFileVisibility::Private,
             sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityUnlisted => PublishedFileVisibility::Unlisted,
-            _ => unreachable!(),
+            // The binding is `#[non_exhaustive]`, so this arm is the answer to "newer than us",
+            // not an assertion that it cannot happen.
+            _ => PublishedFileVisibility::Unknown,
         }
     }
 }
 
-impl Into<sys::ERemoteStoragePublishedFileVisibility> for PublishedFileVisibility {
-    fn into(self) -> sys::ERemoteStoragePublishedFileVisibility {
-        match self {
-            PublishedFileVisibility::Public => sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityPublic,
-            PublishedFileVisibility::FriendsOnly => sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityFriendsOnly,
-            PublishedFileVisibility::Private => sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityPrivate,
-            PublishedFileVisibility::Unlisted => sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityUnlisted,
-        }
+/// Writes a visibility to Steam.
+///
+/// The infallible `Into` this replaced could not answer `Unknown` honestly. Unlike
+/// [`crate::FileType`], whose fix defers by sending Steam's own `k_EWorkshopFileTypeMax`,
+/// `ERemoteStoragePublishedFileVisibility` declares no out-of-range variant at all -- measured
+/// against the vendored bindings, its values are exactly 0..3 -- so there is no sentinel to hand
+/// over and no legal Rust way to build one. `Unknown` therefore refuses here, at the boundary,
+/// instead of reaching Steam as a visibility the caller never asked for.
+impl TryFrom<PublishedFileVisibility> for sys::ERemoteStoragePublishedFileVisibility {
+    type Error = SteamError;
+
+    fn try_from(visibility: PublishedFileVisibility) -> Result<Self, Self::Error> {
+        Ok(match visibility {
+            PublishedFileVisibility::Public => {
+                sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityPublic
+            }
+            PublishedFileVisibility::FriendsOnly => {
+                sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityFriendsOnly
+            }
+            PublishedFileVisibility::Private => {
+                sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityPrivate
+            }
+            PublishedFileVisibility::Unlisted => {
+                sys::ERemoteStoragePublishedFileVisibility::k_ERemoteStoragePublishedFileVisibilityUnlisted
+            }
+            PublishedFileVisibility::Unknown => return Err(SteamError::InvalidParameter),
+        })
     }
 }
 
@@ -635,6 +667,53 @@ mod offline_tests {
                 assert_ne!(mapped[i], mapped[j]);
             }
         }
+    }
+
+    #[test]
+    fn the_four_visibility_codes_keep_their_distinct_steam_numbers() {
+        use sys::ERemoteStoragePublishedFileVisibility as V;
+        let codes = [
+            (
+                PublishedFileVisibility::Public,
+                V::k_ERemoteStoragePublishedFileVisibilityPublic,
+            ),
+            (
+                PublishedFileVisibility::FriendsOnly,
+                V::k_ERemoteStoragePublishedFileVisibilityFriendsOnly,
+            ),
+            (
+                PublishedFileVisibility::Private,
+                V::k_ERemoteStoragePublishedFileVisibilityPrivate,
+            ),
+            (
+                PublishedFileVisibility::Unlisted,
+                V::k_ERemoteStoragePublishedFileVisibilityUnlisted,
+            ),
+        ];
+        for (ours, theirs) in codes {
+            assert_eq!(V::try_from(ours).unwrap(), theirs);
+        }
+        // Distinctness is the point, not the names: two visibilities sharing a code would let a
+        // caller set one and have Steam store the other.
+        for i in 0..codes.len() {
+            for j in (i + 1)..codes.len() {
+                assert_ne!(
+                    V::try_from(codes[i].0).unwrap(),
+                    V::try_from(codes[j].0).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_visibility_steam_was_never_told_about_has_no_code_to_send() {
+        // There is no out-of-range variant here to defer to (the bindings declare exactly 0..3),
+        // so the only alternative to refusing is picking a real visibility for the caller. A
+        // private item written back as Public is a publish, and no test would show it.
+        assert!(matches!(
+            sys::ERemoteStoragePublishedFileVisibility::try_from(PublishedFileVisibility::Unknown),
+            Err(SteamError::InvalidParameter)
+        ));
     }
 }
 

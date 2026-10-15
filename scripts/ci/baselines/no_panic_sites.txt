@@ -1,2 +1,0 @@
-src/remote_storage.rs 1
-src/ugc/types.rs 1

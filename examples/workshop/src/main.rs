@@ -58,6 +58,9 @@ fn upload_item_content(ugc: &UGC, published_id: PublishedFileId) {
         .description("Item description")
         .tags(Vec::<String>::new(), false)
         .visibility(steamworks::PublishedFileVisibility::Public)
+        // `visibility` is the one step here that can fail: `Public` always has a Steam code, so
+        // an error can only be Steam refusing the item itself.
+        .expect("Steam refused the visibility")
         .submit(Some("My changenotes"), |upload_result| {
             // handle the result
             match upload_result {

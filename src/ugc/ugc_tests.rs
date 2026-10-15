@@ -209,3 +209,56 @@ fn writing_unknown_back_sends_steams_own_unset_value() {
     let there: sys::EWorkshopFileType = FileType::Unknown.into();
     assert_eq!(there, sys::EWorkshopFileType::k_EWorkshopFileTypeMax);
 }
+
+#[test]
+fn the_five_content_descriptors_keep_their_distinct_steam_numbers() {
+    use sys::EUGCContentDescriptorID as D;
+    let named = [
+        (
+            UGCContentDescriptorID::NudityOrSexualContent,
+            D::k_EUGCContentDescriptor_NudityOrSexualContent,
+        ),
+        (
+            UGCContentDescriptorID::FrequentViolenceOrGore,
+            D::k_EUGCContentDescriptor_FrequentViolenceOrGore,
+        ),
+        (
+            UGCContentDescriptorID::AdultOnlySexualContent,
+            D::k_EUGCContentDescriptor_AdultOnlySexualContent,
+        ),
+        (
+            UGCContentDescriptorID::GratuitousSexualContent,
+            D::k_EUGCContentDescriptor_GratuitousSexualContent,
+        ),
+        (
+            UGCContentDescriptorID::AnyMatureContent,
+            D::k_EUGCContentDescriptor_AnyMatureContent,
+        ),
+    ];
+    for (ours, theirs) in named {
+        let there = D::try_from(ours).unwrap();
+        assert_eq!(there, theirs);
+        // Both directions have to agree, or a descriptor read from a query and written back
+        // would land on a different one.
+        assert_eq!(UGCContentDescriptorID::from(there), ours);
+    }
+    for i in 0..named.len() {
+        for j in (i + 1)..named.len() {
+            assert_ne!(
+                D::try_from(named[i].0).unwrap(),
+                D::try_from(named[j].0).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
+fn an_unnamed_content_descriptor_has_no_code_to_send() {
+    // `EUGCContentDescriptorID` declares exactly 1..5, so unlike `FileType` there is no sentinel
+    // to defer to. Every other answer would tag the item with a mature-content label the caller
+    // never named, and that is a content rating, not a cosmetic slip.
+    assert!(matches!(
+        sys::EUGCContentDescriptorID::try_from(UGCContentDescriptorID::Unknown),
+        Err(SteamError::InvalidParameter)
+    ));
+}

@@ -440,6 +440,7 @@ bitflags! {
 /// This filtering is done automatically by Steam servers, but first, user-generated content must be tagged appropriately.
 /// Developers can use AddContentDescriptor and RemoveContentDescriptor calls to manage content descriptors a piece of UGC has.
 /// These can be retrieved from the result of a query via GetQueryUGCContentDescriptors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UGCContentDescriptorID {
     /// Some Nudity or Sexual Content: Contains content that has some nudity or sexual themes, but not as the primary focus.
     NudityOrSexualContent = 1,
@@ -451,10 +452,30 @@ pub enum UGCContentDescriptorID {
     GratuitousSexualContent = 4,
     /// General Mature Content: Contains mature topics that may not be appropriate for all audiences.
     AnyMatureContent = 5,
+
+    /// A content descriptor this binding does not name.
+    ///
+    /// `EUGCContentDescriptorID` is `#[non_exhaustive]` and the vendored headers declare exactly
+    /// 1..5, so a Steam newer than this SDK can answer 6 or above; the fallback arm used to reach
+    /// `unreachable!()` and panicked inside the caller while a query result was being read.
+    ///
+    /// Numbered 0 because that is the one value Steam's own table does not use, which keeps it
+    /// from masquerading as a descriptor. Read-only: the `TryFrom` below refuses to send it.
+    Unknown = 0,
 }
-impl Into<sys::EUGCContentDescriptorID> for UGCContentDescriptorID {
-    fn into(self) -> sys::EUGCContentDescriptorID {
-        match self {
+
+/// Writes a content descriptor to Steam.
+///
+/// Replaces an infallible `Into` that could not answer `Unknown` honestly. Steam declares no
+/// out-of-range sentinel for this enum (its variants are exactly 1..5), so -- unlike the
+/// `FileType` fix, which defers by passing `k_EWorkshopFileTypeMax` -- there is nothing to hand
+/// over and no legal way to build one. `Unknown` refuses here instead of tagging an item with a
+/// descriptor nobody asked for.
+impl TryFrom<UGCContentDescriptorID> for sys::EUGCContentDescriptorID {
+    type Error = SteamError;
+
+    fn try_from(descriptor: UGCContentDescriptorID) -> Result<Self, Self::Error> {
+        Ok(match descriptor {
             UGCContentDescriptorID::NudityOrSexualContent => {
                 sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_NudityOrSexualContent
             }
@@ -470,7 +491,8 @@ impl Into<sys::EUGCContentDescriptorID> for UGCContentDescriptorID {
             UGCContentDescriptorID::AnyMatureContent => {
                 sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_AnyMatureContent
             }
-        }
+            UGCContentDescriptorID::Unknown => return Err(SteamError::InvalidParameter),
+        })
     }
 }
 impl From<sys::EUGCContentDescriptorID> for UGCContentDescriptorID {
@@ -491,7 +513,9 @@ impl From<sys::EUGCContentDescriptorID> for UGCContentDescriptorID {
             sys::EUGCContentDescriptorID::k_EUGCContentDescriptor_AnyMatureContent => {
                 UGCContentDescriptorID::AnyMatureContent
             }
-            _ => unreachable!(),
+            // The binding is `#[non_exhaustive]`, so this arm is the answer to "newer than us",
+            // not an assertion that it cannot happen.
+            _ => UGCContentDescriptorID::Unknown,
         }
     }
 }

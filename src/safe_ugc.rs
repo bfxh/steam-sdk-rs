@@ -18,7 +18,7 @@
 //!         .title("My Mod")?
 //!         .description("A cool mod")?
 //!         .content_path(std::path::Path::new("./content"))?
-//!         .visibility(steamworks::remote_storage::PublishedFileVisibility::Public)
+//!         .visibility(steamworks::remote_storage::PublishedFileVisibility::Public)?
 //!         .submit(None, |r| println!("{r:?}"));
 //!     Ok(())
 //! }
@@ -43,6 +43,12 @@ pub enum SafeUgcError {
     InvalidPath(std::path::PathBuf),
     /// 字符串含空字节，无法转换为 C 字符串传给 Steam API。
     InteriorNul(&'static str),
+    /// 枚举值没有可发送的 Steam 编码：把较新客户端读回的 `Unknown` 写回时，
+    /// 宁可在调用前失败，也不替调用方挑一个它没要过的值。
+    UnencodableEnum(&'static str),
+    /// 输入本身可编码，但 Steam 拒绝了这一步。上游 setter 原先是 `assert!` panic，
+    /// 现已改为把 Steam 的错误带出来。
+    Refused(SteamError),
 }
 
 impl fmt::Display for SafeUgcError {
@@ -57,6 +63,15 @@ impl fmt::Display for SafeUgcError {
             }
             SafeUgcError::InteriorNul(field) => {
                 write!(f, "value for `{field}` contains an interior nul byte")
+            }
+            SafeUgcError::UnencodableEnum(field) => {
+                write!(
+                    f,
+                    "`{field}` has no Steam code to send: it was read from a newer client"
+                )
+            }
+            SafeUgcError::Refused(err) => {
+                write!(f, "Steam refused this update step: {err:?}")
             }
         }
     }
@@ -128,11 +143,22 @@ impl SafeUgcUpdate {
         })
     }
 
-    /// 设置可见性。纯枚举映射，无失败路径。
-    pub fn visibility(self, visibility: remote_storage::PublishedFileVisibility) -> Self {
-        Self {
-            inner: self.inner.visibility(visibility),
+    /// 设置可见性。两种失败含义不同，不能混成一个：
+    /// `Unknown`（本绑定不认识的可见性）在触到 Steam 之前就用
+    /// [`SafeUgcError::UnencodableEnum`] 拦下；Steam 自己拒绝则带出它的错误
+    /// （[`SafeUgcError::Refused`]）。
+    pub fn visibility(
+        self,
+        visibility: remote_storage::PublishedFileVisibility,
+    ) -> Result<Self, SafeUgcError> {
+        if visibility == remote_storage::PublishedFileVisibility::Unknown {
+            return Err(SafeUgcError::UnencodableEnum("visibility"));
         }
+        let inner = self
+            .inner
+            .visibility(visibility)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置标签。任一标签含空字节时返回 `Err`。
@@ -212,5 +238,21 @@ mod tests {
     fn error_display_includes_field() {
         let e = SafeUgcError::InteriorNul("description");
         assert!(e.to_string().contains("description"));
+    }
+
+    #[test]
+    fn error_display_names_an_unencodable_enum() {
+        let e = SafeUgcError::UnencodableEnum("visibility");
+        assert!(e.to_string().contains("visibility"));
+    }
+
+    #[test]
+    fn error_display_carries_a_steam_refusal() {
+        // The two failures must stay distinguishable in text as well as in the variant:
+        // "no code to send" is a caller bug, "Steam refused" is the item's problem.
+        let unencodable = SafeUgcError::UnencodableEnum("visibility").to_string();
+        let refused = SafeUgcError::Refused(SteamError::InvalidParameter).to_string();
+        assert!(refused.contains("InvalidParameter"), "{refused}");
+        assert_ne!(unencodable, refused);
     }
 }

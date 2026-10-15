@@ -488,6 +488,17 @@ plus the callbacks the wrapper can deliver.
 
 ### Fixed
 
+- **The last two `unreachable!()` in the hand-written sources are gone, and the panic-site ledger
+  reaches the zero it was built to measure.** Both sat in the fallback arm of a `match` over a
+  `#[non_exhaustive]` Steam enum -- `ERemoteStoragePublishedFileVisibility`, read back while a
+  Workshop query result is assembled, and `EUGCContentDescriptorID`, read back from a preferences
+  or descriptor query -- so a Steam newer than the vendored SDK could panic inside the caller's
+  process. Neither arm is reachable with today's headers, because the bindings name every value
+  those two enums can carry; no test can hit them, so none was written for them. The guard is the
+  ledger itself: it now measures 0 sites across 51 scanned sources, and its comparator turns red on
+  the first new site (an empty ledger is only accepted while the ruler still sees sources, which it
+  checks separately). What those enums gained instead is a documented `Unknown` and a write path
+  that refuses -- see the breaking entry under **Changed**.
 - **Registering a callback from inside a callback, dropping a `CallbackHandle` from inside one,
   and calling `run_callbacks()` re-entrantly all deadlocked** (`8bb88f2`). The dispatch loop runs
   user code while holding the callbacks lock and `std::sync::Mutex` is not reentrant. Such
@@ -541,7 +552,27 @@ plus the callbacks the wrapper can deliver.
 
 ### Changed
 
-
+- **`PublishedFileVisibility` and `UGCContentDescriptorID` no longer pretend every answer fits.**
+  Both gained an `Unknown` variant, and both lost the infallible `Into<sys::E…>` that used to send
+  them back: writing one is now `TryFrom<ours> for sys::E…` with `Error = SteamError`, and
+  `Unknown` refuses with `InvalidParameter`. Migration: `v.into()` becomes `sys::…::try_from(v)?`
+  (or `v.try_into()?`), and the three `UpdateHandle` setters that take these values --
+  `visibility`, `add_content_descriptor`, `remove_content_descriptor` -- now return
+  `Result<Self, SteamError>`, so a chain needs `?` at those steps. `SafeUgcUpdate::visibility`
+  keeps its two failures apart rather than conflating them: a value with no Steam code is
+  `SafeUgcError::UnencodableEnum`, a refusal by Steam is the new `SafeUgcError::Refused`.
+  Why this is not a repeat of the `FileType` fix: `FileType::Unknown` refuses *by deferral*,
+  handing Steam its own `k_EWorkshopFileTypeMax`. Measured against the vendored bindings, neither
+  of these two enums declares such a value -- `ERemoteStoragePublishedFileVisibility` is exactly
+  0..3, `EUGCContentDescriptorID` exactly 1..5 -- and a `#[non_exhaustive]` enum gives no legal way
+  to build an out-of-range discriminant. So the only alternatives were inventing a code or
+  refusing: an invented visibility would publish an item the caller meant to keep private, and an
+  invented descriptor would tag an item with a mature-content label nobody asked for. Those three
+  setters also stop `assert!`-panicking when Steam itself refuses; they return the same
+  `InvalidParameter`, which is the first slice of the 22-method builder change drafted in
+  `docs/pr-bodies/6-ugc-builder-result.md` -- the other ten steps still panic as before.
+  `UGCContentDescriptorID` additionally derives `Clone, Copy, Debug, PartialEq, Eq`: additive, and
+  what lets a test compare a descriptor read out of a query with one written back.
 - `FriendState` gained an `Unknown` variant, and the new `FriendRelationship` enum has one too.
   Adding a variant to a public enum breaks callers who `match` it exhaustively, so this is called
   out rather than buried: the alternative was keeping `Friend::state()`'s `unreachable!()`, which

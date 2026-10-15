@@ -1,1 +1,1 @@
-123  # lib tests reached with --all-features (108 passed + 15 ignored), measured 2026-10-15 with the glyph/string cluster
+129  # lib tests reached with --all-features (114 passed + 15 ignored), measured 2026-10-15 with the visibility/descriptor write path
