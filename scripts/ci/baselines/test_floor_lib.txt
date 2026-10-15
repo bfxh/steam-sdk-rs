@@ -1,1 +1,1 @@
-137  # lib tests reached with --all-features, measured 2026-10-15 with the fallible-builder conversion (4 new helper tests)
+138  # lib tests reached with --all-features, measured 2026-10-15 with the fallible query builder (1 test added)

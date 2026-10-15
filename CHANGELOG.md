@@ -688,6 +688,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Changed
 
+- **Breaking: `QueryHandle`'s builder is fallible too, and the whole file lost its panic surface.**
+  All 29 `-> Self` setters now return `Result<Self, SteamError>` (30 do today, counting
+  `add_required_tag_group`, which was already fallible), and `fetch`, `fetch_total` and `fetch_ids`
+  keep their callback signatures while answering failures **through the callback** -- they have no
+  other channel. Measured before/after in `src/ugc/query.rs`: **78 `unwrap()` → 0, 31
+  `debug_assert!` → 0, 0 `expect`**. Two of those failure classes were not even panics in
+  production: `debug_assert!(ok)` compiles away in release, so Steam refusing a tag, a language or
+  a search string was answered with silence and the query went out unconfigured. A handle that
+  `fetch` already consumed now yields `SteamError::InvalidState` instead of an `unwrap()`, kept
+  distinct from `InvalidParameter` on purpose -- "there is no request left to configure" and "Steam
+  said no to this one" are different bugs and the caller cannot fix either one if they arrive as
+  the same message.
+  **This is wider than the draft in `docs/pr-bodies/6-ugc-builder-result.md`, which named 9 string
+  setters.** Converting only those nine would have left twenty setters in the same file still
+  doing `self.handle.unwrap()` -- the half-converted shape this changelog criticised three entries
+  ago for the update builder, so the file is uniform instead. The other twenty are one-line bool/int
+  setters whose only new failure is the consumed handle, so the migration for a caller is the same
+  `?` in the same chain. Say the word and I will cut it back to nine.
+  Decisiveness: the handle decision was extracted into `taken_from` so it is testable without a
+  Steam client, and mutation-checked twice -- answering a consumed handle with a fabricated handle
+  0, and reporting it as `InvalidParameter` -- each turning the test red, file restored
+  byte-for-byte. The 29 setters themselves are one helper plus one FFI call and got no test: that
+  is the thin-shell case, and a `check(ok)?` restated as an assertion would look like coverage
+  while killing nothing. `examples/` and the rest of `src/` contain no query-builder chains
+  (measured: one doc-link mention), so the break is downstream-only.
+- Ledgers re-recorded at measured values: lib test floor 137 -> 138, and `src/ugc/query.rs` 487 ->
+  462 lines -- it shrank, because the converted bodies are shorter than the `let ok = ...;
+  debug_assert!(ok); self` they replaced. Coverage is unchanged at 621 of 913 and `type_surface`
+  holds at 80 keys: no FFI call and no method name was added or removed.
+
 - **Breaking: `UpdateHandle`'s ten remaining setters return `Result<Self, SteamError>`, and the
   builder no longer panics anywhere.** `title`, `description`, `language`, `preview_path`,
   `content_path`, `metadata`, `tags`, `add_key_value_tag`, `remove_key_value_tag` and

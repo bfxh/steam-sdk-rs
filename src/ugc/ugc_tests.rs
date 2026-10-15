@@ -315,3 +315,17 @@ fn one_unencodable_tag_refuses_the_whole_list_and_frees_the_earlier_ones() {
     assert!(SteamParamStringArray::new(&["fine", "bad\0tag", "also fine"]).is_none());
     assert!(SteamParamStringArray::new(&[] as &[String]).is_some());
 }
+
+#[test]
+fn a_query_handle_taken_by_fetch_answers_invalid_state_instead_of_panicking() {
+    use super::query::taken_from;
+    assert_eq!(taken_from(Some(7)), Ok(7));
+    assert_eq!(taken_from(None), Err(SteamError::InvalidState));
+    // Distinct from the refusal answer on purpose: "there is no request left to configure" and
+    // "Steam said no to this one" are different bugs, and both used to be the same `unwrap()`.
+    assert_ne!(
+        taken_from(None).err(),
+        Some(SteamError::InvalidParameter),
+        "a consumed handle must not be reported as a bad argument"
+    );
+}
