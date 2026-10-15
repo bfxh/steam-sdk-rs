@@ -104,43 +104,50 @@ impl SafeUgcUpdate {
     /// 设置标题。字符串含空字节时返回 `Err`。
     pub fn title(self, title: &str) -> Result<Self, SafeUgcError> {
         Self::check_cstr("title", title)?;
-        Ok(Self {
-            inner: self.inner.title(title),
-        })
+        let inner = self.inner.title(title).map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置描述。字符串含空字节时返回 `Err`。
     pub fn description(self, description: &str) -> Result<Self, SafeUgcError> {
         Self::check_cstr("description", description)?;
-        Ok(Self {
-            inner: self.inner.description(description),
-        })
+        let inner = self
+            .inner
+            .description(description)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置内容目录。路径不存在时返回 `Err`（上游此处 `canonicalize().unwrap()`）。
     pub fn content_path(self, path: &Path) -> Result<Self, SafeUgcError> {
         path.canonicalize()
             .map_err(|_| SafeUgcError::InvalidPath(path.to_path_buf()))?;
-        Ok(Self {
-            inner: self.inner.content_path(path),
-        })
+        let inner = self
+            .inner
+            .content_path(path)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置预览文件路径。路径不存在时返回 `Err`。
     pub fn preview_path(self, path: &Path) -> Result<Self, SafeUgcError> {
         path.canonicalize()
             .map_err(|_| SafeUgcError::InvalidPath(path.to_path_buf()))?;
-        Ok(Self {
-            inner: self.inner.preview_path(path),
-        })
+        let inner = self
+            .inner
+            .preview_path(path)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置元数据。字符串含空字节时返回 `Err`。
     pub fn metadata(self, metadata: &str) -> Result<Self, SafeUgcError> {
         Self::check_cstr("metadata", metadata)?;
-        Ok(Self {
-            inner: self.inner.metadata(metadata),
-        })
+        let inner = self
+            .inner
+            .metadata(metadata)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 设置可见性。两种失败含义不同，不能混成一个：
@@ -170,18 +177,22 @@ impl SafeUgcUpdate {
         for t in &tags {
             Self::check_cstr("tag", t.as_ref())?;
         }
-        Ok(Self {
-            inner: self.inner.tags(tags, allow_admin_tags),
-        })
+        let inner = self
+            .inner
+            .tags(tags, allow_admin_tags)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 添加键值标签。键或值含空字节时返回 `Err`。
     pub fn add_key_value_tag(self, key: &str, value: &str) -> Result<Self, SafeUgcError> {
         Self::check_cstr("key_value_tag.key", key)?;
         Self::check_cstr("key_value_tag.value", value)?;
-        Ok(Self {
-            inner: self.inner.add_key_value_tag(key, value),
-        })
+        let inner = self
+            .inner
+            .add_key_value_tag(key, value)
+            .map_err(SafeUgcError::Refused)?;
+        Ok(Self { inner })
     }
 
     /// 消耗构建器并提交更新。

@@ -1,1 +1,1 @@
-133  # lib tests reached with --all-features (118 passed + 15 ignored), measured 2026-10-15 with the device-callback cluster
+137  # lib tests reached with --all-features, measured 2026-10-15 with the fallible-builder conversion (4 new helper tests)

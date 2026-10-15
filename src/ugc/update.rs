@@ -14,85 +14,96 @@ pub struct UpdateHandle {
     pub(super) handle: sys::UGCUpdateHandle_t,
 }
 
+/// Steam takes these as C strings, so an embedded NUL is a bad argument. It used to be a panic
+/// (`CString::new(..).unwrap()`) inside the caller's process.
+pub(super) fn steam_cstr(value: &str) -> Result<CString, SteamError> {
+    CString::new(value).map_err(|_| SteamError::InvalidParameter)
+}
+
+/// A path Steam must read. A missing one is `FileNotFound`; anything else the OS reports is
+/// `IOFailure`, because "I could not stat it" is not the same answer as "it is not there".
+pub(super) fn resolved_path(path: &Path) -> Result<std::path::PathBuf, SteamError> {
+    path.canonicalize().map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => SteamError::FileNotFound,
+        _ => SteamError::IOFailure,
+    })
+}
+
+/// The `Set*` / `Add*` / `Remove*` calls answer with false. Refusing with Steam's own vocabulary
+/// beats `assert!`, which panicked in the caller over something Steam already reported.
+pub(super) fn check(ok: bool) -> Result<(), SteamError> {
+    if ok {
+        Ok(())
+    } else {
+        Err(SteamError::InvalidParameter)
+    }
+}
 impl UpdateHandle {
     #[must_use]
-    pub fn title(self, title: &str) -> Self {
-        unsafe {
-            let title = CString::new(title).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemTitle(
-                self.ugc,
-                self.handle,
-                title.as_ptr()
-            ));
-        }
-        self
+    /// Sets the item's title.
+    ///
+    /// A title with an embedded NUL has no Steam code to send and fails with
+    /// `InvalidParameter`, as does a title Steam itself refuses.
+    pub fn title(self, title: &str) -> Result<Self, SteamError> {
+        let title = steam_cstr(title)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemTitle(self.ugc, self.handle, title.as_ptr())
+        })?;
+        Ok(self)
     }
 
     #[must_use]
-    pub fn description(self, description: &str) -> Self {
-        unsafe {
-            let description = CString::new(description).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemDescription(
-                self.ugc,
-                self.handle,
-                description.as_ptr()
-            ));
-        }
-        self
+    /// Sets the item's description. Fails on an embedded NUL or a refusal by Steam.
+    pub fn description(self, description: &str) -> Result<Self, SteamError> {
+        let description = steam_cstr(description)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemDescription(self.ugc, self.handle, description.as_ptr())
+        })?;
+        Ok(self)
     }
 
     #[must_use]
-    pub fn language(self, language: &str) -> Self {
-        unsafe {
-            let language = CString::new(language).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemUpdateLanguage(
-                self.ugc,
-                self.handle,
-                language.as_ptr()
-            ));
-        }
-        self
+    /// Sets the language of this update. Fails on an embedded NUL or a refusal by Steam.
+    pub fn language(self, language: &str) -> Result<Self, SteamError> {
+        let language = steam_cstr(language)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemUpdateLanguage(self.ugc, self.handle, language.as_ptr())
+        })?;
+        Ok(self)
     }
 
     #[must_use]
-    pub fn preview_path(self, path: &Path) -> Self {
-        unsafe {
-            let path = path.canonicalize().unwrap();
-            let preview_path = CString::new(&*path.to_string_lossy()).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemPreview(
-                self.ugc,
-                self.handle,
-                preview_path.as_ptr()
-            ));
-        }
-        self
+    /// Sets the preview file. A path that cannot be resolved fails (`FileNotFound` if it is
+    /// missing) instead of `canonicalize().unwrap()` panicking in the caller's process.
+    pub fn preview_path(self, path: &Path) -> Result<Self, SteamError> {
+        let path = resolved_path(path)?;
+        let preview_path = steam_cstr(&path.to_string_lossy())?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemPreview(self.ugc, self.handle, preview_path.as_ptr())
+        })?;
+        Ok(self)
     }
 
     #[must_use]
-    pub fn content_path(self, path: &Path) -> Self {
-        unsafe {
-            let path = path.canonicalize().unwrap();
-            let content_path = CString::new(&*path.to_string_lossy()).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemContent(
-                self.ugc,
-                self.handle,
-                content_path.as_ptr()
-            ));
-        }
-        self
+    /// Sets the folder holding the item's content. Same failure shape as
+    /// [`Self::preview_path`]: an unresolvable path is an error, not a panic.
+    pub fn content_path(self, path: &Path) -> Result<Self, SteamError> {
+        let path = resolved_path(path)?;
+        let content_path = steam_cstr(&path.to_string_lossy())?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemContent(self.ugc, self.handle, content_path.as_ptr())
+        })?;
+        Ok(self)
     }
 
     #[must_use]
-    pub fn metadata(self, metadata: &str) -> Self {
-        unsafe {
-            let metadata = CString::new(metadata).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_SetItemMetadata(
-                self.ugc,
-                self.handle,
-                metadata.as_ptr()
-            ));
-        }
-        self
+    /// Sets the item's metadata string. Fails on an embedded NUL or a refusal by Steam.
+    pub fn metadata(self, metadata: &str) -> Result<Self, SteamError> {
+        let metadata = steam_cstr(metadata)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemMetadata(self.ugc, self.handle, metadata.as_ptr())
+        })?;
+        Ok(self)
     }
 
     /// Sets the item's visibility.
@@ -113,43 +124,45 @@ impl UpdateHandle {
         Ok(self)
     }
 
-    pub fn tags<S: AsRef<str>>(self, tags: Vec<S>, allow_admin_tags: bool) -> Self {
-        unsafe {
-            let mut tags = SteamParamStringArray::new(&tags);
-            assert!(sys::SteamAPI_ISteamUGC_SetItemTags(
-                self.ugc,
-                self.handle,
-                &tags.as_raw(),
-                allow_admin_tags
-            ));
-        }
-        self
+    /// Sets the item's tag list.
+    ///
+    /// One unencodable tag refuses the whole call: `SteamParamStringArray::new` gives back
+    /// `None` and frees what it had already converted, so a partial tag list is never sent.
+    pub fn tags<S: AsRef<str>>(
+        self,
+        tags: Vec<S>,
+        allow_admin_tags: bool,
+    ) -> Result<Self, SteamError> {
+        let mut array = SteamParamStringArray::new(&tags).ok_or(SteamError::InvalidParameter)?;
+        let raw = array.as_raw();
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_SetItemTags(self.ugc, self.handle, &raw, allow_admin_tags)
+        })?;
+        Ok(self)
     }
 
-    pub fn add_key_value_tag(self, key: &str, value: &str) -> Self {
-        unsafe {
-            let key = CString::new(key).unwrap();
-            let value = CString::new(value).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_AddItemKeyValueTag(
+    /// Adds one key/value tag. Either half may refuse: a NUL in key or value, or Steam.
+    pub fn add_key_value_tag(self, key: &str, value: &str) -> Result<Self, SteamError> {
+        let key = steam_cstr(key)?;
+        let value = steam_cstr(value)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_AddItemKeyValueTag(
                 self.ugc,
                 self.handle,
                 key.as_ptr(),
-                value.as_ptr()
-            ));
-        }
-        self
+                value.as_ptr(),
+            )
+        })?;
+        Ok(self)
     }
 
-    pub fn remove_key_value_tag(self, key: &str) -> Self {
-        unsafe {
-            let key = CString::new(key).unwrap();
-            assert!(sys::SteamAPI_ISteamUGC_RemoveItemKeyValueTags(
-                self.ugc,
-                self.handle,
-                key.as_ptr()
-            ));
-        }
-        self
+    /// Removes the key/value tags under one key. Fails on an embedded NUL or a refusal by Steam.
+    pub fn remove_key_value_tag(self, key: &str) -> Result<Self, SteamError> {
+        let key = steam_cstr(key)?;
+        check(unsafe {
+            sys::SteamAPI_ISteamUGC_RemoveItemKeyValueTags(self.ugc, self.handle, key.as_ptr())
+        })?;
+        Ok(self)
     }
 
     /// Adds a content descriptor to the item.
@@ -188,14 +201,10 @@ impl UpdateHandle {
         Ok(self)
     }
 
-    pub fn remove_all_key_value_tags(self) -> Self {
-        unsafe {
-            assert!(sys::SteamAPI_ISteamUGC_RemoveAllItemKeyValueTags(
-                self.ugc,
-                self.handle
-            ));
-        }
-        self
+    /// Removes every key/value tag. Steam's refusal is an error rather than a panic.
+    pub fn remove_all_key_value_tags(self) -> Result<Self, SteamError> {
+        check(unsafe { sys::SteamAPI_ISteamUGC_RemoveAllItemKeyValueTags(self.ugc, self.handle) })?;
+        Ok(self)
     }
 
     /// Adds one of the item's extra previews from a file on disk, with the kind of

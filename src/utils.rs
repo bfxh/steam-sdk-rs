@@ -679,16 +679,26 @@ impl Drop for SteamParamStringArray {
     }
 }
 impl SteamParamStringArray {
-    pub(crate) fn new<S: AsRef<str>>(vec: &[S]) -> SteamParamStringArray {
-        SteamParamStringArray(
-            vec.into_iter()
-                .map(|s| {
-                    CString::new(s.as_ref())
-                        .expect("String passed could not be converted to a c string")
-                        .into_raw()
-                })
-                .collect(),
-        )
+    /// Builds the array, or `None` when an entry cannot become a C string.
+    ///
+    /// The entries are `into_raw` allocations that Steam reads by pointer, so a failure halfway
+    /// through must hand back what was already taken. The old version `expect`ed instead, which
+    /// did two bad things at once: it panicked inside the caller's process, and the strings
+    /// converted before the bad one had no owner left to free them.
+    pub(crate) fn new<S: AsRef<str>>(vec: &[S]) -> Option<SteamParamStringArray> {
+        let mut raw = Vec::with_capacity(vec.len());
+        for s in vec {
+            match CString::new(s.as_ref()) {
+                Ok(value) => raw.push(value.into_raw()),
+                Err(_) => {
+                    for taken in raw {
+                        drop(unsafe { CString::from_raw(taken) });
+                    }
+                    return None;
+                }
+            }
+        }
+        Some(SteamParamStringArray(raw))
     }
 
     pub(crate) fn as_raw(&mut self) -> sys::SteamParamStringArray_t {

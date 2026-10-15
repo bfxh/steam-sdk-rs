@@ -262,3 +262,56 @@ fn an_unnamed_content_descriptor_has_no_code_to_send() {
         Err(SteamError::InvalidParameter)
     ));
 }
+
+use super::update::{check, resolved_path, steam_cstr};
+
+/// The builders are now fallible, and the three helpers above are where that fallibility lives:
+/// each setter is the helper plus one FFI call, so this is the layer a regression can actually
+/// land on. `title`/`content_path`/`tags` etc. are thin glue over these and are not re-asserted
+/// here -- an assertion that only restates a `?` would look like coverage and kill nothing.
+#[test]
+fn a_string_steam_cannot_take_is_an_error_rather_than_a_panic() {
+    assert_eq!(
+        steam_cstr("plain title").unwrap().as_bytes(),
+        b"plain title"
+    );
+    for bad in ["inner\0nul", "trailing\0"] {
+        assert!(
+            matches!(steam_cstr(bad), Err(SteamError::InvalidParameter)),
+            "{bad:?} must be refused, not `expect`ed on"
+        );
+    }
+}
+
+#[test]
+fn an_unresolvable_path_says_which_kind_of_failure_it_is() {
+    // Registered rather than asserted: the `IOFailure` arm below (anything the OS reports that is
+    // not "not found" -- a permission denial, an io error mid-resolve) cannot be provoked
+    // deterministically from a test, so no assertion here claims to cover it. Same for the
+    // rollback in `SteamParamStringArray::new`: returning `None` is tested, the freeing of the
+    // earlier strings is not observable from safe Rust.
+    // The two answers are different operations for a caller: retrying a permission problem and
+    // creating a missing file are not the same fix, and both used to be one panic.
+    assert!(resolved_path(std::path::Path::new(".")).is_ok());
+    assert!(matches!(
+        resolved_path(std::path::Path::new("no-such-file-anywhere/none")),
+        Err(SteamError::FileNotFound)
+    ));
+}
+
+#[test]
+fn steam_refusing_a_setter_becomes_an_error_the_caller_can_take() {
+    assert_eq!(check(true), Ok(()));
+    assert_eq!(check(false), Err(SteamError::InvalidParameter));
+}
+
+#[test]
+fn one_unencodable_tag_refuses_the_whole_list_and_frees_the_earlier_ones() {
+    use crate::utils::SteamParamStringArray;
+    assert!(SteamParamStringArray::new(&["one", "two"]).is_some());
+    // The previous implementation `expect`ed here, which panicked in the caller *and* left the
+    // strings converted before the bad one unreachable. Returning `None` is the fallible answer;
+    // the rollback runs through `CString::from_raw`, so restoring the `expect` turns this red.
+    assert!(SteamParamStringArray::new(&["fine", "bad\0tag", "also fine"]).is_none());
+    assert!(SteamParamStringArray::new(&[] as &[String]).is_some());
+}

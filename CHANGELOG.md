@@ -688,6 +688,37 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Changed
 
+- **Breaking: `UpdateHandle`'s ten remaining setters return `Result<Self, SteamError>`, and the
+  builder no longer panics anywhere.** `title`, `description`, `language`, `preview_path`,
+  `content_path`, `metadata`, `tags`, `add_key_value_tag`, `remove_key_value_tag` and
+  `remove_all_key_value_tags` join the eleven that already answered with a `Result`, so the whole
+  update builder is now uniformly fallible. Measured, this removed **21 panic expressions** from
+  `src/ugc/update.rs` -- 10 `assert!` on Steam's own `false` answer and 11 `unwrap()` (9
+  `CString::new(..)` on a string with an embedded NUL, 2 `canonicalize()` on a path that does not
+  exist). `grep` for `assert!`/`unwrap`/`expect` in that file now returns three hits, all inside
+  doc comments. Migration: a chain that used to be
+  `.title(t).description(d).submit(..)` becomes `.title(t)?.description(d)?.submit(..)`, or a
+  refusal is handled where the chain is built; `examples/workshop` shows both shapes by building
+  the chain in a fallible function and printing the preparation error.
+  Error shapes are Steam's own vocabulary rather than invented ones: an unencodable string is
+  `InvalidParameter`; a path that does not exist is `FileNotFound` while any other OS failure
+  during resolution is `IOFailure` (they are different operations for a caller -- create the file
+  versus fix permissions -- and both used to be the same panic); Steam answering `false` is
+  `InvalidParameter`, the value it already reported rather than a crash.
+  `#[must_use]` is dropped from the converted methods: `Result` is already `#[must_use]`, and
+  keeping both would say nothing.
+- **Breaking (internal signature, no public surface): `SteamParamStringArray::new` returns
+  `Option`.** It is `pub(crate)`, so this is not a downstream-visible change, but it fixed a
+  second defect on the same line: the old `.expect(..)` panicked in the caller's process *and*
+  the entries already converted with `into_raw()` had no owner left to free them, so a bad tag in
+  position 5 leaked the first four. It now hands back `None` and frees what it took. The freeing
+  itself is not observable from safe Rust, so no assertion pretends to cover it -- the
+  no-longer-panicking half is tested.
+- `SafeUgcUpdate`'s passthroughs map the inner error into `SafeUgcError::Refused(err)` (the
+  variant `467ab19` added), which carries the actual `SteamError` rather than flattening it. Its own pre-checks still fire
+  first (a NUL in a title is `InteriorNul`, an unresolvable path is `InvalidPath`), so the carried
+  error means "Steam said no", and the variant keeps that claim checkable.
+
 - **`PublishedFileVisibility` and `UGCContentDescriptorID` no longer pretend every answer fits.**
   Both gained an `Unknown` variant, and both lost the infallible `Into<sys::E…>` that used to send
   them back: writing one is now `TryFrom<ours> for sys::E…` with `Error = SteamError`, and
