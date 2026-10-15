@@ -582,6 +582,43 @@ plus the callbacks the wrapper can deliver.
   for field privacy as well. The widening list was therefore incomplete until the first fix landed and
   the same tree was checked again -- so "the errors say what must widen" is only true one fix at a
   time, and the set is not known until a check comes back without errors.
+- `src/server.rs` (821 lines) became `src/server/`: `config.rs` 172 (the seventeen announcements a
+  server makes about itself -- product, description, map, name, player caps, tags, key/value pairs,
+  heartbeat and advertise flags), `lifecycle.rs` 170 (the raw `SteamGameServer_InitEx` behind
+  `Server::init`, the two callback pumps, `register_callback` and the server's own `steam_id`),
+  `callbacks.rs` 128 (the five game-server notifications, with the `DenyReason` vocabulary and its
+  `From` mapping), `interfaces.rs` 130 (the eight sub-interface accessors), `auth.rs` 107 (session
+  tickets, cancelling one, opening and closing an authentication session), `mod.rs` 105 (the `Server`
+  struct with its `Send`/`Sync` claims, `ServerMode`, `QUERY_PORT_SHARED` and the manual test), and
+  `packets.rs` 59 (the GSHS relay traffic in and out). The crate's largest file is now `src/lib.rs`
+  at 814.
+  This one needed no widening at all: `Server`'s fields were already `pub(crate)`, and the two
+  comments and the payloads that read them stayed reachable through the parent's `use super::*`, so
+  the witness is the cleanest yet -- 743 non-blank lines before, **0** lost, 38 added, every added line
+  a module header (17), a `use super::*;` (6), one of the four extra `impl Server {` openers and their
+  braces (8), or the wiring (7). `api_coverage` (639 of 913) and `type_surface` (`Server` 38) compare
+  green against the pre-split baselines; `module_sizes` and `package_inventory` (102 shipped files in
+  `steamworks`) were re-recorded.
+  One thing the probe found by refusing to move it: the ninth accessor, `Server::apps()`, is not dead
+  code and never was -- lines 633-645 of the old file are a `/* TODO: Buggy currently?` block comment
+  that swallows the whole method, so the anchor I had planned for `pub fn apps` at line 635 pointed at
+  text inside a comment. The splitter's boundary rule caught it (the line above that block is neither
+  blank nor a closer) and the comment now travels with `interfaces.rs` as what it is. Nothing in
+  `README.md`, `CHANGELOG.md`, `docs/` or `examples/` claims a `Server::apps` exists -- checked by
+  grep, 0 hits -- so no document needed correcting, and deleting the commented block was not done: it
+  would be a diagnosis of someone else's "Buggy currently?", not a move.
+  This unit also walked into the trap the previous two had named. The first chain replay judged
+  `module_sizes` red on a single entry: I re-recorded that ledger and *then* rewrote `interfaces.rs`'s
+  module header two lines longer (128 -> 130), so "the chain is green" had been describing the tree
+  before my own last edit. The size quoted above is the post-edit one, the ledger was re-recorded from
+  the tree that ships, and the replay reported for this unit is the run after the last content change.
+  A second self-inflicted trap was worth the detour: the new `interfaces.rs` header first quoted the
+  literal `/* TODO` text, which made a block-comment-stripping regex eat everything from that doc line
+  to the real `*/` and report **0** live null-checks in a file holding 8. The quote is prose now, and
+  the design doc's two accessor tallies were re-measured with the corrected ruler: `debug_assert`
+  null-checks read lib.rs 24 sites / 23 methods and `server/interfaces.rs` 9 textually but 8 live, so
+  the doc's "33 处" is still true as a text count, its live count is 32, and its "17 + 6 = 23 getters"
+  is today 23 + 8 = 31.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

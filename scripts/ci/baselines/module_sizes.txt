@@ -1,4 +1,3 @@
-src/server.rs 821
 src/lib.rs 814
 src/remote_storage.rs 792
 src/networking_sockets/mod.rs 791
@@ -58,16 +57,22 @@ src/parental.rs 191
 src/networking_types/identity.rs 182
 src/networking_types/state.rs 180
 src/remote_play.rs 180
+src/server/config.rs 172
+src/server/lifecycle.rs 170
 src/music.rs 163
 src/friends/callbacks.rs 155
 src/user_stats/stat_callback.rs 151
 src/ugc/read.rs 142
 src/inventory/prices.rs 132
+src/server/interfaces.rs 130
+src/server/callbacks.rs 128
 src/user_stats/stats_io.rs 127
 src/video.rs 122
 src/inventory/actions.rs 121
 src/networking_sockets_callback.rs 117
 src/matchmaking/callbacks.rs 111
+src/server/auth.rs 107
+src/server/mod.rs 105
 src/inventory/definitions.rs 101
 src/user_stats/achievements.rs 90
 src/callback_stream.rs 84
@@ -76,6 +81,7 @@ src/user/passthrough.rs 69
 src/html_surface/keys.rs 63
 src/user/answers.rs 62
 src/user/callbacks.rs 61
+src/server/packets.rs 59
 src/inventory/callbacks.rs 44
 src/networking_types/mod.rs 36
 src/user_stats/mod.rs 20

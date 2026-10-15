@@ -12,6 +12,7 @@ CHANGELOG.md src/matchmaking.rs
 CHANGELOG.md src/user.rs
 CHANGELOG.md src/user_stats.rs
 CHANGELOG.md src/html_surface.rs
+CHANGELOG.md src/server.rs
 docs/SuperSteam-Design.md src/friends.rs
 docs/SuperSteam-Design.md src/friends.rs:124
 docs/SuperSteam-Design.md src/friends.rs:412/433/454
@@ -22,6 +23,8 @@ docs/SuperSteam-Design.md src/ugc.rs:933
 docs/SuperSteam-Design.md src/ugc.rs:933-1050
 docs/SuperSteam-Design.md src/ugc.rs:974
 docs/SuperSteam-Design.md src/ugc.rs:986-997
+docs/SuperSteam-Design.md src/server.rs:551
+docs/SuperSteam-Design.md src/server.rs
 docs/ci-local-evidence-2026-10-13.md src/ugc.rs
 docs/ci-local-evidence-2026-10-13.md src/ugc.rs:1028
 docs/defect-04-null-guard-deep-dive.md src/friends.rs
