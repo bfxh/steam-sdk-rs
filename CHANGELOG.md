@@ -326,6 +326,19 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`quality-extra` no longer cancels itself.** The advisory job (udeps / geiger / audit) moved to
+  its own file, `.github/workflows/quality-extra.yml`, with `concurrency.cancel-in-progress: false`.
+  The reason is measured, not assumed: on `ci.yml` the workflow-level concurrency cancelled every
+  superseded run, and the three cancelled copies of this job had lived **5m14s, 7m46s and 10m17s** --
+  all far below its own `timeout-minutes: 30`, so a timeout was never the cause -- each cancellation
+  landing within seconds of its successor starting. A run that finishes takes ~14 minutes, so the
+  verdicts could not survive a second push: across four consecutive SHAs udeps, geiger and audit
+  reported nothing at all. Stated cost: pushes in quick succession now queue and complete instead of
+  being killed, so runner minutes rise during bursts. `CI` keeps `cancel-in-progress: true` for
+  everything that answers in minutes. The shell-hatch ledger records the move rather than growth --
+  total 10 before and after, `ci.yml` 6 -> 0 and `quality-extra.yml` 0 -> 6. One commit is now two
+  runs (13 jobs in `CI`, 1 in `Quality extra`), so "this SHA landed" means both of them.
+
 - **`documented source pointers resolve`** (`scripts/ci/doc_pointers.py`, one step, one verdict).
   This repo's docs are evidence files: claims carry `src/<path>.rs:line` citations so a reader can
   check them. Three earlier restructures (`src/friends.rs` and `src/ugc.rs` becoming directory
