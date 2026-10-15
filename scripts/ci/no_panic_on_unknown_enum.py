@@ -75,6 +75,9 @@ def main():
         counts[path] = counts.get(path, 0) + 1
     for path in sorted(counts):
         print(f"{path} {counts[path]}")
+    # The ledger is empty by design, so `compare_baseline.py` needs proof the ruler looked at
+    # sources rather than found none: this marker is that proof and is skipped as a comment.
+    print(f"#scanned {files}")
     for violation in found:
         print(f"  registered site: {violation}", file=sys.stderr)
     print(

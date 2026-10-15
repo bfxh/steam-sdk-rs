@@ -12,7 +12,13 @@ The gate is strict in both directions:
 
 No tolerance, no percentage: a single unit of growth is a failure.
 """
+import re
 import sys
+
+# A measurement file with no records is only meaningful if the ruler proved it looked at
+# something. Rulers emit `#scanned <files>` for that; without it, "0 violations" and "the ruler
+# read nothing" are indistinguishable, and the second one is not a pass.
+SCANNED = re.compile(r"^#scanned (\d+)$")
 
 
 def load(path):
@@ -43,11 +49,33 @@ def load(path):
     return records
 
 
+def load_with_marker(path):
+    records = load(path)
+    marker = None
+    try:
+        handle = open(path, encoding="utf-8")
+    except FileNotFoundError:
+        return records, None
+    with handle:
+        for line in handle:
+            m = SCANNED.match(line.strip())
+            if m:
+                marker = int(m.group(1))
+    return records, marker
+
+
 def main():
     if len(sys.argv) != 3:
         print("usage: compare_baseline.py <baseline> <current>", file=sys.stderr)
         return 2
-    baseline, current = load(sys.argv[1]), load(sys.argv[2])
+    baseline = load(sys.argv[1])
+    current, scanned = load_with_marker(sys.argv[2])
+    if not current and scanned is None:
+        print(f"::error:: {sys.argv[2]} holds no records and no `#scanned <N>` marker, so "
+              "nothing was measured. An empty measurement is not a pass -- if the surface "
+              "really is empty, have the ruler print `#scanned <files seen>`.",
+              file=sys.stderr)
+        return 2
     problems = []
 
     for key in sorted(set(baseline) | set(current)):

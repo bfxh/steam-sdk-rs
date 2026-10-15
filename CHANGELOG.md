@@ -326,6 +326,38 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`documented source pointers resolve`** (`scripts/ci/doc_pointers.py`, one step, one verdict).
+  This repo's docs are evidence files: claims carry `src/<path>.rs:line` citations so a reader can
+  check them. Three earlier restructures (`src/friends.rs` and `src/ugc.rs` becoming directory
+  modules, `src/lib.rs` thinned) silently broke a chunk of those citations and no step went red --
+  a doc whose pointers rot reads as a doc that was invented. The gate judges that a cited path is
+  still tracked, that a cited line is inside the file, and that it is not a blank line (a pointer
+  landing on whitespace cannot be what the sentence cites; a pointer that is in range but off by
+  forty lines is *not* mechanically detectable, and the gate says so rather than claiming more).
+  First run caught 7 drifted citations, all re-anchored by reading the code again rather than
+  guessing: Pointers
+  that name a file a document legitimately recorded as same-day evidence (the `defect-0N` logs, the
+  CI evidence note) are **not rewritten** -- replacing a measurement with today's coordinates would
+  be a guess -- so they go into `baselines/doc_pointers_historical.txt`, one `<doc> <token>` pair
+  each, and that list is judged like a debt register: an entry no document cites any more is red.
+  Measured on first run: 128 pointer tokens across 10 docs, 19 registered as historical.
+  Controls, each fired red and then restored byte-for-byte: rename a path by one character; push a
+  line past EOF; point a line at a blank line; delete a register entry that is still cited; add a
+  register entry nobody cites. The vacuous-scan floor was proved with a throwaway copy of the
+  script (`MIN_TOKENS` raised out of reach) which exits 2 rather than reporting a clean doc set.
+  The ruler needed one fix of its own before it could be trusted: without a leading path boundary,
+  the tail of the *correct* citation `steamworks-sys/src/windows_bindings.rs` was matched as a
+  second, bare pointer of its own, so four good citations were registered as dead -- which is the
+  familiar failure mode of a parser reporting violations because it is looking at the wrong string.
+- **An empty measurement can no longer pass `compare_baseline.py`.** The panic-site ledger became
+  genuinely empty this session, and with an empty baseline an empty current file used to print
+  `baseline holds: 0 entries` -- indistinguishable from the ruler having read nothing (which is
+  exactly what happened once here, when `api_coverage.py` was invoked with `src` in place of the
+  bindings path and produced an empty file). The rulers now emit `#scanned <files seen>`
+  (`no_panic_on_unknown_enum.py` does) and the comparator refuses any zero-record measurement that
+  carries no such marker, exiting 2 as "not judged". Proved both ways: an empty file without the
+  marker exits 2, the same file with `#scanned 51` passes.
+
 - Four new strictness gates, each one step with one verdict (`scripts/ci/`, so the
   failure names the gate instead of a mega-step that can half-run):
   - `module sizes stay under their registered ceilings` and

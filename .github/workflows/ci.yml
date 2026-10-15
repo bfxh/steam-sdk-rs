@@ -117,11 +117,28 @@ jobs:
 
       # `unreachable!()` 落在 `match` 的兜底臂里 = Steam 上游枚举多出一个值时，在本进程内 panic。
       # 台账按文件计数，双向判红：新增一处即红；修掉一处也要把基线改小才算数（方向是 0）。
-      # 首跑实测 10 处，修掉 `ChatMemberStateChange` 那处后登记 9 处，逐条 `文件:行号` 进日志。
+      # 首跑实测 10 处；逐条修到 2026-10-15 的 **0 处**（`baselines/no_panic_sites.txt` 现为空）。
+      # 空台账尤其危险，所以尺子自己打 `#scanned <文件数>`，比较器没有这条标记就判"没判定"（码 2）
+      # 而不是绿——否则"尺子什么都没读到"和"确实一处都没有"长得一模一样。
       - name: panic sites on unnamed enum values stay counted
         run: |
           python3 scripts/ci/no_panic_on_unknown_enum.py src > "$RUNNER_TEMP/panic_sites.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/no_panic_sites.txt "$RUNNER_TEMP/panic_sites.txt"
+
+      # 本仓的文档是**证据文件**：论断靠 `src/某.rs:行号` 支撑，读者据此复核。三次目录化拆分
+      # （`src/friends.rs`、`src/ugc.rs` 变目录，`src/lib.rs` 瘦身）把这些指针冲掉了而没有任何
+      # 一步变红——指针烂掉的文档读起来就像编的，这条门把它钉成判定。
+      # 判据：路径必须仍被 git 跟踪；行号必须在文件行数之内、且不能落在空行（落在空行=行号已漂）。
+      # 反证（2026-10-15 首跑逐条实测，全部判红）：① 改一个字节的路径名；② 把行号改到 EOF 之后；
+      # ③ 把行号改到某个空行上；④ 删掉一条登记单里真被引用的条目；⑤ 往登记单塞一条没人引用的。
+      # 历史证据指针（当日实测、文件后来没了）**不改写**——把测量值换成今天的坐标就是拿猜测替换
+      # 测量；它们进 `baselines/doc_pointers_historical.txt` 登记单，这张单只能变短：
+      # 引用没了还留着 = 判红。首跑实测 128 条指针 / 10 个文档，其中 19 条登记为历史。
+      # 尺子自己也被反证修过一次：`src/...` 若不做行首边界，会把 `steamworks-sys/src/windows_bindings.rs`
+      # 里的后缀也读成一个裸指针，于是 4 条本来正确的引用被当成死路径——解析层出错时，
+      # "违规数=0"可能只是它在看别的东西。
+      - name: documented source pointers resolve
+        run: python3 scripts/ci/doc_pointers.py
 
       # `cargo test` 在"一个测试都没匹配到"时仍然退出 0 并打印 `test result: ok. 0 passed`。
       # 这条门读实际跑到的用例数，为 0 就判红，并拒绝低于登记地板的数量。

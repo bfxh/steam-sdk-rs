@@ -102,7 +102,7 @@
 
 **真实缺陷是可重入死锁，不是数据竞争。** 机制如下：
 
-- `src/lib.rs:126` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 lib.rs:146-149 同样如此）。
+- `src/lib.rs:255-257` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 lib.rs:146-149 同样如此）。
 - 用户在任何 Steam 回调内部调用 `register_callback`（或 `run_callbacks`）都需要同一把 `callbacks` 锁。
 - `std::sync::Mutex` 不可重入 → 自锁 → 线程永久挂起。
 
@@ -312,7 +312,7 @@ impl UpdateBuilder {
 
 针对实证缺陷 #4 和 #8。
 
-> **方案修正（见 0.7 节）**：此处原写 `NonNull + Result`，但那会破坏 23 个公开方法的签名。改为采用 **timeline 式 `disabled` 标记**——`src/lib.rs:508-518` 已在本仓验证可行，零 API 破坏且同样在 release 下安全。下面是修正后的方案：
+> **方案修正（见 0.7 节）**：此处原写 `NonNull + Result`，但那会破坏 23 个公开方法的签名。改为采用 **timeline 式 `disabled` 标记**——`src/timeline.rs:7` 已在本仓验证可行，零 API 破坏且同样在 release 下安全。下面是修正后的方案：
 
 ```rust
 pub struct Friends<'a> {
@@ -1187,7 +1187,7 @@ apicall_result.resize(size as usize, 0u8);
 
 ### 本地代码现状
 
-`src/lib.rs:110-114` 已是拆分后的结构（即 #259 的修复已在代码中）：
+`src/lib.rs:133-140` 已是拆分后的结构（即 #259 的修复已在代码中）：
 
 ```rust
 struct Callbacks {
@@ -1554,7 +1554,7 @@ SuperSteam 的价值主张需相应收敛：**不是「做一个更快的绑定�
 已在 https://github.com/Noxime/steamworks-rs/issues/253#issuecomment-6093232733 发布补充评论（账号 `bfxh`），内容为：
 
 1. 核实 #259 对当前 `master` 的实际效果（主场景确已修复）
-2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:110-114` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
+2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:133-140` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
 3. 指出维护者倾向的方案 4 可消除 B 和 C，但 **D 在方案 4 下依然存在**（`process_callbacks` 用户同样会在回调内丢弃 handle）
 4. 表示愿意提 PR，但先确认方向
 
@@ -1586,7 +1586,7 @@ let ptr = unsafe { sys::SteamAPI_SteamFriends_v018() };
 let ptr = NonNull::new(ptr).ok_or(SteamError::NotInitialized)?;  // release 同样生效
 ```
 
-`src/lib.rs:496-776` 与 `src/server.rs` 共 **33 处** `debug_assert!(!x.is_null())` 全部属于此类。
+`src/lib.rs:501-780` 与 `src/server.rs` 共 **33 处** `debug_assert!(!x.is_null())` 全部属于此类。
 
 **计数更正**：本行此前写的是「61 处、其中 23 处 null 检查、lib.rs 17、server.rs 6」，那是拆文件之前的旧尺。按当前源码逐行重测（`grep -c debug_assert src/**/*.rs` 加 `grep -c "debug_assert.*null"`）：
 
@@ -1612,7 +1612,7 @@ lib.rs 的 24 处守卫每一处都紧贴一行接口指针获取（`let x = sys
 **但这个代价可以完全避免**，因为同一文件里已有零破坏的现成方案：
 
 ```rust
-// src/lib.rs:508-518 —— timeline 的做法
+// src/timeline.rs:7 —— timeline 的做法
 pub fn timeline(&self) -> Timeline {          // 签名不变，无 Result
     let timeline = sys::SteamAPI_SteamTimeline_v004();
     Timeline {

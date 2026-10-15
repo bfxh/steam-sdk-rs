@@ -1,0 +1,24 @@
+# Pointers kept as same-day evidence: the file they name no longer exists, and rewriting
+# them to today's coordinates would replace a measurement with a guess. The design doc's
+# coordinate block maps each old file onto where its content lives now. This list only
+# shrinks -- `doc_pointers.py` judges an entry nobody cites as red.
+# <doc> <token-as-cited>
+CHANGELOG.md src/friends.rs
+CHANGELOG.md src/networking_sockets.rs
+CHANGELOG.md src/networking_types.rs
+CHANGELOG.md src/ugc.rs
+docs/SuperSteam-Design.md src/friends.rs
+docs/SuperSteam-Design.md src/friends.rs:124
+docs/SuperSteam-Design.md src/friends.rs:412/433/454
+docs/SuperSteam-Design.md src/friends.rs:64-68
+docs/SuperSteam-Design.md src/ugc.rs
+docs/SuperSteam-Design.md src/ugc.rs:1028
+docs/SuperSteam-Design.md src/ugc.rs:933
+docs/SuperSteam-Design.md src/ugc.rs:933-1050
+docs/SuperSteam-Design.md src/ugc.rs:974
+docs/SuperSteam-Design.md src/ugc.rs:986-997
+docs/ci-local-evidence-2026-10-13.md src/ugc.rs
+docs/ci-local-evidence-2026-10-13.md src/ugc.rs:1028
+docs/defect-04-null-guard-deep-dive.md src/friends.rs
+docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs
+docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs:927-1128
