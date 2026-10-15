@@ -13,6 +13,7 @@ CHANGELOG.md src/user.rs
 CHANGELOG.md src/user_stats.rs
 CHANGELOG.md src/html_surface.rs
 CHANGELOG.md src/server.rs
+CHANGELOG.md src/remote_storage.rs
 docs/SuperSteam-Design.md src/friends.rs
 docs/SuperSteam-Design.md src/friends.rs:124
 docs/SuperSteam-Design.md src/friends.rs:412/433/454

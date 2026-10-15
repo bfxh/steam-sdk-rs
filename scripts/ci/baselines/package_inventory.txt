@@ -63,7 +63,12 @@ steamworks/src/networking_utils.rs
 steamworks/src/parental.rs
 steamworks/src/parties.rs
 steamworks/src/remote_play.rs
-steamworks/src/remote_storage.rs
+steamworks/src/remote_storage/api.rs
+steamworks/src/remote_storage/changes.rs
+steamworks/src/remote_storage/files.rs
+steamworks/src/remote_storage/mod.rs
+steamworks/src/remote_storage/platforms.rs
+steamworks/src/remote_storage/visibility.rs
 steamworks/src/safe_ugc.rs
 steamworks/src/screenshots.rs
 steamworks/src/server/auth.rs

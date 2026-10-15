@@ -1,5 +1,4 @@
 src/lib.rs 814
-src/remote_storage.rs 792
 src/networking_sockets/mod.rs 791
 src/friends/mod.rs 790
 src/input.rs 725
@@ -43,6 +42,8 @@ src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
 src/networking.rs 257
 src/html_surface/callbacks.rs 247
+src/remote_storage/files.rs 247
+src/remote_storage/mod.rs 247
 src/networking_types/addresses.rs 246
 src/user/auth.rs 244
 src/friends/chat.rs 216
@@ -55,6 +56,7 @@ src/inventory/items.rs 204
 src/identity.rs 198
 src/parental.rs 191
 src/networking_types/identity.rs 182
+src/remote_storage/api.rs 182
 src/networking_types/state.rs 180
 src/remote_play.rs 180
 src/server/config.rs 172
@@ -78,10 +80,13 @@ src/user_stats/achievements.rs 90
 src/callback_stream.rs 84
 src/inventory/mod.rs 83
 src/user/passthrough.rs 69
+src/remote_storage/visibility.rs 68
 src/html_surface/keys.rs 63
 src/user/answers.rs 62
 src/user/callbacks.rs 61
 src/server/packets.rs 59
+src/remote_storage/changes.rs 58
 src/inventory/callbacks.rs 44
 src/networking_types/mod.rs 36
+src/remote_storage/platforms.rs 27
 src/user_stats/mod.rs 20

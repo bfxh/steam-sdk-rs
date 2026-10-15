@@ -619,6 +619,29 @@ plus the callbacks the wrapper can deliver.
   null-checks read lib.rs 24 sites / 23 methods and `server/interfaces.rs` 9 textually but 8 live, so
   the doc's "33 处" is still true as a text count, its live count is 32, and its "17 + 6 = 23 getters"
   is today 23 + 8 = 31.
+- `src/remote_storage.rs` (792 lines) became `src/remote_storage/`: `mod.rs` 247 (the `RemoteStorage`
+  struct, its `Clone`, the two argument-validation helpers and the 200-line `#[cfg(test)]
+  mod offline_tests`), `files.rs` 247 (`SteamFile`, its writer and reader with `Seek` and `Drop`,
+  `FileWriteBatch` and `SteamFileInfo`), `api.rs` 182 (`RemoteStorage`'s ten methods -- quota,
+  enumeration, the one-shot `read_file`/`write_file` and the legacy surface it forwards),
+  `visibility.rs` 68, `changes.rs` 58 and `platforms.rs` 27 (the `bitflags!` block and its conversion
+  onto Steam's raw enum). The crate's largest file is now `src/lib.rs` at 814.
+  27 items, 0 unclaimed lines, witness 723 non-blank before / **2** lost (both widenings:
+  `SteamFile::name` and `FileWriteBatch::rs`, each constructed by `api.rs`) / 32 added, of which 2 are
+  those replacements and 30 are headers, wiring and braces. `api_coverage` (639 of 913, with
+  `ISteamRemoteStorage` still at 26 of 59) and `type_surface` (`RemoteStorage` 10 methods) compare
+  green against the pre-split baselines.
+  Two lessons, both from things that looked like passes. First: "0 holes" proves *coverage*, not topic
+  correctness. `cloud_file_name` and `cloud_chunk_len` are file-level functions rather than methods, and
+  I had no anchor for them, so the probe handed their lines to the preceding block -- `api.rs` -- and
+  reported a clean 0 holes. The root's own test module calls both by name, so it was `cargo check`'s six
+  `E0425 cannot find function` errors, not the splitter, that found the mis-assignment. Second: the root
+  deliberately keeps the 200-line test module inline instead of giving it a file of its own, because
+  `api_coverage.py` strips test code by the shape "`mod name {` at column 0 under `#[cfg(test)]`" and a
+  whole-file test module would leave that marker behind for the ruler to miss. On today's content the
+  exposure is measured and hypothetical -- that module holds 0 direct `SteamAPI_*` call sites, so
+  coverage could not inflate from it -- but the shape is what the gate reads, and `test_only_calls` is
+  the tripwire that says so.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
