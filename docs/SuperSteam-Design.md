@@ -7,6 +7,13 @@
 > 若对照上游 HEAD（`6e4a2bc`），`lib.rs` 行号需 **−4**；`callback.rs`/`server.rs`/各头文件无本地修改，行号两边一致。
 > 复现脚本与 grep 命令以工作区为准。
 >
+> **坐标更新（2026-10-15 按内容重测，master 已到 `467ab19`）**：本文行号是**当时**的实测坐标；此后源码做了目录化拆分与多处修复，以下落点是按内容重新定位的（不是按文件名猜的）。
+> - `src/friends.rs` 已不存在，分为 `src/friends/mod.rs`（`ISteamFriends` 接口，790 行）、`friend.rs`（`Friend` 句柄，401 行）、`callbacks.rs`（10 个回调载荷，155 行）、`chat.rs`（216 行）。原 `friends.rs:64-68` 的 `CStr::from_ptr` + `to_string_lossy` 读法现在在 `friend.rs:38`、`:50`、`:198` 与 `callbacks.rs:67`；原 `friends.rs:412/433/454` 的 `vec![0; 32*32*4]` 头像缓冲现在只剩一处，`friend.rs:111-112`；原 `friends.rs:124` 那类 `CString::new(..).unwrap()` 站点现在在 `friend.rs:172`、`:191`（`:277` 那处在测试里）。
+> - `src/ugc.rs` 已不存在，分为 `ugc/mod.rs`、`update.rs`、`query.rs`、`results.rs`、`answers.rs`、`types.rs`、`read.rs`、`ugc_tests.rs`。原 `ugc.rs:974` 与 `:986-997` 的 `canonicalize().unwrap()` 两个站点，现在是 `src/ugc/update.rs:60` 和 `:74`。原 `ugc.rs:933-1050`「15+ 个构建方法返回 `Self` 而非 `Result`」**今天实测**：`update.rs` 有 11 个方法返回 `Result<Self, SteamError>`、10 个仍返回 `Self`；`query.rs` 有 1 个返回 `Result`、29 个仍返回 `Self`。其中 `visibility`/`add_content_descriptor`/`remove_content_descriptor` 三个是 `467ab19` 转的，其余 8 个更早；完整方案见 `docs/pr-bodies/6-ugc-builder-result.md`。
+> - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
+> - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 129 个（114 passed + 15 ignored），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
+> - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
+>
 > **复现脚本位于 `repro/` 目录**（独立可编译，无需 Steam 客户端）：
 > - `repro/deadlock_test.rs` —— 缺陷 #2 死锁复现（镜像**修复前**的单 Mutex 模式，即 PR #259 之前）
 > - `repro/post_fix_deadlock_test.rs` —— 缺陷 #2 **修复后**的剩余影响面实测（A 已修 / B,C,D 仍死锁）
