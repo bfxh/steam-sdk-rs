@@ -1,3 +1,4 @@
+# counts: {'steamworks': 93, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -82,9 +83,13 @@ steamworks/src/user/duration.rs
 steamworks/src/user/mod.rs
 steamworks/src/user/passthrough.rs
 steamworks/src/user/voice.rs
-steamworks/src/user_stats.rs
+steamworks/src/user_stats/achievements.rs
+steamworks/src/user_stats/global_stats.rs
+steamworks/src/user_stats/leaderboard.rs
+steamworks/src/user_stats/mod.rs
 steamworks/src/user_stats/stat_callback.rs
 steamworks/src/user_stats/stats.rs
+steamworks/src/user_stats/stats_io.rs
 steamworks/src/utils.rs
 steamworks/src/video.rs
 steamworks-sys/.cargo_vcs_info.json

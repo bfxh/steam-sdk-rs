@@ -527,6 +527,37 @@ plus the callbacks the wrapper can deliver.
   `use std::os::raw::c_char;`, copied into every child by the generator, was dropped from the four
   that do not name `c_char` -- trimmed only after `cargo check` came back without errors, per the
   rule the networking_types split bought.
+- `src/user_stats.rs` (868 lines) became `src/user_stats/`, joining the `stat_callback.rs` and
+  `stats.rs` that directory already had: `leaderboard.rs` 384 (the eight leaderboard calls, the
+  seven leaderboard value types, and the manual leaderboard round-trip), `global_stats.rs` 280
+  (`request_global_stats` and the four global-value/history readers, plus the two global-stat tests),
+  `stats_io.rs` 127 (the request-store-reset lifecycle and the four single-stat accessors),
+  `achievements.rs` 90 (the achievement helper entry point, the count, the name list, and the opt-in
+  global-percentage request), and `mod.rs` 20 -- wiring plus the `UserStats` struct and nothing else.
+  `UserStats`' 24 methods are now four `impl UserStats` blocks by concern, and the crate's largest
+  file is `src/html_surface.rs` at 842.
+  No field or method had to widen this time: the witness is a line-level multiset difference against
+  the pre-split file, 805 non-blank lines before, **0** lost, and the 27 new lines are all wrappers
+  (four `use super::*;`, three extra `impl UserStats {` and their braces, the four three-line module
+  headers, four new `mod` lines and one `pub use leaderboard::*;`). The two behavioural ledgers were
+  re-run against the *pre-split* baselines and hold unchanged -- `api_coverage` still counts
+  `ISteamUserStats` at 31 and the total at 639 of 913, `type_surface` still counts `UserStats` at 24
+  -- and `lib` tests are still 153 (138 passed + 15 ignored), so nothing was added, removed or renamed
+  by the move. Public paths are unchanged: `Leaderboard`
+  and its types reach the crate root through the parent's re-export exactly as before, and
+  `src/lib.rs:51`'s `pub use crate::user_stats::*;` was re-read rather than recalled.
+  One ordering bug was caught by reading my own generated file rather than by a gate: the first pass
+  emitted a file's plain items, then its impl, and the `#[test]` blocks went in source order with the
+  plain items -- which put both manual tests *above* the methods while the `leaderboard.rs` header I
+  had just written said the manual test sits "at the bottom". The generator now puts `#[test]` blocks
+  last, and the re-run's witness still reads 0 lost / 27 added, so the sentence is true of the file a
+  reader actually opens.
+  One path reference does move with a split, and only one: `achievement()`'s return type was written
+  `stats::AchievementHelper`, which resolved because the parent's `use super::*` makes the sibling
+  `stats` module visible to the file it lands in -- so it needed no edit, and the check that proved it
+  was `cargo check --locked --all-targets` rather than a reading of the generated text. The struct's
+  own doc line was also wrong before this commit and is fixed in it: it read "Access to the steam user
+  interface", which is `User`'s interface (`ISteamUser`), not this one's; it now says user stats.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621
