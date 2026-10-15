@@ -41,10 +41,15 @@ steamworks/src/networking_sockets/connection.rs
 steamworks/src/networking_sockets/fake_udp.rs
 steamworks/src/networking_sockets/mod.rs
 steamworks/src/networking_sockets_callback.rs
+steamworks/src/networking_types/addresses.rs
 steamworks/src/networking_types/config.rs
 steamworks/src/networking_types/connection_info.rs
 steamworks/src/networking_types/end.rs
+steamworks/src/networking_types/events.rs
+steamworks/src/networking_types/identity.rs
+steamworks/src/networking_types/message.rs
 steamworks/src/networking_types/mod.rs
+steamworks/src/networking_types/state.rs
 steamworks/src/networking_utils.rs
 steamworks/src/parental.rs
 steamworks/src/parties.rs

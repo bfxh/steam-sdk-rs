@@ -549,3 +549,81 @@ impl From<NetworkingConfigValue> for sys::ESteamNetworkingConfigValue {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct NetworkingConfigEntry {
+    inner: sys::SteamNetworkingConfigValue_t,
+}
+
+impl NetworkingConfigEntry {
+    fn new_uninitialized_config_value() -> sys::SteamNetworkingConfigValue_t {
+        sys::SteamNetworkingConfigValue_t {
+            m_eValue: sys::ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_Invalid,
+            m_eDataType: sys::ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int32,
+            m_val: sys::SteamNetworkingConfigValue_t__bindgen_ty_1 { m_int32: 0 },
+        }
+    }
+
+    pub fn new_int32(value_type: NetworkingConfigValue, value: i32) -> Self {
+        debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::Int32);
+
+        let mut config = Self::new_uninitialized_config_value();
+        unsafe {
+            sys::SteamAPI_SteamNetworkingConfigValue_t_SetInt32(
+                &mut config,
+                value_type.into(),
+                value,
+            );
+            NetworkingConfigEntry { inner: config }
+        }
+    }
+
+    pub fn new_int64(value_type: NetworkingConfigValue, value: i64) -> Self {
+        debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::Int64);
+
+        let mut config = Self::new_uninitialized_config_value();
+        unsafe {
+            sys::SteamAPI_SteamNetworkingConfigValue_t_SetInt64(
+                &mut config,
+                value_type.into(),
+                value,
+            );
+            NetworkingConfigEntry { inner: config }
+        }
+    }
+
+    pub fn new_float(value_type: NetworkingConfigValue, value: f32) -> Self {
+        debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::Float);
+
+        let mut config = Self::new_uninitialized_config_value();
+        unsafe {
+            sys::SteamAPI_SteamNetworkingConfigValue_t_SetFloat(
+                &mut config,
+                value_type.into(),
+                value,
+            );
+            NetworkingConfigEntry { inner: config }
+        }
+    }
+
+    pub fn new_string(value_type: NetworkingConfigValue, value: &str) -> Self {
+        debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::String);
+
+        let mut config = Self::new_uninitialized_config_value();
+        unsafe {
+            let c_str = CString::new(value).expect("Rust string could not be converted");
+            sys::SteamAPI_SteamNetworkingConfigValue_t_SetString(
+                &mut config,
+                value_type.into(),
+                c_str.as_ptr(),
+            );
+            NetworkingConfigEntry { inner: config }
+        }
+    }
+}
+
+impl From<NetworkingConfigEntry> for sys::SteamNetworkingConfigValue_t {
+    fn from(entry: NetworkingConfigEntry) -> sys::SteamNetworkingConfigValue_t {
+        entry.inner
+    }
+}

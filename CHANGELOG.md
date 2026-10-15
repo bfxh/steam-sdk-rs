@@ -480,6 +480,31 @@ plus the callbacks the wrapper can deliver.
   so it is declared without a glob, and the splitter initially leaked `impl Matchmaking {` itself
   into the previous item's body, producing a file with three impl openers and two closers, which is
   what `cargo check` (not the eye) caught.
+- `src/networking_types/mod.rs` (1100 lines) became wiring plus topic files: `mod.rs` 36,
+  `state.rs` 180 (connection state and the availability ladder), `events.rs` 212 (status-change
+  callback and the connect/disconnect structs), `identity.rs` 182, `message.rs` 206,
+  `addresses.rs` 246, and the three `NetworkingConfigEntry` items appended to the `config.rs` that
+  already existed (551 -> 629). Nothing is left in the parent but its doc line, its imports and the
+  child wiring, so the crate's largest file is now `src/inventory.rs` at 966.
+  Public paths are unchanged and the behavioural ledgers say so: `api_coverage` and `type_surface`
+  both compare green against the pre-split baselines, `lib` tests are still 153 (138 + 15 ignored)
+  and `doc` still 16. The moved-not-lost witness is a line-level multiset difference over the whole
+  directory against `HEAD`: 2071 non-blank lines before, exactly **2** lost, and both are field
+  declarations that had to widen -- `NetworkingIdentity::inner` and `SteamIpAddr::inner` became
+  `pub(super)` because the split left their readers in sibling files (`message.rs` fills a Steam
+  identity out of the first, `identity.rs` builds a `SteamIpAddr` from the second). 30 lines are
+  new: five module headers, the two widened fields with the reason beside them, and one re-export
+  note.
+  Two lessons here were learned by breaking things rather than by design. The first attempt moved
+  the imports into each child and emptied the parent, which broke every child that had been reaching
+  `sys`, `Arc` and the serde derives through `use super::*` -- 126 errors, restored and redone with
+  the parent's import block left where it was, because it is load-bearing. Then a trim loop deleted
+  imports that were not unused, because it acted on rustc's `unused_imports` warnings while errors
+  were still standing in the same build; a warning emitted over a broken tree is not a signal, and
+  the correction is to trim only after `cargo check` returns without errors. One new warning was
+  also answered rather than ignored: `pub use addresses::*;` re-exported nothing public, since that
+  child holds only the crate-internal `SteamIpAddr`, so it is now `pub(crate) use`, no broader than
+  the item.
 - `ISteamInput` device callbacks: `Input::enable_device_callbacks()` plus the `DeviceConnected`
   and `DeviceDisconnected` payloads, delivered through `CallbackResult` so they reach the callback
   stream as well as `client.register_callback`. `ISteamInput` goes 43 -> 44 and the total to 621

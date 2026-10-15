@@ -1,4 +1,3 @@
-src/networking_types/mod.rs 1100
 src/inventory.rs 966
 src/user_stats.rs 868
 src/html_surface.rs 842
@@ -9,6 +8,7 @@ src/networking_sockets/mod.rs 791
 src/friends/mod.rs 790
 src/input.rs 725
 src/utils.rs 710
+src/networking_types/config.rs 629
 src/error.rs 603
 src/ugc/answers.rs 599
 src/ugc/mod.rs 598
@@ -16,7 +16,6 @@ src/matchmaking_servers.rs 580
 src/timeline.rs 578
 src/http.rs 566
 src/ugc/types.rs 559
-src/networking_types/config.rs 551
 src/app.rs 550
 src/callback.rs 543
 src/networking_sockets/connection.rs 536
@@ -43,12 +42,17 @@ src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
 src/networking.rs 257
+src/networking_types/addresses.rs 246
 src/user/auth.rs 244
 src/friends/chat.rs 216
+src/networking_types/events.rs 212
+src/networking_types/message.rs 206
 src/user/buffers.rs 206
 src/matchmaking/queries.rs 205
 src/identity.rs 198
 src/parental.rs 191
+src/networking_types/identity.rs 182
+src/networking_types/state.rs 180
 src/remote_play.rs 180
 src/music.rs 163
 src/friends/callbacks.rs 155
@@ -61,3 +65,4 @@ src/callback_stream.rs 84
 src/user/passthrough.rs 69
 src/user/answers.rs 62
 src/user/callbacks.rs 61
+src/networking_types/mod.rs 36
