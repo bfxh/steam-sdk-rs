@@ -12,6 +12,7 @@ src/app.rs 550
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
 src/parties.rs 499
+src/networking_sockets/fake_ip.rs 493
 src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
@@ -19,7 +20,6 @@ src/user/voice.rs 437
 src/networking_messages.rs 416
 src/ugc/update.rs 404
 src/friends/friend.rs 401
-src/networking_sockets/fake_ip.rs 395
 src/user/duration.rs 393
 src/networking_types/end.rs 384
 src/user_stats/leaderboard.rs 384

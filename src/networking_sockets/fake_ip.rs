@@ -114,17 +114,17 @@ impl NetworkingSockets {
 /// The FakeIP block Steam assigned: one address and the ports actually granted.
 ///
 /// `identity` is the local `ISteamNetworkingSockets` object the reservation belongs to, which
-/// `steamnetworkingfakeip.h:110-114` explains is needed because a process can hold more than one (a
+/// `steamnetworkingfakeip.h:108-111` explains is needed because a process can hold more than one (a
 /// user's, and a local game server's).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FakeIpAllocation {
-    /// Our assigned fake IPv4 address, and not exclusively ours: `:116-122` says Steam tries to
+    /// Our assigned fake IPv4 address, and not exclusively ours: `:114-120` says Steam tries to
     /// avoid sharing an IP but cannot promise it, and may hand back an address another host is using.
     pub ip: Ipv4Addr,
-    /// The granted ports in reservation order. Steam fills only the leading slots of its eight-entry
-    /// array (`:124-130`), so the trailing zeros are dropped instead of reported as ports; and
-    /// `isteamnetworkingsockets.h:831-832` warns they are neither ordered nor contiguous, so no
-    /// caller should assume `ports[i + 1]` follows `ports[i]`.
+    /// The granted ports in reservation order. Steam fills only the leading slots of the array
+    /// (`:123-125`), which is eight entries wide (`:129-130`), so the trailing zeros are dropped
+    /// instead of reported as ports; and `isteamnetworkingsockets.h:831-832` warns they are neither
+    /// ordered nor contiguous, so no caller should assume `ports[i + 1]` follows `ports[i]`.
     pub ports: Vec<u16>,
     /// Which local sockets object holds this reservation.
     pub identity: NetworkingIdentity,
@@ -166,7 +166,7 @@ fn fake_ipv4(bits: u32) -> Ipv4Addr {
 }
 
 /// The leading run of granted ports, per Steam's own rule that only the first entries are non-zero
-/// (`steamnetworkingfakeip.h:126-129`). This takes a prefix rather than filtering, so a zero inside
+/// (`steamnetworkingfakeip.h:123-125`). This takes a prefix rather than filtering, so a zero inside
 /// the array ends the reservation instead of being quietly skipped.
 fn allocated_ports(ports: [u16; 8]) -> Vec<u16> {
     ports
@@ -390,6 +390,104 @@ mod fake_ip_tests {
         assert!(
             matches!(later, Err(SteamError::TryLater)),
             "k_EResultTryLater decoded as {later:?}"
+        );
+    }
+
+    /// The same treatment for the *other* header this file cites. Written after an independent
+    /// re-measurement of the commit that added these wrappers found three of the spans below sitting
+    /// two to six lines off -- a line citation is only worth as much as the line it lands on, and the
+    /// ones that were wrong had all been typed from a reading rather than re-read after the fact.
+    /// `(label, first, last, phrase)`, spans inclusive and 1-based.
+    const FAKEIP_CITATIONS: &[(&str, u32, u32, &str)] = &[
+        (
+            "the struct this binds",
+            93,
+            93,
+            "struct SteamNetworkingFakeIPResult_t",
+        ),
+        (
+            "the four refusals",
+            98,
+            102,
+            "k_EResultBusy - you called GetFakeIP but the request has not completed",
+        ),
+        (
+            "Busy is the one a poller may tolerate",
+            104,
+            105,
+            "with the exception of k_EResultBusy (if you are polling)",
+        ),
+        (
+            "identity needed when several objects exist",
+            108,
+            111,
+            "This is needed in the callback",
+        ),
+        (
+            "the address is not exclusively ours",
+            114,
+            120,
+            "IP address is not exclusively ours!",
+        ),
+        (
+            "only the leading entries are nonzero",
+            123,
+            125,
+            "Only the first entries will contain",
+        ),
+        ("the array is eight wide", 129, 130, "k_nMaxReturnPorts = 8"),
+    ];
+
+    fn fakeip_header() -> Option<Vec<String>> {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("steamworks-sys/lib/steam/public/steam/steamnetworkingfakeip.h");
+        match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text.lines().map(|l| l.trim_start().to_string()).collect()),
+            Err(_) => {
+                eprintln!(
+                    "skipping FakeIP header citation checks: {} is not present",
+                    path.display()
+                );
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn every_fakeip_header_citation_lands_on_the_sentence_it_quotes() {
+        let Some(lines) = fakeip_header() else {
+            return;
+        };
+        for (what, first, last, phrase) in FAKEIP_CITATIONS {
+            assert!(
+                *first >= 1 && *last as usize <= lines.len(),
+                "{what}: cited {}-{} but the header has only {} lines",
+                first,
+                last,
+                lines.len()
+            );
+            let span = lines[(*first as usize - 1)..*last as usize].join(" ");
+            assert!(
+                span.contains(phrase),
+                "{what}: expected {phrase:?} within lines {first}-{last}, got {span:?}"
+            );
+        }
+    }
+
+    /// And the ruler has to be able to fail: the span one below the leading-entries rule is the
+    /// max-ports note, which does not contain that phrase, so a citation drifting by three lines here
+    /// is something this test actually sees.
+    #[test]
+    fn a_fakeip_citation_point_at_the_wrong_line_is_red() {
+        let Some(lines) = fakeip_header() else {
+            return;
+        };
+        let (_, _, _, phrase) = FAKEIP_CITATIONS[5];
+        let shifted = lines[125..128].join(" ");
+        assert!(
+            !shifted.contains(phrase),
+            "the fixture span already contains {phrase:?}, so the check above would not have \
+             noticed a citation that drifted by a few lines"
         );
     }
 }

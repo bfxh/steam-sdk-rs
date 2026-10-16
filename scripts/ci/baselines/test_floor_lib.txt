@@ -1,1 +1,1 @@
-161  # lib tests reached with --all-features, measured 2026-10-16 after the FakeIP read-back landed
+163  # lib tests reached with --all-features, measured 2026-10-16 with the FakeIP header-citation ruler (2 tests added)

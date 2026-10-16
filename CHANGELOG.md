@@ -497,15 +497,25 @@ plus the callbacks the wrapper can deliver.
   against the vendored header on every run rather than trusted from this prose.
   The address is `Ipv4Addr::from(u32)` with no byte swap because `steamnetworkingtypes.h:205` defines the
   integer as `aa.bb.cc.dd`, and `ports` keeps only the leading run of Steam's eight-entry array
-  (`steamnetworkingfakeip.h:124-130`), so a zero in the middle ends the reservation instead of being
-  skipped. The four refusals Steam names (`:98-102`) keep their own `SteamError` variants rather than
-  collapsing into `Generic`, because `:104-105` singles Busy out as the only failure a poller may tolerate.
+  (`steamnetworkingfakeip.h:123-125` for the leading run, `:129-130` for the width), so a zero in the
+  middle ends the reservation instead of being skipped. The four refusals Steam names (`:98-102`) keep
+  their own `SteamError` variants rather than collapsing into `Generic`, because `:104-105` singles Busy
+  out as the only failure a poller may tolerate.
+  **Three of those `steamnetworkingfakeip.h` spans were wrong when this entry was written, and each of
+  them was two to six lines off** -- I had typed them from a reading rather than re-reading the header
+  after laying out the text. So the citations this file makes against that header are now a ruler, not
+  prose: `every_fakeip_header_citation_lands_on_the_sentence_it_quotes` checks seven spans against the
+  vendored file, and `a_fakeip_citation_point_at_the_wrong_line_is_red` proves that ruler can fail by
+  checking a span three lines below the leading-entries note, which does not contain its phrase.
+  Control: mutate one phrase in the table -> the new test is the only thing that goes red; restored
+  byte-for-byte.
   `SetGlobalCallback_FakeIPResult` is still not wrapped, but the reason changed: not the layout -- which is
   now real, `windows_bindings.rs:27038-27046` with `k_iCallback = 1223` at `:27053` -- but that this payload
   already arrives through the installed-callback stream, while the SDK's global callback is a bare function
   pointer with nowhere to put a capture. Wrapping it would offer a second, weaker route to a message that
   is already delivered.
-  Six tests, all offline, and four mutation controls:
+  Six new tests across the two files -- five in `fake_ip.rs`, which now holds seven, and one in
+  `src/callback.rs` -- all offline, plus four mutation controls:
   `take_while` -> `filter` in `allocated_ports` -> `only_the_leading_ports_of_the_reservation_are_reported`
   red; deleting the `FakeIpResult::ID` arm of `CallbackResult::from_raw` -> `the_fake_ip_result_reaches_the_stream`
   red; collapsing every mapped code into `Generic` -> both of `the_four_fake_ip_refusals_keep_their_names`
@@ -521,9 +531,17 @@ plus the callbacks the wrapper can deliver.
 Ledgers for this commit: `api_coverage` `ISteamNetworkingSockets.called` 28 -> 29 (total 643),
 `type_surface` `NetworkingSockets` 15 -> 16, `module_sizes` `src/networking_sockets/fake_ip.rs` 195 -> 395,
 `src/callback.rs` 543 -> 560, `src/lib.rs` 814 -> 829, `src/networking_sockets/mod.rs` 260 -> 261, and the
-lib test floor raised to what the run actually reports. `package_inventory`, `sdk_vendored`,
+lib test floor 153 -> 161. `package_inventory`, `sdk_vendored`,
 `no_panic_sites` and `shell_hatches` compare **unchanged**; the last of those is the interesting one, see
 the drift-artifact entry under **Added -- CI and release automation**.
+  The floor needs its own sentence, because two rulers disagreed and only one of them was the gate: the
+  run reports 161 today, and six tests really are new here, but `src/` held **155** attribute-form
+  `#[test]` lines at the previous commit against a registered floor of **153** -- measured both ways with
+  `git grep` on the attribute pattern, 155 at `41cf3fb` and 161 at this commit, which is exactly +6. So
+  the ledger moved by eight while six tests arrived: the unit before this one added two tests without
+  re-recording the floor. That is the same class of miss as a stale size ledger, and the reason the
+  register is raised to the measured number rather than left as a comfortably low bound -- a number that
+  cannot be exceeded by reality cannot notice reality shrinking either.
 - `ISteamNetworkingMessages` is now a **complete** interface: 6 of 6, where it had been 5 of 6. Added
   `close_session_with_user(&NetworkingIdentity) -> bool` and
   `close_channel_with_user(&NetworkingIdentity, i32) -> bool`, which fill the last two entries of
@@ -919,7 +937,10 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named
   `bindings-drift`, so it matched its own glob: `apply` downloaded the diff *into the crate's source
   directory*, ran `git add steamworks-sys/src`, and committed `steamworks-sys/src/bindings.diff` --
-  33,637 bytes of diff, present in `41cf3fb` and listed by `git ls-files`. It is removed here.
+  667 lines, `git cat-file -s` says 32,970 bytes for the blob (33,637 on disk where this entry was
+  drafted, one byte per line more for CRLF; my first draft quoted the checkout size as though it were the
+  object size, and the independent re-measurement of this sentence is what caught it). Present in
+  `41cf3fb`, listed by `git ls-files`, removed here.
   Two changes, and neither one alone is enough: the artifact is now `drift-diff`, which cannot match the
   collection glob, *and* `apply` stages `steamworks-sys/src/*_bindings.rs` by name, then refuses the
   commit outright if `git diff --cached --name-only` shows any path that is not one of the four. The
