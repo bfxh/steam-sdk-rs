@@ -35,7 +35,15 @@ steamworks/src/html_surface/keys.rs
 steamworks/src/html_surface/mod.rs
 steamworks/src/http.rs
 steamworks/src/identity.rs
-steamworks/src/input.rs
+steamworks/src/input/actions.rs
+steamworks/src/input/callbacks.rs
+steamworks/src/input/core.rs
+steamworks/src/input/effects.rs
+steamworks/src/input/layers.rs
+steamworks/src/input/mod.rs
+steamworks/src/input/origins.rs
+steamworks/src/input/roster.rs
+steamworks/src/input/session.rs
 steamworks/src/inventory/actions.rs
 steamworks/src/inventory/callbacks.rs
 steamworks/src/inventory/definitions.rs

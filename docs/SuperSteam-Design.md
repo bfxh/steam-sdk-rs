@@ -13,7 +13,7 @@
 > - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
 > - **最大的单文件模块已目录化（不是全部）**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜；
 >   `ls src/*.rs | wc -l` 实测仍有 **24 个**单文件模块直接躺在 `src/` 下，最大的是 `input.rs` 725、
->   `utils.rs` 710、`error.rs` 603，它们本来就是一次性做完的叶子模块，不是待拆的根）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 260、`fake_udp.rs` 317、`fake_ip.rs` 195、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
+>   `error.rs` 603 等叶子模块——`input.rs` 725 已在 2026-10-16 拆进 `src/input/`，所以现在的第二名是 `utils.rs` 710）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 260、`fake_udp.rs` 317、`fake_ip.rs` 195、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 57、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
 > - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 155 个（140 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；同一晚先记 129、再记 153，两次都被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
 > - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
 >
@@ -489,7 +489,7 @@ while let Some(event) = events.next().await {
 
 | 方向 | 现状 | 评价 |
 |------|------|------|
-| **读**（Steam → Rust） | `CStr::from_ptr()` + `to_string_lossy()`，见 `src/friends.rs:64-68`、`src/app.rs:88`、`src/app.rs:104/117/134/155/170`、`src/input.rs:126` 等 | **已是零拷贝**，无中间分配，可直接借鉴 |
+| **读**（Steam → Rust） | `CStr::from_ptr()` + `to_string_lossy()`，见 `src/friends.rs:64-68`、`src/app.rs:88`、`src/app.rs:104/117/134/155/170`、`src/input/origins.rs:23`（拆分前这个读法在该文件里只有一处，旧行号 126 早就漂了——拆分前那份文件里，这个读法在第 542 行） 等 | **已是零拷贝**，无中间分配，可直接借鉴 |
 | **写**（Rust → Steam） | `CString::new(...).unwrap()`，77 处 panic 点 | **这是真缺口** |
 
 典型的读法（`src/friends.rs:64-68`）：
@@ -602,10 +602,10 @@ impl Drop for Inner {
 | ISteamParties | 12 | **锦上添花（中）** | Steam 原生日派对系统（可被 Matchmaking 绕开） |
 | ISteamMusic | 9 | **可选（低）** | Steam 音乐播放器集成（极少游戏用） |
 | ISteamVideo | 4 | **可选（低）** | Steam 视频播放器集成 |
-| ISteamController | 34 | **已取代（低）** | **注意**：已被 ISteamInput（src/input.rs 15+ 个方法）完全取代，缺失是主动选择 |
+| ISteamController | 34 | **已取代（低）** | **注意**：已被 ISteamInput（`src/input/` 九件，`type_surface` 复算 45 个 `pub fn`）完全取代，缺失是主动选择 |
 
 **关键发现**：
-- **ISteamController 不是真正的功能缺口**。头文件注释明言"已被 ISteamInput 取代"，Rust 侧用 Input 模块（src/input.rs 15+ 个方法）覆盖其核心功能（GetActionSetHandle、GetDigital/AnalogActionData 等）。Steamworks.NET 包含它可能是为了兼容性。
+- **ISteamController 不是真正的功能缺口**。头文件注释明言"已被 ISteamInput 取代"，Rust 侧用 Input 模块（`src/input/`，45 个 `pub fn`）覆盖其核心功能（GetActionSetHandle、GetDigital/AnalogActionData 等）。Steamworks.NET 包含它可能是为了兼容性。
 - **真正的必补缺口**是 Inventory（内购）和 HTTP（自建后端），这两个缺了会阻塞大量游戏开发。
 - **合规必需**是 ParentalSettings（家长控制），在某些区域上线必需。
 - **GameServer 全套**是给服务器开发者用的，不做服务器则低。
@@ -949,7 +949,7 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 |---|---|
 | `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11771` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
 | `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11774`）——裸 C 函数指针回调，头文件 h:872 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
-| `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+| `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
 
 顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 `src/lib.rs:170` 的 `resize` 行为"里的
 `resize` 现在在 `src/lib.rs:308`（拆分后行号漂移，本轮按内容重测；原句描述的行为本身没变）。

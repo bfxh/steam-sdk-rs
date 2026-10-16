@@ -500,6 +500,34 @@ plus the callbacks the wrapper can deliver.
   `send_message_to_user` takes, and `:110-113` says closing the last channel closes the session.
   Total coverage 641 -> 642 of 913; `type_surface` counts `NetworkingMessages` at 5 -> 7. No test: both
   need a live `ISteamNetworkingMessages` pointer and the methods contain no branch for a test to pin.
+- `src/input.rs` (725 lines, three separate `impl Input` blocks and three test modules in one file)
+  became `src/input/`: `origins.rs` 178 (the glyph and string reads for an action origin or an
+  `EXboxOrigin`, the two glyph formats, the origin translations, the `steam_static_str` helper every
+  one of them reads through, and `static_string_tests`), `actions.rs` 104 (handles by name, digital and
+  analog state, the origins behind an action, motion), `layers.rs` 96 (set and layer activation, the
+  layer listing and its clamp, plus `mod input_tests`), `callbacks.rs` 83 (`DeviceConnected`,
+  `DeviceDisconnected` with their `impl_callback!`s, and `device_callback_tests`), `roster.rs` 67 (the
+  two roster shapes and the per-handle `InputType`), `effects.rs` 87 (vibration, extended vibration,
+  simple haptics, analog momentum, LED colour), `core.rs` 58 (`init`, `run_frame`,
+  `enable_device_callbacks`, the manifest path, the binding panel, `shutdown`), `session.rs` 57 (Remote
+  Play session id, session configuration, binding revision, new-data and wait, the gamepad index map in
+  both directions), and `mod.rs` 53 (imports, the `Input` struct, `InputType`, the two file-level
+  helpers and the wiring). The crate's largest file is still `src/lib.rs` at 814; the next is
+  `src/utils.rs` at 710.
+  48 items, 0 unclaimed lines, witness 658 non-blank before / **0** lost / 48 added and every added line
+  wrapper-shaped -- nothing widened, because `Input`'s fields are `pub(crate)` and the free helpers
+  landed in the parent where both callers and the test module can reach them. `api_coverage` (642 of 913,
+  `ISteamInput` 44) and `type_surface` (`Input` 45) compare green against the pre-split baselines;
+  `module_sizes` (115 entries, 27,315 lines) and `package_inventory` (130 shipped files) were
+  re-recorded, and `cargo test --lib input` reaches 9 tests, all passing.
+  Two things this split got wrong before it got right, both worth recording because they are the same two
+  traps the series keeps hitting. I typed the three `impl Input` ranges as `(29, 265), (276, 466), (548,
+  640)` -- numbers that are really "next anchor minus one" from the probe, not the impls' own closers --
+  and the true spans are `(29, 259), (276, 460), (548, 639)`, so `core.rs` shipped with a stray closing
+  brace that only `cargo check` could see. The generator now computes every closer by brace balance from
+  its own opener and asserts there are exactly three. Then `pub use origins::*;` and `pub use roster::*;`
+  were refused as unused imports for the sixth time in this series, because those children hold only
+  extra `impl` blocks and export nothing -- so only `callbacks` is globbed out, and the rest are declared.
 - No API change, one structure change: `src/matchmaking.rs` was the largest file left in the crate
   (1339 lines) and the last big module still in single-file form, so it became a directory module --
   `src/matchmaking/mod.rs` 478 (`Matchmaking`, `LobbyType`, `LobbyId`, the lobby lifecycle and the
