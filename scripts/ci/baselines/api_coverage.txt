@@ -1,4 +1,3 @@
-# 33 interfaces, 913 declared, 641 called
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -51,7 +50,7 @@ ISteamMatchmakingServers.called 14
 ISteamMusic.called 9
 ISteamNetworking.called 6
 ISteamNetworkingFakeUDPPort.called 4
-ISteamNetworkingMessages.called 5
+ISteamNetworkingMessages.called 6
 ISteamNetworkingSockets.called 28
 ISteamNetworkingUtils.called 14
 ISteamParentalSettings.called 6

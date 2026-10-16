@@ -1,5 +1,6 @@
-//! The five notifications a game server posts about players: approved, denied (with the deny
-//! reason vocabulary), kicked, and a group status answer.
+//! The four notifications a game server posts about players -- approved, denied, kicked and a
+//! group status answer -- each with its `impl_callback!`, plus the `DenyReason` vocabulary the
+//! denial carries. Four `pub struct`, four `impl_callback!` (measured with `grep -c`).
 
 use super::*;
 

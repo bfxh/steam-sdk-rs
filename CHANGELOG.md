@@ -434,7 +434,7 @@ plus the callbacks the wrapper can deliver.
   Two documented numbers became checked ones: `FAKE_UDP_RECOMMENDED_MTU` (1200, a recommendation and
   deliberately *not* enforced -- refusing above it would invent a rule Steam does not have) and
   `FAKE_UDP_MAX_MESSAGE_BYTES` (4096, "Messages larger than this size are not allowed and cannot be
-  sent", `steamnetworkingfakeip.h:18-19`), which the wrapper refuses locally instead of spending a
+  sent", `steamnetworkingfakeip.h:17-18`), which the wrapper refuses locally instead of spending a
   call. The first test reads both constants back out of the vendored header at run time, so a future
   SDK bump that changes them turns the test red rather than leaving a stale copy in Rust -- and that
   test earned its place immediately: the parser's first version matched only a line *prefix* and the
@@ -452,6 +452,54 @@ plus the callbacks the wrapper can deliver.
   Three tests, four mutation controls: the copied ceiling drifting from the header, the maximum not
   enforced, a negative count trusted, and the batch clamp removed -- each turned its test red, files
   restored byte for byte.
+- FakeIP allocation, the two calls of `ISteamNetworkingSockets` that the generated layer lets this
+  crate reach: `begin_async_request_fake_ip(num_ports) -> bool` and
+  `create_listen_socket_p2p_fake_ip(idx_fake_port, options) -> Result<ListenSocket, InvalidHandle>`, in
+  the new `src/networking_sockets/fake_ip.rs`. `ISteamNetworkingSockets.called` 26 -> 28 and the total
+  to 641 of 913. **This entry arrived late.** The commit that added the code promised, in its own last
+  paragraph, that it had updated `docs/SuperSteam-Design.md`'s coverage table row and total; `git show
+  --stat 306bbf1` lists six files and no doc, so that paragraph described an intention rather than the
+  diff, and this entry -- which the repository's convention requires for any added wrapper and which
+  that commit also lacked -- is written now rather than then. The code, the wiring, the ledgers and the
+  header citations really were in it; only the prose was missing.
+  `begin_async_request_fake_ip` returns Steam's `bool` rather than a `Result` because `false` is not a
+  failure: `isteamnetworkingsockets.h:835-836` defines it as "a request was already in progress", and
+  both answers are normal. No ceiling is imposed on `num_ports`: the limit exists only as prose
+  (":829-830", "At the time of this writing, the limit is 4") and a case-insensitive search of every
+  vendored header and all four bindings files finds no constant for it -- only
+  `steamnetworkingfakeip.h:4`, the include guard -- so checking it would mean inventing the number.
+  ":831-832" also warns the assignments are neither ordered nor contiguous, so nothing pretends index
+  `i + 1` follows index `i`. The listen-socket half takes an **index into the reservation**, not a port
+  (":873-875"), and the pair is safe to expose without the completion message because ":875-877" allows
+  the socket to be created while the allocation is still pending.
+  What is still not wrapped, and why each reason is different: `GetFakeIP` (h:867) and
+  `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` are blocked by the generated layer --
+  `SteamNetworkingFakeIPResult_t` is bound as the opaque `windows_bindings.rs:17499-17501` shell
+  `_unused: [u8; 0]` while the real definition is `steamnetworkingfakeip.h:93`, so feeding that header
+  to bindgen and regenerating is a decision about the frozen generated layer, not this module.
+  `GetRemoteFakeIPForConnection` (h:895) is reachable -- `SteamNetworkingIPAddr` is bound concretely and
+  `From<sys::SteamNetworkingIPAddr> for SteamIpAddr` already exists at
+  `src/networking_types/addresses.rs:183-187` -- but every public address-facing method here speaks
+  `std::net::SocketAddr` and keeps `SteamIpAddr` crate-internal, so wrapping it means deciding what a
+  FakeIP is in the public API; it is registered, not guessed. Neither new method has a test or a
+  mutation control: both need a live `ISteamNetworkingSockets` to answer anything, and there is no
+  branch in them for a test to pin.
+- `ISteamNetworkingMessages` is now a **complete** interface: 6 of 6, where it had been 5 of 6. Added
+  `close_session_with_user(&NetworkingIdentity) -> bool` and
+  `close_channel_with_user(&NetworkingIdentity, i32) -> bool`, which fill the last two entries of
+  `steamworks-sys`'s six for this interface (`AcceptSessionWithUser`, `CloseChannelWithUser`,
+  `CloseSessionWithUser`, `GetSessionConnectionInfo`, `ReceiveMessagesOnChannel`,
+  `SendMessageToUser` -- measured with `grep -o` over the bindings, sorted unique). Until now
+  `CloseSessionWithUser` was reachable only as a side effect of `SessionRequest::reject`, i.e. only for
+  a session that had never been accepted; a session you finished using had no way to give the
+  resources back early. `isteamnetworkingmessages.h:103-108` is the reason both are `bool` and not
+  `Result`: the header says what the call does ("immediately free up resources under-the-hood", a
+  re-used peer posts a fresh `SteamNetworkingMessagesSessionRequest_t`) and adds that idle sessions
+  time out by themselves after a few minutes, but it never defines what `false` means, so turning that
+  into an error would be this wrapper's invention. `local_channel` is the same routing number
+  `send_message_to_user` takes, and `:110-113` says closing the last channel closes the session.
+  Total coverage 641 -> 642 of 913; `type_surface` counts `NetworkingMessages` at 5 -> 7. No test: both
+  need a live `ISteamNetworkingMessages` pointer and the methods contain no branch for a test to pin.
 - No API change, one structure change: `src/matchmaking.rs` was the largest file left in the crate
   (1339 lines) and the last big module still in single-file form, so it became a directory module --
   `src/matchmaking/mod.rs` 478 (`Matchmaking`, `LobbyType`, `LobbyId`, the lobby lifecycle and the
@@ -537,7 +585,8 @@ plus the callbacks the wrapper can deliver.
   `UserStats`' 24 methods are now four `impl UserStats` blocks by concern, and the crate's largest
   file is `src/html_surface.rs` at 842.
   No field or method had to widen this time: the witness is a line-level multiset difference against
-  the pre-split file, 805 non-blank lines before, **0** lost, and the 27 new lines are all wrappers
+  the pre-split file, 805 non-blank lines before, **1** lost -- the `/// Access to the steam user interface` doc line this same entry then rewrote --
+  and the 28 new lines are otherwise all wrappers
   (four `use super::*;`, three extra `impl UserStats {` and their braces, the four three-line module
   headers, four new `mod` lines and one `pub use leaderboard::*;`). The two behavioural ledgers were
   re-run against the *pre-split* baselines and hold unchanged -- `api_coverage` still counts
@@ -550,7 +599,7 @@ plus the callbacks the wrapper can deliver.
   emitted a file's plain items, then its impl, and the `#[test]` blocks went in source order with the
   plain items -- which put both manual tests *above* the methods while the `leaderboard.rs` header I
   had just written said the manual test sits "at the bottom". The generator now puts `#[test]` blocks
-  last, and the re-run's witness still reads 0 lost / 27 added, so the sentence is true of the file a
+  last, and the re-run's witness still reads 1 lost / 28 added, so the sentence is true of the file a
   reader actually opens.
   One path reference does move with a split, and only one: `achievement()`'s return type was written
   `stats::AchievementHelper`, which resolved because the parent's `use super::*` makes the sibling
@@ -586,15 +635,15 @@ plus the callbacks the wrapper can deliver.
   server makes about itself -- product, description, map, name, player caps, tags, key/value pairs,
   heartbeat and advertise flags), `lifecycle.rs` 170 (the raw `SteamGameServer_InitEx` behind
   `Server::init`, the two callback pumps, `register_callback` and the server's own `steam_id`),
-  `callbacks.rs` 128 (the five game-server notifications, with the `DenyReason` vocabulary and its
+  `callbacks.rs` 128 (the four game-server notifications, with the `DenyReason` vocabulary and its
   `From` mapping), `interfaces.rs` 130 (the eight sub-interface accessors), `auth.rs` 107 (session
   tickets, cancelling one, opening and closing an authentication session), `mod.rs` 105 (the `Server`
   struct with its `Send`/`Sync` claims, `ServerMode`, `QUERY_PORT_SHARED` and the manual test), and
   `packets.rs` 59 (the GSHS relay traffic in and out). The crate's largest file is now `src/lib.rs`
   at 814.
-  This one needed no widening at all: `Server`'s fields were already `pub(crate)`, and the two
+  This one needed no widening at all: `Server`'s fields are private to the root, and a child may read its parent's private fields, and the two
   comments and the payloads that read them stayed reachable through the parent's `use super::*`, so
-  the witness is the cleanest yet -- 743 non-blank lines before, **0** lost, 38 added, every added line
+  the witness is the cleanest yet -- 743 non-blank lines before, **0** lost, 40 added, every added line
   a module header (17), a `use super::*;` (6), one of the four extra `impl Server {` openers and their
   braces (8), or the wiring (7). `api_coverage` (639 of 913) and `type_surface` (`Server` 38) compare
   green against the pre-split baselines; `module_sizes` and `package_inventory` (102 shipped files in
@@ -620,7 +669,7 @@ plus the callbacks the wrapper can deliver.
   the doc's "33 处" is still true as a text count, its live count is 32, and its "17 + 6 = 23 getters"
   is today 23 + 8 = 31.
 - `src/remote_storage.rs` (792 lines) became `src/remote_storage/`: `mod.rs` 247 (the `RemoteStorage`
-  struct, its `Clone`, the two argument-validation helpers and the 200-line `#[cfg(test)]
+  struct, its `Clone`, the two argument-validation helpers and the 126-line `#[cfg(test)]
   mod offline_tests`), `files.rs` 247 (`SteamFile`, its writer and reader with `Seek` and `Drop`,
   `FileWriteBatch` and `SteamFileInfo`), `api.rs` 182 (`RemoteStorage`'s ten methods -- quota,
   enumeration, the one-shot `read_file`/`write_file` and the legacy surface it forwards),
@@ -636,21 +685,21 @@ plus the callbacks the wrapper can deliver.
   I had no anchor for them, so the probe handed their lines to the preceding block -- `api.rs` -- and
   reported a clean 0 holes. The root's own test module calls both by name, so it was `cargo check`'s six
   `E0425 cannot find function` errors, not the splitter, that found the mis-assignment. Second: the root
-  deliberately keeps the 200-line test module inline instead of giving it a file of its own, because
+  deliberately keeps the 126-line test module inline instead of giving it a file of its own, because
   `api_coverage.py` strips test code by the shape "`mod name {` at column 0 under `#[cfg(test)]`" and a
   whole-file test module would leave that marker behind for the ruler to miss. On today's content the
   exposure is measured and hypothetical -- that module holds 0 direct `SteamAPI_*` call sites, so
   coverage could not inflate from it -- but the shape is what the gate reads, and `test_only_calls` is
   the tripwire that says so.
-- `src/networking_sockets/mod.rs` (791 lines, the last module root still carrying its own
+- `src/networking_sockets/mod.rs` (791 lines, the largest module root still carrying its own
   implementation) became wiring plus six children beside the `connection.rs` and `fake_udp.rs` that
-  were already there: `mod.rs` 259 (the imports, the `NetworkingSockets` struct and its `Send`/`Sync`
+  were already there: `mod.rs` 259 at that commit -- 260 once the FakeIP wiring line was added, the `NetworkingSockets` struct and its `Send`/`Sync`
   claims, `send_messages`, `InvalidHandle` and the inline test module), `listen.rs` 120 (the three ways
   to open a listening socket), `listen_socket.rs` 122 (the socket handle, its three event reads and its
   accepting send), `poll_group.rs` 102 (`InnerSocket`, `NetPollGroup` with its `Drop`, the batched
   receive, and the method that mints a group), `status.rs` 98 (connection info, realtime status, lane
   configuration), `connect.rs` 92 (IP and P2P connects), `auth.rs` 49 (`init_authentication` and
-  `get_authentication_status`). `NetworkingSockets`' 398-line `impl` is now seven blocks by concern; the
+  `get_authentication_status`). `NetworkingSockets`' 389-line `impl` (38..426 inclusive) is now seven blocks by concern; the
   crate's largest file is `src/lib.rs` at 814.
   28 items, 0 unclaimed lines, witness 730 non-blank before / **1** lost (`NetPollGroup::handle`, now
   `pub(super)` because `connection.rs` attaches a connection to a group through it) / 39 added, 38 of
@@ -667,10 +716,10 @@ plus the callbacks the wrapper can deliver.
   the wrong block. Two fixes followed the incident: the generator now asserts the opener line literally
   reads `impl NetworkingSockets {` and the closer is exactly `}`, so a recalled boundary cannot be used
   again, and the FakeUDPPort unit's citation of the old module root's 588-604 range -- a fourth
-  `set_len` pointer, naming a file that this same change shrank to 259 lines -- was re-anchored by
+  `set_len` pointer, naming a file that this same change shrank to 260 lines -- was re-anchored by
   content to `src/networking_sockets/poll_group.rs:67`, the
   line the unclamped `as usize; set_len(count)` actually sits on today.
-- `src/friends/mod.rs` (790 lines, the last module root still holding its own implementation) became
+- `src/friends/mod.rs` (790 lines, the largest module root still holding its own implementation) became
   wiring plus eight children beside the `callbacks.rs`, `chat.rs` and `friend.rs` already there:
   `clans.rs` 174 (count, roster, name, tag, owner, officers, the two public/official flags, chat member
   counts and the activity feed), `clan_chat.rs` 157 (join and leave, the roster, sending and reading,
@@ -681,7 +730,7 @@ plus the callbacks the wrapper can deliver.
   `mod.rs` down to 70 lines of header, wiring and the four calls that have no topic of their own.
   `Friends`' single 719-line `impl` held 48 `pub fn` (counted: `sed -n '72,790p' | grep -c '^    pub fn '`),
   which is exactly the `type_surface` entry for `Friends` -- the 14 methods in `friend.rs` belong to the
-  `Friend` handle, a different type. Those 48 are now spread over nine `impl Friends` blocks grouped by
+  `Friend` handle, a different type. Those 48 are now spread over eight `impl Friends` blocks grouped by
   what they ask Steam for.
   52 items, 0 unclaimed lines, and the cleanest witness of the series: 736 non-blank lines before, **0**
   lost, 51 added, and none of those 51 is anything but a module header, a `use super::*;`, a `mod` or
@@ -1024,6 +1073,41 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 
 ### Fixed
+
+- **Eleven numeric and attribution claims in this changelog and the design doc were wrong, and are
+  corrected in place.** A separate read-only review of the seven most recent commits re-measured every
+  number those commits publish. It found: two witness tallies that had gone stale when a file was
+  edited *after* the ledger was recorded (`src/user_stats.rs`'s is 805 / **1** lost / **28** added, not
+  0 / 27 -- the lost line is the `UserStats` doc line that same entry describes rewriting; `src/server.rs`'s
+  is 743 / 0 / **40** added with 19 header lines, not 38 with 17); a `Server` field-visibility claim
+  with the right conclusion and the wrong reason (the fields are private to the root, and a *child* may
+  read its parent's private fields -- `pub(crate)` was never involved; the reverse case really does
+  fail, and `E0451` is what proved it in `html_surface`); `src/server/callbacks.rs` described as "five
+  notifications" where the file holds four `pub struct` and four `impl_callback!` (the fifth item is the
+  `DenyReason` enum); the `remote_storage` test module called "200-line" where `mod offline_tests` spans
+  lines 48-173, i.e. 126; "nine `impl Friends` blocks" where `grep -rc '^impl Friends'` finds eight files
+  with one block each; `src/networking_sockets/mod.rs` quoted at 259 lines where it is 260 after the
+  FakeIP wiring line landed; `NetworkingSockets`' impl called 398 lines where 38..426 is 389; two
+  subjects and two bullets calling a root "the last module root still carrying its own implementation"
+  when `ugc/mod.rs` (598 lines, four impls), `matchmaking/mod.rs` (478, three) and `user/mod.rs` (376)
+  all still held theirs; a design-doc heading that read "all single-file modules are now directories"
+  while `ls src/*.rs | wc -l` measures 24 that are not (biggest: `input.rs` 725, `utils.rs` 710,
+  `error.rs` 603); a `src/server/interfaces.rs` header that promised "one more site" for both `pub fn`
+  and `debug_assert` when the `debug_assert` half counted the header sentence's own use of the word, so
+  it now states only the reproducible `pub fn` figure (9 text / 8 live); and a `steamnetworkingfakeip.h`
+  citation off by one line (the "cannot be sent" sentence is at 17-18, not 18-19).
+  Two things came out of the pattern rather than the list. First, `scripts/ci/split_witness.py` is
+  committed: it re-derives any split's old/new/lost/added multiset from git objects on both sides
+  (`python scripts/ci/split_witness.py 295cfbd^ src/user_stats.rs 295cfbd src/user_stats stat_callback.rs
+  stats.rs`), so "X lost / Y added" is now a claim anyone can re-check without rewriting a scratch
+  script -- all six published witnesses reproduce, and every lost line is a widening or the doc rewrite
+  named above. Second, `src/networking_sockets/fake_ip.rs` gained
+  `every_header_citation_in_this_file_lands_on_the_sentence_it_quotes`, which reads
+  `isteamnetworkingsockets.h` and asserts that each of the nine line spans its docs cite actually
+  contains the quoted phrase -- the review had correctly pointed out that the FakeUDPPort constants are
+  machine-checked but nothing checked this file's citations. The guard was disproved by mutation: moving
+  one citation to lines 20-22 turned that test red with the offending span printed, and the file was
+  restored byte for byte.
 
 - **The last two `unreachable!()` in the hand-written sources are gone, and the panic-site ledger
   reaches the zero it was built to measure.** Both sat in the fallback arm of a `match` over a

@@ -3,8 +3,9 @@
 //! wrapper the client uses, built on this server's own interface pointer. The ninth one, `apps`,
 //! travels here as the block comment the file already held -- it opens with the words "TODO: Buggy
 //! currently?" and swallows the whole method -- because deleting it would be a diagnosis, not a
-//! move. Any ruler that counts `pub fn` or `debug_assert` textually over this file therefore reads
-//! one more site than actually compiles.
+//! move. The cost of keeping it is that a textual count over this file reads nine `pub fn` where
+//! eight compile (`grep -c '^    pub fn'` = 9, live accessors = 8), so any future tally here has to
+//! say which of the two it means.
 
 use super::*;
 

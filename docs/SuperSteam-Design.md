@@ -8,11 +8,13 @@
 > 复现脚本与 grep 命令以工作区为准。
 >
 > **坐标更新（2026-10-15 按内容重测，master 已到 `467ab19`）**：本文行号是**当时**的实测坐标；此后源码做了目录化拆分与多处修复，以下落点是按内容重新定位的（不是按文件名猜的）。
-> - `src/friends.rs` 已不存在，分为 `src/friends/mod.rs`（2026-10-16 复测：它现在只剩 70 行测线——根里那 48 个 `pub fn` 已按关注点拆进 `list.rs` 85、`overlay.rs` 88、`rich_presence.rs` 77、`clans.rs` 174、`clan_chat.rs` 157、`followers.rs` 91、`messages.rs` 60、`flags.rs` 50 八件，`impl Friends` 变成 9 个块）、`friend.rs`（`Friend` 句柄，401 行）、`callbacks.rs`（10 个回调载荷，155 行）、`chat.rs`（216 行）。原 `friends.rs:64-68` 的 `CStr::from_ptr` + `to_string_lossy` 读法现在在 `friend.rs:38`、`:50`、`:198` 与 `callbacks.rs:67`；原 `friends.rs:412/433/454` 的 `vec![0; 32*32*4]` 头像缓冲现在只剩一处，`friend.rs:111-112`；原 `friends.rs:124` 那类 `CString::new(..).unwrap()` 站点现在在 `friend.rs:172`、`:191`（`:277` 那处在测试里）。
+> - `src/friends.rs` 已不存在，分为 `src/friends/mod.rs`（2026-10-16 复测：它现在只剩 70 行测线——根里那 48 个 `pub fn` 已按关注点拆进 `list.rs` 85、`overlay.rs` 88、`rich_presence.rs` 77、`clans.rs` 174、`clan_chat.rs` 157、`followers.rs` 91、`messages.rs` 60、`flags.rs` 50 八件，`impl Friends` 变成 8 个块（`grep -rc '^impl Friends' src/friends/*.rs` 实测 8 个文件各 1 块））、`friend.rs`（`Friend` 句柄，401 行）、`callbacks.rs`（10 个回调载荷，155 行）、`chat.rs`（216 行）。原 `friends.rs:64-68` 的 `CStr::from_ptr` + `to_string_lossy` 读法现在在 `friend.rs:38`、`:50`、`:198` 与 `callbacks.rs:67`；原 `friends.rs:412/433/454` 的 `vec![0; 32*32*4]` 头像缓冲现在只剩一处，`friend.rs:111-112`；原 `friends.rs:124` 那类 `CString::new(..).unwrap()` 站点现在在 `friend.rs:172`、`:191`（`:277` 那处在测试里）。
 > - `src/ugc.rs` 已不存在，分为 `ugc/mod.rs`、`update.rs`、`query.rs`、`results.rs`、`answers.rs`、`types.rs`、`read.rs`、`ugc_tests.rs`。原 `ugc.rs:974` / `:986-997` 那两个 `canonicalize().unwrap()` 站点**已不再是站点**：路径解析收敛到 `src/ugc/update.rs:26` 的 `resolved_path`（NotFound→`FileNotFound`，其它 IO→`IOFailure`），两个 setter 各自 `?` 它。原 `ugc.rs:933-1050`「15+ 个构建方法返回 `Self` 而非 `Result`」**今天实测**：`update.rs` 21 个方法返回 `Result<Self, SteamError>`、**0 个返回 `Self`**，且文件里已无任何真实 panic 站点（`assert!`/`unwrap`/`expect` 三处命中全在文档注释里）；`query.rs` 现 **30 个方法返回 `Result<Self, SteamError>`、0 个返回 `Self`**，且文件内已无 `unwrap`/`expect`/`assert!`（唯一命中是我写的那句说明文字）；`fetch`/`fetch_total`/`fetch_ids` 保持回调签名，失败经 `cb(Err(..))` 送达。转换次序：8 个早于本轮、`visibility`/`add_content_descriptor`/`remove_content_descriptor` 三个在 `467ab19`、其余 10 个在本次改动。
 > - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
-> - **单文件模块已全部目录化**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 259、`fake_udp.rs` 317、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
-> - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 153 个（138 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；本块 10-15 那晚记的 129 已被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
+> - **最大的单文件模块已目录化（不是全部）**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜；
+>   `ls src/*.rs | wc -l` 实测仍有 **24 个**单文件模块直接躺在 `src/` 下，最大的是 `input.rs` 725、
+>   `utils.rs` 710、`error.rs` 603，它们本来就是一次性做完的叶子模块，不是待拆的根）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 260、`fake_udp.rs` 317、`fake_ip.rs` 195、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
+> - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 155 个（140 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；同一晚先记 129、再记 153，两次都被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
 > - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
 >
 > **复现脚本位于 `repro/` 目录**（独立可编译，无需 Steam 客户端）：
@@ -660,8 +662,8 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
-| ISteamNetworkingSockets |   26 |  47 | ISteamUGC |   97 |  99 |
-| ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
+| ISteamNetworkingSockets |   28 |  47 | ISteamUGC |   97 |  99 |
+| ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
@@ -672,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 639 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 642 / 913**（33 个接口；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28 与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见上面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -703,11 +705,21 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
   交给 Steam 回调进来。但那套实现**一次都没有调用**绑定给这四个接口生成的入口函数，
   所以台账读 0：这里 0 的含义是"入口没被调"，不是"接口不存在于本仓"。
 
-FakeIP 那一族现在只剩**分配侧**没包，四个都在 `isteamnetworkingsockets.h`，逐个实测过
-`declared=1 / called=0`：`BeginAsyncRequestFakeIP`（h:862）、`GetFakeIP`（h:867，出参是
-`SteamNetworkingFakeIPResult_t *`）、`CreateListenSocketP2PFakeIP`（h:878）、
-`GetRemoteFakeIPForConnection`（h:895，出参是 `SteamNetworkingIPAddr *`）。`fake_udp.rs` 里
-`create_fake_udp_port` 的文档指回这一段，就是为了让"票从哪来"这条边界有人看见而不是被假装跳过。
+FakeIP 那一族四个入口都在 `isteamnetworkingsockets.h`。**2026-10-16 补掉两个**：
+`begin_async_request_fake_ip`（h:862）与 `create_listen_socket_p2p_fake_ip`（h:878），落在
+`src/networking_sockets/fake_ip.rs`，`ISteamNetworkingSockets.called` 26→28。这一对能在读不到完成
+消息的情况下封，靠的是头文件自己那句 h:875-877「you do not need to wait for the request to
+complete」；`bool` 不改成 `Result` 是因为 h:835-836 把 `false` 定义成「已有一个请求在跑」，两个答案都
+是正常状态。**余下三个阻碍各不相同**：`GetFakeIP`（h:867）与
+`ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` 堵在生成层——`SteamNetworkingFakeIPResult_t`
+被绑成空壳 `_unused: [u8; 0]`（`steamworks-sys/src/windows_bindings.rs:17499-17501`，真定义在
+`steamnetworkingfakeip.h:93`），要动的是 bindgen 输入清单与四个重生成文件，属于生成层的决定；
+`GetRemoteFakeIPForConnection`（h:895）技术上可达（`SteamNetworkingIPAddr` 绑定具体，
+`From<sys::SteamNetworkingIPAddr> for SteamIpAddr` 已在
+`src/networking_types/addresses.rs:183-187`），但本仓所有面向地址的公开 API 都说
+`std::net::SocketAddr`、`SteamIpAddr` 保持 crate 内部，所以它是「FakeIP 要不要进公开类型面」的设计
+决策，登记而不是猜。`fake_udp.rs` 里 `create_fake_udp_port` 的文档指回这一段，就是为了让"票从哪来"
+这条边界有人看见而不是被假装跳过。
 
 这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
 方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了

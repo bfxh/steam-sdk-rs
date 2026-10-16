@@ -268,6 +268,50 @@ impl NetworkingMessages {
 
         (state, connection_info, quick_status)
     }
+
+    /// Call this when you are done talking to a user, to free the resources Steam holds for the
+    /// session immediately.
+    ///
+    /// A plain `bool` is returned because that is all Steam gives and the header does not define
+    /// what `false` means: `isteamnetworkingmessages.h:103-105` says only "Call this when you're
+    /// done talking to a user to immediately free up resources under-the-hood. If the remote user
+    /// tries to send data to you again, another SteamNetworkingMessagesSessionRequest_t callback
+    /// will be posted", and `:107-108` adds that sessions which go unused for a few minutes are
+    /// timed out automatically. So this call decides *when* the resources come back, not whether
+    /// they ever would -- and mapping `false` onto an error would be this wrapper inventing a
+    /// failure Steam never described.
+    ///
+    /// [`SessionRequest::reject`] reaches the same Steam function for a session that was never
+    /// accepted; this is the one for a session you have been using.
+    pub fn close_session_with_user(&self, identity_remote: &NetworkingIdentity) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(
+                self.net,
+                identity_remote.as_ptr(),
+            )
+        }
+    }
+
+    /// Like [`close_session_with_user`](Self::close_session_with_user), but closes a single channel.
+    ///
+    /// `isteamnetworkingmessages.h:110-113`: once all open channels to a user have been closed the
+    /// session itself is closed, and new data from that user posts a fresh session request. The
+    /// number is the same routing channel [`send_message_to_user`](Self::send_message_to_user)
+    /// takes, and the header's own advice for apps that do not route by channel applies here too --
+    /// use 0.
+    pub fn close_channel_with_user(
+        &self,
+        identity_remote: &NetworkingIdentity,
+        local_channel: i32,
+    ) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamNetworkingMessages_CloseChannelWithUser(
+                self.net,
+                identity_remote.as_ptr(),
+                local_channel,
+            )
+        }
+    }
 }
 
 /// A helper for creating SessionRequests.

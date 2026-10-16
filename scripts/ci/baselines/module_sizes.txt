@@ -18,13 +18,13 @@ src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user/voice.rs 437
+src/networking_messages.rs 416
 src/ugc/update.rs 404
 src/friends/friend.rs 401
 src/user/duration.rs 393
 src/networking_types/end.rs 384
 src/user_stats/leaderboard.rs 384
 src/user/mod.rs 375
-src/networking_messages.rs 372
 src/lib_tests.rs 354
 src/html_surface/browser.rs 352
 src/inventory/result.rs 338
@@ -53,6 +53,7 @@ src/user/buffers.rs 206
 src/matchmaking/queries.rs 205
 src/inventory/items.rs 204
 src/identity.rs 198
+src/networking_sockets/fake_ip.rs 195
 src/parental.rs 191
 src/networking_types/identity.rs 182
 src/remote_storage/api.rs 182
@@ -67,8 +68,8 @@ src/friends/callbacks.rs 155
 src/user_stats/stat_callback.rs 151
 src/ugc/read.rs 142
 src/inventory/prices.rs 132
-src/server/interfaces.rs 130
-src/server/callbacks.rs 128
+src/server/interfaces.rs 131
+src/server/callbacks.rs 129
 src/user_stats/stats_io.rs 127
 src/networking_sockets/listen_socket.rs 122
 src/video.rs 122
@@ -88,7 +89,6 @@ src/friends/overlay.rs 88
 src/friends/list.rs 85
 src/callback_stream.rs 84
 src/inventory/mod.rs 83
-src/networking_sockets/fake_ip.rs 82
 src/friends/rich_presence.rs 77
 src/friends/mod.rs 70
 src/user/passthrough.rs 69

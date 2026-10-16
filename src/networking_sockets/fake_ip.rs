@@ -80,3 +80,116 @@ impl NetworkingSockets {
         }
     }
 }
+
+#[cfg(test)]
+mod fake_ip_tests {
+    use std::path::Path;
+
+    /// Every line citation this file's docs make against `isteamnetworkingsockets.h`, as
+    /// `(first, last, a phrase that must sit inside that span)`. The spans are inclusive and
+    /// 1-based, exactly as cited in the prose above.
+    const CITATIONS: &[(&str, u32, u32, &str)] = &[
+        (
+            "already in progress",
+            835,
+            836,
+            "Returns false if a request was already in progress",
+        ),
+        ("the limit is 4", 829, 830, "the limit is 4"),
+        (
+            "not ordered or contiguous",
+            831,
+            832,
+            "The port assignments are *not* guaranteed to have any particular order",
+        ),
+        (
+            "result posted on completion",
+            836,
+            837,
+            "A SteamNetworkingFakeIPResult_t will be posted when the request",
+        ),
+        (
+            "gameservers before login",
+            839,
+            840,
+            "you *must* call this after initializing the SDK but before",
+        ),
+        (
+            "failure needs several retries",
+            845,
+            849,
+            "will not be reported until *several* retries have been attempted",
+        ),
+        (
+            "the TCP-style flow starts with this socket",
+            852,
+            857,
+            "Server creates a listen socket using CreateListenSocketP2PFakeIP",
+        ),
+        (
+            "index, not port",
+            873,
+            875,
+            "idxFakePort refers to the *index* of the fake port requested",
+        ),
+        (
+            "no need to wait",
+            875,
+            877,
+            "However, you do not need to wait for the",
+        ),
+    ];
+
+    fn sockets_header() -> Option<Vec<String>> {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("steamworks-sys/lib/steam/public/steam/isteamnetworkingsockets.h");
+        match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text.lines().map(|l| l.trim_start().to_string()).collect()),
+            Err(_) => {
+                // A `.crate` package ships no SDK sources, so the read skips out loud; every CI
+                // checkout is a repository, where the assertions below really run.
+                eprintln!(
+                    "skipping FakeIP citation checks: {} is not present",
+                    path.display()
+                );
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn every_header_citation_in_this_file_lands_on_the_sentence_it_quotes() {
+        let Some(lines) = sockets_header() else {
+            return;
+        };
+        for (what, first, last, phrase) in CITATIONS {
+            assert!(
+                *first >= 1 && *last as usize <= lines.len(),
+                "{what}: cited {}-{} but the header has only {} lines",
+                first,
+                *last,
+                lines.len()
+            );
+            let span = lines[(*first as usize - 1)..*last as usize].join(" ");
+            assert!(
+                span.contains(phrase),
+                "{what}: expected {phrase:?} within lines {first}-{last}, got {span:?}"
+            );
+        }
+    }
+
+    /// Guards the guard: the ruler has to be able to fail, or a drifted header would read as a pass.
+    #[test]
+    fn a_citation_point_at_the_wrong_line_is_red() {
+        let Some(lines) = sockets_header() else {
+            return;
+        };
+        let (_, _, _, phrase) = CITATIONS[0];
+        let shifted = lines[2..4].join(" ");
+        assert!(
+            !shifted.contains(phrase),
+            "the fixture span already contains {phrase:?}, so the check above would not have \
+             noticed a citation that drifted by a few lines"
+        );
+    }
+}
