@@ -113,18 +113,22 @@ impl NetworkingSockets {
 
 /// The FakeIP block Steam assigned: one address and the ports actually granted.
 ///
-/// `identity` is the local `ISteamNetworkingSockets` object the reservation belongs to, which
-/// `steamnetworkingfakeip.h:108-111` explains is needed because a process can hold more than one (a
-/// user's, and a local game server's).
+/// `identity` is the local `ISteamNetworkingSockets` object the reservation belongs to. Steam's
+/// own field comment at `steamnetworkingfakeip.h:108-111` opens "Local identity of the
+/// ISteamNetworkingSockets object that made this request and is assigned the IP", and says it "is
+/// needed in the callback in the case where there are multiple ISteamNetworkingSockets objects" --
+/// a user's, and a local game server's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FakeIpAllocation {
     /// Our assigned fake IPv4 address, and not exclusively ours: `:114-120` says Steam tries to
     /// avoid sharing an IP but cannot promise it, and may hand back an address another host is using.
     pub ip: Ipv4Addr,
-    /// The granted ports in reservation order. Steam fills only the leading slots of the array
-    /// (`:123-125`), which is eight entries wide (`:129-130`), so the trailing zeros are dropped
-    /// instead of reported as ports; and `isteamnetworkingsockets.h:831-832` warns they are neither
-    /// ordered nor contiguous, so no caller should assume `ports[i + 1]` follows `ports[i]`.
+    /// The granted ports in reservation order. `steamnetworkingfakeip.h:123-125` -- "Port number(s)
+    /// assigned to us. Only the first entries will contain nonzero values" -- is why the trailing
+    /// zeros are dropped instead of reported as ports, and `:129-130` fixes the array at
+    /// k_nMaxReturnPorts = 8 slots. `isteamnetworkingsockets.h:831-832` adds "The port assignments
+    /// are *not* guaranteed to have any particular order or relationship", so no caller should
+    /// assume `ports[i + 1]` follows `ports[i]`.
     pub ports: Vec<u16>,
     /// Which local sockets object holds this reservation.
     pub identity: NetworkingIdentity,
@@ -133,7 +137,8 @@ pub struct FakeIpAllocation {
 /// Steam's answer to a FakeIP allocation request, as it arrives on the callback pipe.
 ///
 /// Posted when [`begin_async_request_fake_ip`](NetworkingSockets::begin_async_request_fake_ip)
-/// completes (`isteamnetworkingsockets.h:836-837`), carrying the same status the polling read
+/// completes -- `isteamnetworkingsockets.h:836-837`: "A SteamNetworkingFakeIPResult_t will be
+/// posted when the request completes" -- carrying the same status the polling read
 /// reports, so the outcome here is a `Result` and not a status field to remember to check.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FakeIpResult {
@@ -165,7 +170,7 @@ fn fake_ipv4(bits: u32) -> Ipv4Addr {
     Ipv4Addr::from(bits)
 }
 
-/// The leading run of granted ports, per Steam's own rule that only the first entries are non-zero
+/// The leading run of granted ports, per "Only the first entries will contain nonzero values"
 /// (`steamnetworkingfakeip.h:123-125`). This takes a prefix rather than filtering, so a zero inside
 /// the array ends the reservation instead of being quietly skipped.
 fn allocated_ports(ports: [u16; 8]) -> Vec<u16> {
@@ -303,8 +308,9 @@ mod fake_ip_tests {
 
     #[test]
     fn a_fake_ipv4_integer_reads_as_the_octets_steam_documents() {
-        // `steamnetworkingtypes.h:205`: aa.bb.cc.dd is 0xaabbccdd, so 1.2.3.4 must not come back as
-        // 4.3.2.1 -- byte-swapping this is exactly the mistake the line below would catch.
+        // `steamnetworkingtypes.h:205` says "Returns IP in host byte order (e.g. aa.bb.cc.dd as
+        // 0xaabbccdd)", so 1.2.3.4 must not come back as 4.3.2.1 -- byte-swapping this is exactly
+        // the mistake the line below would catch.
         assert_eq!(fake_ipv4(0x0102_0304), Ipv4Addr::new(1, 2, 3, 4));
         assert_eq!(fake_ipv4(0x7f00_0001), Ipv4Addr::new(127, 0, 0, 1));
         assert_eq!(fake_ipv4(0), Ipv4Addr::UNSPECIFIED);
@@ -334,8 +340,9 @@ mod fake_ip_tests {
         );
     }
 
-    /// `steamnetworkingfakeip.h:98-102` names the four refusals and `:104-105` singles Busy out as the
-    /// one a poller is allowed to tolerate. That distinction survives only while each code lands on its
+    /// `steamnetworkingfakeip.h:98-102` names the four refusals -- the first being "k_EResultBusy -
+    /// you called GetFakeIP but the request has not completed" -- and `:104-105` singles Busy out as
+    /// the one a poller is allowed to tolerate. That distinction survives only while each code lands on its
     /// own variant: folding them into `Generic` would make "not yet" read exactly like "fatal", which is
     /// the one thing the header tells the caller not to do.
     #[test]

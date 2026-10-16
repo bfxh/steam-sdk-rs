@@ -1018,6 +1018,27 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   second). `module_sizes`: `src/user/voice.rs` 437 -> 445, `src/user/mod.rs` 375 -> 381,
   `src/user_stats/stats.rs` 276 -> 277 (registered total 27838 -> 27853, the +15 being exactly those
   three), and canaries 43 -> **46**.
+- **Batch 2 of the anchoring, and a second rule measured and refused.** Nine more spans in
+  `src/networking_sockets/fake_ip.rs` and `fake_udp.rs` now quote the sentence they cite
+  (`"Port number(s) assigned to us. Only the first entries will contain nonzero values"`,
+  `"The port assignments are *not* guaranteed to have any particular order or relationship"`,
+  `"If you call this function multiple times and pass the same (nonnegative) fake port index, the same
+  object will be returned, and this object is not reference counted"`, and the rest), replacing prose
+  that had *paraphrased* Steam -- "warns they are neither ordered nor contiguous", "explains is needed
+  because" -- which is exactly the shape no ruler can check. `~undeclared` 25 -> **16**, still 0
+  findings, and the span count moved 125 -> 127 because writing out a bare `:123-125` in full makes it
+  countable: coverage appearing, not drift.
+  The refused rule: some of those blocks carry verbatim header text inside **backticks** rather than
+  quotation marks (`fake_udp.rs` quotes the `ReceiveMessages` doc exactly, as code), so the tempting
+  generalisation was to accept a multi-word backtick phrase as an anchor too. Measured over the
+  unanchored corpus: **1 phrase would have matched a cited span, 22 would not** -- and the 22 are the
+  ruler mis-reading its own syntax, because a backtick pair that opens in one code span and closes in
+  the next swallows the prose between them (`"says to pass 0 for the first port of the block. call ["`
+  quotes nothing). One true case does not pay for a class of fabricated debt, so quotation marks remain
+  the only anchor, and what those two files needed is the thing actually done: put the sentence in
+  quotes where the doc claims it is Steam's.
+  Ledger after batch 2: 127 spans, 0 findings, 21 unjudged, **16 undeclared**; `module_sizes`
+  `fake_ip.rs` 493 -> 500 and `fake_udp.rs` 425 -> 427 (registered total 27853 -> 27862).
 - **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
   `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named

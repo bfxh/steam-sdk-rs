@@ -146,8 +146,9 @@ impl FakeUDPPort {
     /// Drains up to `batch_size` received datagrams; the returned messages own their payload, as
     /// everywhere else in this module.
     ///
-    /// `SteamNetworkingMessage_t::m_identity in the returned message(s) will always contain a
-    /// FakeIP. See ISteamNetworkingUtils::GetRealIdentityForFakeIP` (`steamnetworkingfakeip.h:61-66`).
+    /// `steamnetworkingfakeip.h:61-66` words it exactly: "SteamNetworkingMessage_t::m_identity in the
+    /// returned message(s) will always contain a FakeIP.  See
+    /// ISteamNetworkingUtils::GetRealIdentityForFakeIP."
     ///
     /// Steam's return value is clamped by `received_count` before it is used as a length, so a
     /// negative or over-large answer cannot make this read slots that were never offered.
@@ -198,9 +199,10 @@ impl FakeUDPPort {
     /// Destroys this port and its internal connections.
     ///
     /// Consuming the wrapper is what keeps Rust from handing out a second destroy, and it is the
-    /// reason there is no `Drop`: for a server port (index `>= 0`) Steam returns *the same object*
-    /// for every call with that index and does not reference count it
-    /// (`isteamnetworkingsockets.h:906-908`), so two live wrappers for one index are already a
+    /// reason there is no `Drop`: `isteamnetworkingsockets.h:906-908` says that for a server port
+    /// (index `>= 0`) "If you call this function multiple times and pass the same (nonnegative) fake
+    /// port index, the same object will be returned, and this object is not reference counted", so
+    /// two live wrappers for one index are already a
     /// caller-side alias -- dropping one behind the other's back would be the bug, not the fix.
     /// After this call any other wrapper for the same index refers to a destroyed object; treat it
     /// as a single-owner handle.

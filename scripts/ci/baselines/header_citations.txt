@@ -4,11 +4,12 @@
 #                         quotation marks, or a fragment several headers share. Debt: shrink-only.
 #   <path>~undeclared     citation spans in blocks carrying no checkable phrase at all -- the blind
 #                         spot, counted rather than left silent. Debt: shrink-only.
-# Recorded 2026-10-16 by scripts/ci/header_citations.py, whose own summary reads: 17 files cite the
-# SDK, 125 spans, 0 judged wrong, 21 unjudged phrases, 25 spans with nothing to check. This ledger's
-# first entry the same day read 124 / 44 / 39; it moved because (a) the joiner kept the header lines'
-# `//` markers, which hid 25 verbatim quotes, and (b) fourteen spans in src/user/voice.rs and
-# src/user/mod.rs were anchored with the real sentences they cite.
+# Recorded 2026-10-16 by scripts/ci/header_citations.py; its own summary reads: 17 files cite the SDK,
+# 127 spans, 0 judged wrong, 21 unjudged phrases, 16 spans with nothing to check. Earlier states the
+# same day: 124/44/39 (before the joiner fix and the first two anchoring batches) then 125/21/25.
+# The 39 -> 25 -> 16 movement is 14 anchors in src/user/{voice,mod}.rs plus 9 in
+# src/networking_sockets/{fake_ip,fake_udp}.rs; the span count rose because naming a previously-bare
+# `:123-125` citation in full makes it countable, which is coverage, not drift.
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
 src/networking_messages.rs~undeclared 1
@@ -32,10 +33,10 @@ src/matchmaking/chat.rs~unjudged 0
 src/matchmaking/chat.rs~undeclared 0
 src/networking_sockets/fake_ip.rs 0
 src/networking_sockets/fake_ip.rs~unjudged 4
-src/networking_sockets/fake_ip.rs~undeclared 9
+src/networking_sockets/fake_ip.rs~undeclared 2
 src/networking_sockets/fake_udp.rs 0
 src/networking_sockets/fake_udp.rs~unjudged 4
-src/networking_sockets/fake_udp.rs~undeclared 2
+src/networking_sockets/fake_udp.rs~undeclared 0
 src/ugc/answers.rs 0
 src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0
