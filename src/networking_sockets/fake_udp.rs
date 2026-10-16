@@ -11,7 +11,7 @@ use super::*;
 use crate::networking_types::{NetworkingMessage, SendFlags, SteamIpAddr};
 
 /// Steam's conservative recommended ceiling for one datagram
-/// (`steamnetworkingfakeip.h:11-15`).
+/// (`steamnetworkingfakeip.h:10-15`).
 ///
 /// Quoted in full because it is *not* a limit the code enforces: "It is HIGHLY recommended to limit
 /// messages sent via Fake UDP port to this value ... Although the real MTU might be higher than
@@ -21,7 +21,8 @@ use crate::networking_types::{NetworkingMessage, SendFlags, SteamIpAddr};
 pub const FAKE_UDP_RECOMMENDED_MTU: usize = 1200;
 
 /// The one size limit that *is* a hard rule: "Messages larger than this size are not allowed and
-/// cannot be sent via Fake UDP port" (`steamnetworkingfakeip.h:18-19`).
+/// cannot be sent via Fake UDP port" (`steamnetworkingfakeip.h:17-18`; the sentence runs from the
+/// "Messages larger than" line, not from the constant's line).
 pub const FAKE_UDP_MAX_MESSAGE_BYTES: usize = 4096;
 
 /// The length Steam is told for one datagram, after the hard size rule is applied.
@@ -313,5 +314,111 @@ mod fake_udp_tests {
         // Claiming more slots than were offered must not widen the slice.
         assert_eq!(received_count(1000, 8), 8);
         assert_eq!(received_count(i32::MAX, 0), 0);
+    }
+
+    /// Every `steamnetworkingfakeip.h` line citation this file's docs make, checked against the
+    /// vendored header itself. The two constants above already read their numbers out of this file;
+    /// this is the same treatment for the *prose*, which had gone unmeasured -- and measuring it found
+    /// two spans one line off (the MTU note begins at 10, not 11; the hard-rule sentence is 17-18,
+    /// not 18-19, which is the constant's own line).
+    ///
+    /// One phrase per span, and each phrase sits inside a single header line: the ruler joins lines
+    /// with a space but keeps the `///` prefixes, so a phrase that runs across a line break can never
+    /// match, and a check written that way would fail for the wrong reason.
+    const CITATIONS: &[(&str, u32, u32, &str)] = &[
+        (
+            "the interface this type wraps",
+            22,
+            78,
+            "ISteamNetworkingFakeUDPPort",
+        ),
+        (
+            "the MTU figure is a recommendation",
+            10,
+            15,
+            "It is HIGHLY recommended to limit",
+        ),
+        (
+            "the message ceiling is a hard rule",
+            17,
+            18,
+            "Messages larger than this size are not allowed",
+        ),
+        (
+            "what a fake UDP port acts like",
+            24,
+            25,
+            "Acts like a UDP port, sending and receiving datagrams",
+        ),
+        (
+            "which call is not threadsafe",
+            33,
+            35,
+            "not threadsafe with respect",
+        ),
+        (
+            "the send notes this module repeats",
+            38,
+            58,
+            "reliable messages (k_nSteamNetworkingSend_Reliable) are not supported",
+        ),
+        (
+            "identities come back as FakeIP",
+            61,
+            66,
+            "m_identity in the returned message(s) will always contain",
+        ),
+        (
+            "cleanup is optional, not required",
+            71,
+            76,
+            "not strictly *necessary*,",
+        ),
+    ];
+
+    fn fakeip_header_lines() -> Option<Vec<String>> {
+        let text = vendored_fake_ip_header()?;
+        Some(
+            text.lines()
+                .map(|line| line.trim_start().to_string())
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn every_fake_udp_header_citation_lands_on_the_sentence_it_quotes() {
+        let Some(lines) = fakeip_header_lines() else {
+            return;
+        };
+        for (what, first, last, phrase) in CITATIONS {
+            assert!(
+                *first >= 1 && *last as usize <= lines.len(),
+                "{what}: cited {}-{} but the header has only {} lines",
+                first,
+                last,
+                lines.len()
+            );
+            let span = lines[(*first as usize - 1)..*last as usize].join(" ");
+            assert!(
+                span.contains(phrase),
+                "{what}: expected {phrase:?} within lines {first}-{last}, got {span:?}"
+            );
+        }
+    }
+
+    /// Guards the guard: the hard-rule sentence must not be findable in the recommendation's span, so
+    /// a citation drifting by a few lines here is something the test above actually sees.
+    #[test]
+    fn a_fake_udp_citation_point_at_the_wrong_line_is_red() {
+        let Some(lines) = fakeip_header_lines() else {
+            return;
+        };
+        let (_, _, _, phrase) = CITATIONS[2];
+        let shifted = lines[9..15].join(" ");
+        assert!(
+            !shifted.contains(phrase),
+            "the fixture span already contains {phrase:?}, so the check above would not have \
+             noticed a citation that drifted by a few lines"
+        );
     }
 }

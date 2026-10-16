@@ -954,6 +954,26 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   ledger went 9 -> 10 for a comment. That is the ruler telling you the literal belongs nowhere in a
   workflow file, so the reworded version keeps the ledger where it was. Every `run:` body in the file was
   then syntax-checked with `bash -n` -- 8 bodies, 0 failures.
+- **The FakeUDP datagram port's header citations are a ruler too, and measuring them found two off by
+  one** (`every_fake_udp_header_citation_lands_on_the_sentence_it_quotes` and
+  `a_fake_udp_citation_point_at_the_wrong_line_is_red`, both in `src/networking_sockets/fake_udp.rs`).
+  That unit cites `steamnetworkingfakeip.h` eight times. Its two *constants* have been read out of the
+  header on every run since the day it landed, but its prose was never re-measured -- and two of the
+  eight spans were wrong. The recommended-MTU sentence begins on line 10, so the cited 11-15 opened one
+  line late; the hard-rule sentence is 17-18, and the cited 18-19 landed on the constant's own line,
+  which is the worse of the two shapes: a citation that describes a rule while pointing at a number reads
+  as verified to anyone who glances at it. Both are corrected here, and all eight are now checked against
+  the vendored file, each with one phrase chosen to sit inside a *single* header line -- the ruler joins
+  lines but keeps their `///` prefixes, so a phrase running across a break could never match and the
+  check would fail for the wrong reason.
+  Control: re-applying the original 18-19 span to the table makes the new test fail by name and print what
+  those two lines really say; the file was then restored with `cp` and verified byte-for-byte with `cmp`.
+  Same commit as the FakeIP citation ruler, same reason: prose corrections do not survive the next edit,
+  so every one of these findings is turned into something that judges.
+  Ledgers this moves: `module_sizes` `src/networking_sockets/fake_udp.rs` 317 -> 424 (registered total
+  27728 -> 27835, and the +107 is that one file) and the lib test floor 163 -> 165, both re-recorded
+  from the run; `api_coverage`, `type_surface`, `package_inventory`,
+  `sdk_vendored`, `no_panic_sites` and `shell_hatches` compare unchanged.
 - **`ledgers are tracked, populated and read`** (`scripts/ci/baseline_files.py`). This repo's gates
   *are* files, and two failure modes had already happened once each: a shipped gate whose baseline
   was swallowed by a `*.txt` ignore rule (so CI judged against a file that existed only on the
