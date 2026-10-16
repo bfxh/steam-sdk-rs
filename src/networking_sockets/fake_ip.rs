@@ -11,7 +11,8 @@
 //! of `docs/SuperSteam-Design.md`.
 //!
 //! `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` is deliberately not wrapped either. The
-//! same completion payload (`SteamNetworkingFakeIPResult_t`, `steamnetworkingfakeip.h:93`) reaches
+//! same completion payload -- `steamnetworkingfakeip.h:93` opens it as "struct
+//! SteamNetworkingFakeIPResult_t" -- reaches
 //! callers as [`FakeIpResult`] through this crate's installed-callback stream, and the SDK's global
 //! callback takes a bare function pointer with nowhere to put a capture, so wrapping it would offer a
 //! second, weaker route to a message that already arrives.
@@ -52,11 +53,12 @@ impl NetworkingSockets {
 
     /// Opens a listen socket that accepts P2P connections sent to one of *our* FakeIP addresses.
     ///
-    /// `idx_fake_port` is the **index into the reservation**, not a port number: `:873-875` says to
-    /// pass 0 for the first port of the block. Call [`begin_async_request_fake_ip`](Self::begin_async_request_fake_ip)
-    /// first, but do not wait for it -- `:875-877` allows the socket to be created while the
-    /// allocation is still pending, which is why this pair is reachable even though the completion
-    /// message is not.
+    /// `idx_fake_port` is the **index into the reservation**, not a port number:
+    /// `isteamnetworkingsockets.h:873-875` says "idxFakePort refers to the *index* of the fake port
+    /// requested". Call
+    /// [`begin_async_request_fake_ip`](Self::begin_async_request_fake_ip) first, but do not wait for
+    /// it -- `:875-877` allows the socket to be created while the allocation is still pending,
+    /// which is why this pair is reachable even though the completion message is not.
     ///
     /// A peer reaches this socket with `ConnectByIPAddress`, passing the FakeIP address; until Steam
     /// knows the real identity, the connection reports the FakeIP one

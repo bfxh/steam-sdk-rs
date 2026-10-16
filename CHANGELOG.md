@@ -1039,6 +1039,27 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   quotes where the doc claims it is Steam's.
   Ledger after batch 2: 127 spans, 0 findings, 21 unjudged, **16 undeclared**; `module_sizes`
   `fake_ip.rs` 493 -> 500 and `fake_udp.rs` 425 -> 427 (registered total 27853 -> 27862).
+- **Batch 3: the blind spot is closed, and closing it turned up a citation naming the wrong file.**
+  Fourteen edits across `src/input/{effects,session}.rs`,
+  `src/networking_sockets/fake_ip.rs`, `src/user/{answers,duration,passthrough,buffers}.rs`,
+  `src/networking_messages.rs` and `src/networking_utils.rs` anchored the last **16** spans, so
+  **`~undeclared` is 0**: every citing comment block in `src/` is either judged or carries a phrase the
+  gate attempted. That is the column's purpose paid off -- while writing the quotes for it,
+  `src/networking_utils.rs` turned out to attribute the ping sentinels to
+  `isteamnetworkingutils.h:139-146`, which is `EstimatePingTimeFromLocalHost`'s doc comment; the two
+  constants are declared in a *different file*, `steamnetworkingtypes.h:1089-1090`
+  ("const int k_nSteamNetworkingPing_Failed = -1;" and the -2 below it). Wrong file, wrong lines, and
+  undetectable by any rule keyed on quotation marks -- the block simply had none. Same shape as the
+  `chat.rs` fabrication two commits back, arrived by a different route, and the only reason either was
+  caught is that the invisible set got a number.
+  Where Steam's own text is malformed the quote keeps it: `isteaminput.h:829` says "Returns true when
+  data was recievied before the timeout expires", and the doc now carries the misspelling with a note
+  that it is theirs, because silently correcting a quotation is the exact move that made the last two
+  findings possible.
+  Ledger: **129 spans, 0 findings, 21 unjudged, 0 undeclared** (the span count rose twice because
+  naming a shorthand `:873-875` in full makes it countable), `module_sizes` registered total
+  27862 -> 27874. What is left on this ledger is 21 quoted phrases that no header contains verbatim --
+  paraphrases wearing quotation marks, which is the next thing to pay down, not coverage to leave.
 - **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
   `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named

@@ -39,8 +39,9 @@ impl Input {
     /// Block until Steam sends new data, for a game with a dedicated input thread.
     ///
     /// This parks the calling thread: it waits forever when `wait_forever` is set, otherwise up to
-    /// `timeout_ms`. Returns `true` only if data arrived before the deadline
-    /// (`isteaminput.h:828-830`).
+    /// `timeout_ms`. `isteaminput.h:828-830` says it "Returns true when data was recievied
+    /// before the timeout expires" -- their spelling -- and adds "Useful for games with a
+    /// dedicated input thread", which is why this parks the caller at all.
     pub fn wait_for_data(&self, wait_forever: bool, timeout_ms: u32) -> bool {
         unsafe { sys::SteamAPI_ISteamInput_BWaitForData(self.input, wait_forever, timeout_ms) }
     }

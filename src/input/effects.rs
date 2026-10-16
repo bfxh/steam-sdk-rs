@@ -4,13 +4,13 @@
 use super::*;
 
 impl Input {
-    /// Trigger a vibration event on a supported controller. Steam translates this into haptic
-    /// pulses for Steam Controllers (`isteaminput.h:953`).
+    /// "Trigger a vibration event on supported controllers - Steam will translate these
+    /// commands into haptic pulses for Steam" controllers (`isteaminput.h:953`).
     pub fn trigger_vibration(&self, controller: sys::InputHandle_t, left: u16, right: u16) {
         unsafe { sys::SteamAPI_ISteamInput_TriggerVibration(self.input, controller, left, right) }
     }
 
-    /// The same, including Xbox trigger impulse rumble (`isteaminput.h:956`).
+    /// The same, "including Xbox trigger impulse rumble" (`isteaminput.h:956`).
     pub fn trigger_vibration_extended(
         &self,
         controller: sys::InputHandle_t,
@@ -31,7 +31,7 @@ impl Input {
         }
     }
 
-    /// Send a haptic pulse. Works on Steam Deck and Steam Controller devices
+    /// "Send a haptic pulse, works on Steam Deck and Steam Controller devices"
     /// (`isteaminput.h:959`). Intensities are `uint8` and the gains are signed dB, both as Steam
     /// declares them; the `other_*` pair applies when the location is `Both`.
     pub fn trigger_simple_haptic_event(

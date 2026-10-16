@@ -6,7 +6,8 @@ use super::*;
 
 /// How long the game says the player is playing, for the Steam China duration-control system.
 ///
-/// The four states are `steamclientpublic.h:462-465` and the comments there are the definition;
+/// The four states are `steamclientpublic.h:462-465` and the comments there are the definition --
+/// offline play, for instance, is "currently in offline play - single-player, offline co-op, etc.";
 /// `Invalid` is Steam's own "nil value", listed here because passing it is what clears a state.
 /// Input-only: nothing comes back through this type, so it needs no fallback variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,7 +42,9 @@ impl From<DurationControlOnlineState> for sys::EDurationControlOnlineState {
 }
 
 /// Steam's answer to [`User::duration_control`]; every field doc below is the comment
-/// `isteamuser.h:410-419` puts on the matching member, not a reading of the name.
+/// `isteamuser.h:410-419` puts on the matching member, not a reading of the name -- the progress
+/// field's reads "recommended progress (either everything is fine, or please exit game)", which
+/// is why the exit states and the reward throttles share one enum.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DurationControl {
     /// "appid generating playtime" (`isteamuser.h:410`).

@@ -375,8 +375,9 @@ impl NetworkingUtils {
 
 /// What Steam said about a route's latency.
 ///
-/// Steam names exactly two negative answers (sentinels `k_nSteamNetworkingPing_Failed` = -1
-/// and `k_nSteamNetworkingPing_Unknown` = -2, `isteamnetworkingutils.h:139-146`); anything else
+/// Steam names exactly two negative answers, declared as
+/// `steamnetworkingtypes.h:1089-1090`: "const int k_nSteamNetworkingPing_Failed = -1;" and
+/// "const int k_nSteamNetworkingPing_Unknown = -2;"; anything else
 /// it returns is taken as a millisecond figure, because the header names no other sentinel.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PingEstimate {

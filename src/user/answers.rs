@@ -24,10 +24,11 @@ pub enum UserHasLicense {
 /// Steam says "not allowed" through [`MarketEligibility::allowed`] and its reason bitfield.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MarketEligibility {
-    /// `m_bAllowed` (`isteamuser.h:388`); the header puts no comment on it, so this reads the
-    /// field as it names it: whether the account may use the Community Market.
+    /// `isteamuser.h:388` declares the field as "bool m_bAllowed;" and puts no comment on it,
+    /// so this reads it as it names it: whether the account may use the Community Market.
     pub allowed: bool,
-    /// Steam's own reason bitfield, forwarded unchanged (`isteamuser.h:389`).
+    /// Steam's own reason bitfield -- `isteamuser.h:389` declares it as "EMarketNotAllowedReasonFlags
+    /// m_eNotAllowedReason;" -- forwarded unchanged.
     ///
     /// `EMarketNotAllowedReasonFlags` arrives from bindgen as a `#[repr(transparent)]` newtype over
     /// `c_int` with associated constants, not a Rust enum, and the header writes the values as

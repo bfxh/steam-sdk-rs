@@ -22,7 +22,8 @@ const USER_DATA_FOLDER_BYTES: usize = 32 * 1024;
 /// The largest app ticket this crate will allocate on a caller's behalf.
 ///
 /// A ticket is a small encrypted blob, and the probe round of `GetEncryptedAppTicket` reports the
-/// size it needs (`isteamuser.h:170-172`). Reporting an absurd number is a failure mode the header
+/// size it needs (`isteamuser.h:170-172`: "you can pass pTicket=NULL and cbMaxTicket=0").
+/// Reporting an absurd number is a failure mode the header
 /// does not rule out, so the loop refuses above this figure instead of spending unbounded memory
 /// on a length nobody can check.
 const MAX_TICKET_BYTES: usize = 1 << 20;

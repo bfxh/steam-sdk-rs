@@ -294,8 +294,10 @@ impl NetworkingMessages {
 
     /// Like [`close_session_with_user`](Self::close_session_with_user), but closes a single channel.
     ///
-    /// `isteamnetworkingmessages.h:110-113`: once all open channels to a user have been closed the
-    /// session itself is closed, and new data from that user posts a fresh session request. The
+    /// `isteamnetworkingmessages.h:110-113`: "Once all open channels to a user have been closed, the
+    /// open session to the user will be closed, and any new data from this user will trigger a
+    /// SteamSteamNetworkingMessagesSessionRequest_t callback" -- so a later packet reopens the
+    /// session as a request. The
     /// number is the same routing channel [`send_message_to_user`](Self::send_message_to_user)
     /// takes, and the header's own advice for apps that do not route by channel applies here too --
     /// use 0.

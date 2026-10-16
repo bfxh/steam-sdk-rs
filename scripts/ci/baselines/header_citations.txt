@@ -2,38 +2,40 @@
 #   <path>                findings the gate judges red (target: 0, and it must stay 0)
 #   <path>~unjudged       phrases it could not match verbatim -- the author's own wording in
 #                         quotation marks, or a fragment several headers share. Debt: shrink-only.
-#   <path>~undeclared     citation spans in blocks carrying no checkable phrase at all -- the blind
-#                         spot, counted rather than left silent. Debt: shrink-only.
+#   <path>~undeclared      citation spans in blocks carrying no checkable phrase at all. This
+#                         column is at 0 as of 2026-10-16: every citing comment block in src/ is now
+#                         either judged or has a phrase the gate tried to match. Re-adding a bare
+#                         citation with no quote puts a number back here, and it must be paid down.
 # Recorded 2026-10-16 by scripts/ci/header_citations.py; its own summary reads: 17 files cite the SDK,
-# 127 spans, 0 judged wrong, 21 unjudged phrases, 16 spans with nothing to check. Earlier states the
-# same day: 124/44/39 (before the joiner fix and the first two anchoring batches) then 125/21/25.
-# The 39 -> 25 -> 16 movement is 14 anchors in src/user/{voice,mod}.rs plus 9 in
-# src/networking_sockets/{fake_ip,fake_udp}.rs; the span count rose because naming a previously-bare
-# `:123-125` citation in full makes it countable, which is coverage, not drift.
+# 129 spans, 0 judged wrong, 21 unjudged phrases, 0 spans with nothing to check. The state when this
+# ledger was first written the same day was 124 / 44 / 39; the movement is one observation-layer fix
+# (header `//` markers were left in the joined text, which hid 25 verbatim quotes) and 38 spans
+# anchored with the sentences they cite, which also surfaced two citations that pointed at the wrong
+# lines and one that named the wrong file (isteamnetworkingutils.h:139-146 -> steamnetworkingtypes.h:1089-1090).
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
-src/networking_messages.rs~undeclared 1
+src/networking_messages.rs~undeclared 0
 src/networking_utils.rs 0
 src/networking_utils.rs~unjudged 0
-src/networking_utils.rs~undeclared 1
+src/networking_utils.rs~undeclared 0
 src/input/core.rs 0
 src/input/core.rs~unjudged 0
 src/input/core.rs~undeclared 0
 src/input/effects.rs 0
 src/input/effects.rs~unjudged 1
-src/input/effects.rs~undeclared 3
+src/input/effects.rs~undeclared 0
 src/input/origins.rs 0
 src/input/origins.rs~unjudged 0
 src/input/origins.rs~undeclared 0
 src/input/session.rs 0
 src/input/session.rs~unjudged 0
-src/input/session.rs~undeclared 1
+src/input/session.rs~undeclared 0
 src/matchmaking/chat.rs 0
 src/matchmaking/chat.rs~unjudged 0
 src/matchmaking/chat.rs~undeclared 0
 src/networking_sockets/fake_ip.rs 0
 src/networking_sockets/fake_ip.rs~unjudged 4
-src/networking_sockets/fake_ip.rs~undeclared 2
+src/networking_sockets/fake_ip.rs~undeclared 0
 src/networking_sockets/fake_udp.rs 0
 src/networking_sockets/fake_udp.rs~unjudged 4
 src/networking_sockets/fake_udp.rs~undeclared 0
@@ -42,19 +44,19 @@ src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0
 src/user/answers.rs 0
 src/user/answers.rs~unjudged 2
-src/user/answers.rs~undeclared 3
+src/user/answers.rs~undeclared 0
 src/user/buffers.rs 0
 src/user/buffers.rs~unjudged 4
-src/user/buffers.rs~undeclared 1
+src/user/buffers.rs~undeclared 0
 src/user/duration.rs 0
 src/user/duration.rs~unjudged 4
-src/user/duration.rs~undeclared 2
+src/user/duration.rs~undeclared 0
 src/user/mod.rs 0
 src/user/mod.rs~unjudged 0
 src/user/mod.rs~undeclared 0
 src/user/passthrough.rs 0
 src/user/passthrough.rs~unjudged 1
-src/user/passthrough.rs~undeclared 2
+src/user/passthrough.rs~undeclared 0
 src/user/voice.rs 0
 src/user/voice.rs~unjudged 1
 src/user/voice.rs~undeclared 0

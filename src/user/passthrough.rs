@@ -1,7 +1,8 @@
 //! The two `ISteamUser` calls whose parameter vocabulary the SDK never declares:
 //! `AdvertiseGame`'s raw `uint32` server IP (`isteamuser.h:156-159`) and
 //! `TrackAppUsageEvent`'s `int eAppUsageEvent`, which sits under the header's own
-//! `// Legacy functions` banner and has no matching enum in this binding (h:63-65).
+//! `// Legacy functions` banner -- "used by only a few games to track usage events", as
+//! `h:63-65` has it -- and has no matching enum in this binding.
 //!
 //! Both are wrapped anyway, because in each case the missing vocabulary can be *forwarded* without
 //! inventing one -- but only if the wrapper says out loud which assumption it is making. Where the
