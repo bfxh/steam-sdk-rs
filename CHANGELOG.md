@@ -528,6 +528,35 @@ plus the callbacks the wrapper can deliver.
   its own opener and asserts there are exactly three. Then `pub use origins::*;` and `pub use roster::*;`
   were refused as unused imports for the sixth time in this series, because those children hold only
   extra `impl` blocks and export nothing -- so only `callbacks` is globbed out, and the rest are declared.
+- `src/utils.rs` (710 lines: one `impl Utils` of 28 methods spanning lines 130-450, plus 26 other top-level items) became
+  `src/utils/`: `text_input.rs` 178 (the three controller-typing vocabularies with their write-side
+  `From`s, and show / read / length / dismiss for both the plain and floating box), `mod.rs` 142
+  (imports, the `Utils` struct, the wiring, and the 105-line `#[cfg(test)] mod tests` (old lines 567-671) that stayed in
+  the column-0 shape `api_coverage.py` strips on), `filtering.rs` 103 (init, the filter call, the
+  context vocabulary, the `FilteredText` record and the buffer copy that builds it), `ipv6.rs` 60,
+  `identity.rs` 56 (app id, IP country, UI language, server time, the two idle reads, the IPC
+  counter), `warning.rs` 54 (the process-wide slot behind an `RwLock`, the `extern "C"` trampoline
+  that catches a panicking user callback, and `set_warning_callback`), `overlay.rs` 47 (needs-present
+  and the notification position/inset), `param_strings.rs` 47, `client_state.rs` 42 (Big Picture,
+  Steam Deck, VR running and the headset-streaming switch, the China launcher), `battery.rs` 34 and
+  `callbacks.rs` 29 (the two dismissal payloads and the corner enum). The crate's largest file is
+  still `src/lib.rs` at 814; the next two are `src/networking_types/config.rs` 629 and
+  `src/error.rs` 603.
+  54 items, 0 unclaimed lines, witness 642 non-blank before / **2** lost / 70 added, and every one of
+  the five non-wrapper additions is named by this paragraph: the two lost lines are
+  `ipv6_state_from_raw` and `filtered_text_from_buffer` becoming `pub(super)`, their two replacements,
+  the `pub(crate) use param_strings::*;` that keeps `crate::utils::SteamParamStringArray` resolving for
+  `src/ugc/update.rs` and `src/ugc/ugc_tests.rs`, and the two `use super::...` lines the root's test
+  module needed once those converters lived a level down. `api_coverage` (642 of 913, `ISteamUtils` 32)
+  and `type_surface` (`Utils` 28) compare green against the pre-split baselines; `module_sizes`
+  (125 entries, 27,397 lines) and `package_inventory` (140 shipped files) re-recorded; `cargo test
+  --lib utils` reaches 10 (9 passed, 1 ignored) and the suite still lands at 155.
+  The impl's closer was computed again rather than typed -- `(130, 450)` by brace balance -- and two of
+  the eleven anchors were wrong on the first pass: I wrote `static WARNING_CALLBACK` at 101 and
+  `c_warning_callback` at 104, but 101 is its doc line and the static sits at 103, so the generator's
+  decl-line assert (which checks the *declaration*, not the span start) refused and named line 101 as
+  blank. Same class as the friends unit's recalled impl span: the probe catches a range, only an
+  assertion on the item line catches an off-by-two anchor.
 - No API change, one structure change: `src/matchmaking.rs` was the largest file left in the crate
   (1339 lines) and the last big module still in single-file form, so it became a directory module --
   `src/matchmaking/mod.rs` 478 (`Matchmaking`, `LobbyType`, `LobbyId`, the lobby lifecycle and the
