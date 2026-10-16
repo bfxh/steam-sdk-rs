@@ -38,6 +38,7 @@ BASELINES = ROOT / "scripts" / "ci" / "baselines"
 READERS = {
     "api_coverage.txt": ".github/workflows/ci.yml",
     "doc_pointers_historical.txt": "scripts/ci/doc_pointers.py",
+    "header_citations.txt": ".github/workflows/ci.yml",
     "module_sizes.txt": ".github/workflows/ci.yml",
     "no_panic_sites.txt": ".github/workflows/ci.yml",
     "package_inventory.txt": ".github/workflows/ci.yml",
@@ -56,8 +57,9 @@ EXCUSED_EMPTY = {
     "no_panic_sites.txt": "target is zero; the measurement side must prove it scanned (compare_baseline marker rule)",
 }
 
-# Measured on 2026-10-15: 10 files. Below this the scan is not looking at the real inventory.
-MIN_BASELINES = 10
+# Measured on 2026-10-16: 11 files (the twelfth candidate, `header_citations.txt`, arrived with the
+# SDK-citation gate that day). Below this the scan is not looking at the real inventory.
+MIN_BASELINES = 11
 
 
 def tracked():

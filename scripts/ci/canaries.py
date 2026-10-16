@@ -202,7 +202,12 @@ def canary_baseline_files():
                    + "".join(f'    "{n}": ".github/workflows/ci.yml",\n' for n in ledgers)
                    + '}\n')
         script = replace_block(read(dst), "READERS = {", mapping)
-        script = script.replace("MIN_BASELINES = 10", "MIN_BASELINES = 3")
+        # Set the floor by pattern, not by the value the repository happens to carry: this fixture
+        # held three ledgers and the literal replacement `"MIN_BASELINES = 10"` stopped matching the
+        # day the inventory grew to eleven, so the fixture ran against the real floor and every
+        # assertion in it exited 2 -- a canary that fails because a constant moved is not testing the
+        # rule it claims to test.
+        script = re.sub(r"^MIN_BASELINES = \d+$", "MIN_BASELINES = 3", script, flags=re.M)
         probe = write(tmp / CI / "probe.py", script)
         git(tmp, "add", "-A")
         expect("a clean fixture inventory passes", run_script(probe, cwd=tmp).returncode, 0)
@@ -243,7 +248,7 @@ def canary_baseline_files():
         expect("a reader entry for a ledger that no longer exists",
                run_script(tmp / CI / "probe_ghost.py", cwd=tmp).returncode, 1)
 
-        floor = read(probe).replace("MIN_BASELINES = 3", "MIN_BASELINES = 40")
+        floor = re.sub(r"^MIN_BASELINES = \d+$", "MIN_BASELINES = 40", read(probe), flags=re.M)
         write(tmp / CI / "probe_floor.py", floor)
         expect("an empty ledger inventory is refused, not passed",
                run_script(tmp / CI / "probe_floor.py", cwd=tmp).returncode, 2)
@@ -320,8 +325,72 @@ def canary_bindings_drift():
             failures.append(f"bindings_drift: {label}")
 
 
+HEADER_FIXTURE = """// line one
+// the phrase that matters is right here on line two
+
+// line four says something else entirely about widgets and gadgets
+"""
+OTHER_FIXTURE = "// a sentence that only lives in the other header, about trampolines\n"
+
+
+def canary_header_citations():
+    """The header-citation ruler must judge each outcome it claims, and the two short citation forms
+    it exists to parse. Proven against fixture headers, so every assertion is about the ruler rather
+    than about whichever line numbers the real SDK happens to put text on."""
+    print("header_citations.py -- span drift, blanks, ranges, shorthand, wrong header, empty scan")
+    root = Path(tempfile.mkdtemp(prefix="hc-canary-"))
+    sdk = root / "sdk"
+    src = root / "src"
+    write(sdk / "fake.h", HEADER_FIXTURE)
+    write(sdk / "other.h", OTHER_FIXTURE)
+    ruler = "ruler.py"
+    shutil.copy(ROOT / CI / "header_citations.py", root / ruler)
+
+    def run(body):
+        write(src / "lib.rs", body)
+        done = subprocess.run(
+            [sys.executable, ruler, "src", "sdk"],
+            cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        return done.returncode, done.stdout
+
+    global checks
+    for label, body, want in (
+        ("phrase inside the cited span", '/// `fake.h:2` says "the phrase that matters"\n', 0),
+        ("the same phrase one line off", '/// `fake.h:4` says "the phrase that matters"\n', 1),
+        ("a span of blank lines", '/// `fake.h:3` says "the phrase that matters"\n', 1),
+        ("a span past the end of the header", '/// `fake.h:99` says "the phrase that matters"\n', 1),
+        ("the `h:` shorthand is judged, not skipped",
+         '/// `fake.h:2` then `h:4` -- "line four says something else"\n', 0),
+        ("the `h:` shorthand pointing at the wrong line",
+         '/// `fake.h:2` then `h:2` -- "line four says something else"\n', 1),
+        ("a phrase belonging to a header this block never cites",
+         '/// `fake.h:2` quotes "a sentence that only lives in the other header"\n', 1),
+        ("the author's own summary in quotes is debt, not a verdict",
+         '/// `fake.h:2` is "a paraphrase no header contains verbatim at all"\n', 0),
+    ):
+        code, _ = run(body)
+        expect(f"header_citations: {label}", code, want)
+
+    _, output = run('/// `fake.h:2` is "a paraphrase no header contains verbatim at all"\n')
+    checks += 1
+    if "src/lib.rs~unjudged 1" in output:
+        print("  ok   the paraphrase is registered as exactly one unit of debt")
+    else:
+        print(f"  FAIL paraphrase debt missing from [{output.strip()}]")
+        failures.append("header_citations: paraphrase debt")
+
+    shutil.rmtree(src)
+    done = subprocess.run(
+        [sys.executable, ruler, "gone-src", "sdk"],
+        cwd=str(root), capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    expect("header_citations: a scan with no sources at all", done.returncode, 2)
+    shutil.rmtree(root, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_doc_pointers, canary_baseline_files,
-            canary_api_coverage, canary_bindings_drift)
+            canary_api_coverage, canary_bindings_drift, canary_header_citations)
 
 
 def main():

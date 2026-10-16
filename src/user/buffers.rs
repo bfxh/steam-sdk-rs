@@ -47,7 +47,7 @@ fn folder_arg_len(len: usize) -> Option<i32> {
 
 /// How large a buffer the ticket's second round needs, from the size Steam reported.
 ///
-/// Zero means "no ticket is available" (`isteamuser.h:172`), which is not a failure of the caller
+/// Zero means "no ticket is available" (`isteamuser.h:168-172`), which is not a failure of the caller
 /// but of timing -- the request callback has not delivered readiness yet.
 fn ticket_buffer(reported: u32) -> Result<usize, SteamError> {
     if reported == 0 {

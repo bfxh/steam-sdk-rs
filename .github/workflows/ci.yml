@@ -142,6 +142,24 @@ jobs:
       - name: documented source pointers resolve
         run: python3 scripts/ci/doc_pointers.py
 
+      # 文档指针管的是 `src/某.rs:行`，这条管的是另一头：**代码注释里对 vendored SDK 头文件的行号引用**。
+      # 建这条门的原因是本仓连着两个单元都在这上面出错：`fake_ip.rs` 三处偏 2~6 行、`fake_udp.rs` 两处
+      # 偏 1 行，全是"读过一遍就抄下来、抄完没再读"。当时只有这两个文件因为自带手写引用表而侥幸，
+      # 其余 15 个文件没人看。首跑实测：**17 个文件、124 处引用、99 个注释块**，其中 115 处写全名
+      # （`isteamuser.h:168-172`）、7 处缩写（`h:910-911`）、6 处续引（`:866`）——只认全名的尺子会数出
+      # 119 处，把"这里没有引用"和"引用按散文的写法出现"混成一回事。
+      # 判据（每条都有 canary 反证，`canaries.py` 里 10 条断言）：越界 / 整段空行 / 引号里的原文确实属于
+      # 被引头文件但落在本块所有被引 span 之外 / 原文属于另一个头文件而本块没引它 —— 四类判红；
+      # 引号里是本仓自己的转述（头文件里逐字找不到）则计入 **debt**，按文件登记、只能变短。
+      # 判决在注释块级别做并集，不做"引用↔短语"配对：原型按最近短语配对时，一个块里三处引用共用一条
+      # 短语会把同一条判三次——那是启发式的失败伪装成文档的失败。
+      # 多头文件都能匹配上的通用短语（"not allowed"）算 debt 不算违规：首版把它当判红，一条就占了
+      # 当时全部违规的四分之一，而误报的门没人信。
+      - name: SDK-header citations in code docs land on the text they quote
+        run: |
+          python3 scripts/ci/header_citations.py > "$RUNNER_TEMP/header_citations.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/header_citations.txt "$RUNNER_TEMP/header_citations.txt"
+
       # `cargo test` 在"一个测试都没匹配到"时仍然退出 0 并打印 `test result: ok. 0 passed`。
       # 这条门读实际跑到的用例数，为 0 就判红，并拒绝低于登记地板的数量。
       - name: test floors (a run that tested nothing is not green)

@@ -90,7 +90,7 @@ impl Input {
 
     /// Translate an origin to another controller type.
     ///
-    /// `isteaminput.h:1003`: "for inputs not present on the other controller type this will return
+    /// `isteaminput.h:1003-1005`: "for inputs not present on the other controller type this will return
     /// k_EInputActionOrigin_None", and passing `k_ESteamInputType_Unknown` asks Steam for the
     /// closest mapping it knows -- "if a Playstation 5 controller was released this function would
     /// return Playstation 4 origins". The answer is the raw binding enum, deliberately not

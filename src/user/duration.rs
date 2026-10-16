@@ -83,8 +83,8 @@ impl DurationControl {
 /// What the playtime system recommends, or that the game should exit.
 ///
 /// Read-only: nothing is sent back through this type, so no fallback value can be mistaken for a
-/// Steam code. `steamclientpublic.h:426-435` puts progress and exit-soon requests in the *same*
-/// enum under "WARNING: DO NOT RENUMBER" -- 0..2 are reward throttles, 3..5 are "please exit" --
+/// Steam code. `steamclientpublic.h:425-435` puts progress and exit-soon requests in the *same*
+/// enum under "WARNING: DO NOT RENUMBER" -- 0..2 are reward throttles, 3..5 tell the game to exit --
 /// which is why this cannot be a plain three-way choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DurationControlProgress {

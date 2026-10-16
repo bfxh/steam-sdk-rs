@@ -1385,6 +1385,27 @@ struct Callbacks {
 - miri test                      # UB 检测（FFI 用 mock 替代）
 ```
 
+上面这段是 2026-10-11 的规划稿，`deny`/`miri` 至今没进链（记在这里是为了别把它当成已存在）。
+**实际在跑的是 `quality` 作业的 19 个 step（其中 16 个具名，`python E:/tmp/count_steps.py` 按 YAML 数）**，
+外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 24 项判定。
+2026-10-16 新增的是其中一步：
+
+- `SDK-header citations in code docs land on the text they quote`（`scripts/ci/header_citations.py`
+  ＋ `baselines/header_citations.txt`）。它判的是**代码注释里对 vendored SDK 头文件的行号引用**。
+  实测规模：17 个文件、99 个注释块、**124 处引用**——115 处写全名（`isteamuser.h:168-172`）、
+  7 处缩写（`h:910-911`）、6 处续引（`:866`）；只认全名的原型数到 119，于是把"这里没引用"和
+  "引用按散文的写法出现"混成了一回事。四类判红：越界、整段空行、短语确实属于被引头文件但落在本块
+  所有 span 之外、短语属于另一个本块没引的头文件。其余（引号里是本仓自己的转述，或本块没有可核对的
+  短语）按文件登记成 `~unjudged` 债，**当前 44 条**，只能变短。
+  判决以注释块为单位做并集，不做"引用↔短语"配对：原型按最近短语配对时，一个三引用一短语的块会把
+  同一条判三次——那是启发式的失败伪装成文档的失败。多头文件共有的通用短语（"not allowed" 在四个头
+  文件里逐字出现）算债不算违规：首版把它判红，一条就占了当时全部违规的 1/4，而爱哭狼的门没人信。
+  首跑抓到 9 条、分布在 7 个位置，其中 6 处是文档写错。最重的一条在 `src/matchmaking/chat.rs`：
+  引 `isteammatchmaking.h:961`，并把 "Flags describing how a users lobby state has changed" 当成
+  Steam 原文——**该头文件只有 886 行**，那句话在整个 vendored SDK 里逐字不存在，它是本仓自己的注释
+  戴了引号和一个不存在的行号。反证 10 条断言进 `canaries.py`（总数 33→43）：命中 span、偏一行、
+  整段空行、越过 EOF、`h:` 缩写两种结局、跨头文件误引、纯转述记 1 条债、无源目录退出 2。
+
 ### 7.2 测试策略
 
 现状问题：20 个测试中 `basic_test`（原在 `src/lib.rs`，拆分后在 `src/lib_tests.rs:12`）依赖真实 Steam 客户端，无 Steam 的 CI 必然 panic，导致该测试实际无法在 CI 运行——14 个模块因此零覆盖。

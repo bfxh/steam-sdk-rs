@@ -932,6 +932,66 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   script and takes its two `$GITHUB_OUTPUT` keys from stdout, and the four fixtures -- noise-only,
   struct materialised, token at column one, empty diff -- are pinned as canaries, so a future edit that
   reintroduces the hole turns the gate red instead of quietly narrowing it.
+- **Every SDK-header line citation in `src/` is judged by a gate now**
+  (`scripts/ci/header_citations.py`, a new ledger `scripts/ci/baselines/header_citations.txt`, 10 new
+  canary assertions -- `canaries.py` runs 43 where it ran 33). The reason it exists is the two units
+  immediately before it: `fake_ip.rs` shipped three citations 2-6 lines off and `fake_udp.rs` two
+  citations one line off, and the only reason those were caught at all is that those two files bother
+  to carry a hand-written citation table. Measured first: **124 citation spans across 17 files and 99
+  comment blocks**, of which exactly 2 files were checked by anything.
+  The corpus has three citation forms and all three are parsed -- `isteamuser.h:168-172`, the short
+  `h:910-911`, and the bare continuation `:866` -- the last two inheriting the header named earlier in
+  the same block, which is how prose writes them. That was a measured decision, not a nicety: a
+  prototype that matched only the named form counted 119 spans and could not tell "no citation here"
+  apart from "a citation written the way people write".
+  Judging happens per comment block, over the union of the block's spans, not per citation. Pairing each
+  citation with its nearest quoted phrase -- what the prototype did -- reported one phrase against all
+  three citations of a block that held three citations and one quote, i.e. a heuristic failure
+  pretending to be a documentation failure. Four verdicts are red: a span past the end of the header, a
+  span whose lines are all blank, a phrase that is verbatim in a cited header but outside every span
+  cited for it, and a phrase that is verbatim in some *other* vendored header the block never cites.
+  Everything else -- no phrase, or a phrase no header contains verbatim because it is this crate's own
+  summary written inside quotation marks -- is registered per file as `~unjudged` debt that may only
+  shrink, because scoring those as verified is the same lie as a green exit from a ruler that read
+  nothing. One canary assertion counts that debt literally -- a fixture paraphrase must register as
+  exactly one unit, not zero and not two.
+  **Scope boundary, registered rather than glossed.** The gate reads comment blocks, so the
+  hand-written citation tables -- 26 tuples across `fake_ip.rs` (`CITATIONS` 11 + `FAKEIP_CITATIONS` 7)
+  and `fake_udp.rs` (8) -- are *not* among its 124 spans: they are code, and they are pinned by their own
+  unit tests instead, which is exactly how both files' bad spans got caught this week. What the gate does
+  see in those two files is their prose: 5 + 12 = 17 of the 44 unjudged entries are paraphrases in
+  quotation marks, which is why the debt column exists at all.
+  Control on the real corpus, not just the fixtures: `steamclientpublic.h:425-435` moved to `427-435`
+  in place -- a two-line drift of exactly the kind that shipped twice this week -- and the gate went
+  0 → 1 findings naming that citation and that header, then back to 0 with the file restored
+  byte-identical. The span was chosen so the quoted phrase still matches nothing in the new range;
+  a mutation that only trips the blank or out-of-range rules would have proved the wrong thing.
+  Building that control turned up a brittle canary: `canary_baseline_files` set its fixture floor by
+  replacing the literal `MIN_BASELINES = 10`, and the day the ledger inventory reached eleven the
+  pattern stopped matching, so the fixture silently ran against the repository's real floor and two
+  of its assertions exited 2 -- a canary failing because an unrelated constant moved is not testing
+  the rule it claims. Both floor edits in that canary are pattern-based now (`^MIN_BASELINES = \d+$`).
+  One rule was added after it produced a false red: a fragment several headers share verbatim
+  ("not allowed" turns up in four) attributes to none of them, so it is debt, not a finding. The first
+  version called it red, and one such fragment was a quarter of everything it reported -- a gate that
+  cries wolf on boilerplate teaches everyone to ignore its output.
+- **The gate's first run found nine findings over seven sites, and six of them were my prose being
+  wrong about Steam's text.** Fixed at the source, each verified against the header rather than against
+  memory: `isteaminput.h` 1003 → **1003-1005** (the Playstation-5 example it quotes is on 1005);
+  `steamnetworkingfakeip.h:17-18` was **never cited** by the `send_to_fake_ip` doc that quotes "not
+  allowed and cannot be sent"; `isteamugc.h:606-607` was missing for the two field comments
+  `GetAppDependenciesResult_t` quotes; `isteamuser.h:172` → **168-172** (the "no ticket is available"
+  sentence is 168); `steamclientpublic.h:426-435` → **425-435** (the `WARNING: DO NOT RENUMBER` line
+  sits above the enum it describes). The seventh site was worse than a drift: `src/matchmaking/chat.rs`
+  cited `isteammatchmaking.h:961` and put "Flags describing how a users lobby state has changed" in
+  quotation marks as Steam's words -- **that header is 886 lines long**, and the quoted sentence is
+  nowhere in the vendored SDK. It was the crate's own doc comment on `ChatMemberStateChange` wearing
+  quotation marks and a fabricated number; the entry now cites 531-541 and quotes the line that is
+  actually there ("fields specific to a chat member").
+  Two more sites were this crate paraphrasing inside quotation marks: `3..5 are "please exit"`, which
+  Steam writes as "game should exit - steam will terminate the game", and one generic fragment. The
+  paraphrases are now written as prose rather than as quotes, because a quotation mark is a claim that
+  the words are somebody else's.
 - **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
   `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named

@@ -1,7 +1,7 @@
 src/lib.rs 829
 src/networking_types/config.rs 629
 src/error.rs 603
-src/ugc/answers.rs 599
+src/ugc/answers.rs 600
 src/ugc/mod.rs 598
 src/matchmaking_servers.rs 580
 src/timeline.rs 578
@@ -17,7 +17,7 @@ src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user/voice.rs 437
-src/networking_sockets/fake_udp.rs 424
+src/networking_sockets/fake_udp.rs 425
 src/networking_messages.rs 416
 src/ugc/update.rs 404
 src/friends/friend.rs 401
@@ -32,7 +32,7 @@ src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
 src/matchmaking/filters.rs 314
 src/server_stats.rs 309
-src/matchmaking/chat.rs 280
+src/matchmaking/chat.rs 281
 src/user_stats/global_stats.rs 280
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271

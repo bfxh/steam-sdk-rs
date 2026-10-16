@@ -236,7 +236,8 @@ impl_callback!(cb: WorkshopEULAStatus_t => WorkshopEULAStatus {
 /// callback: `isteamugc.h:596-598` says "the result of a call to GetAppDependencies. Callback
 /// may be called multiple times until all app dependencies have been returned", and the struct
 /// carries both `m_nNumAppDependencies` ("number returned in this struct") and
-/// `m_nTotalNumAppDependencies` ("total found"). Accumulate pages until they add up.
+/// `m_nTotalNumAppDependencies` ("total found"), `isteamugc.h:606-607`. Accumulate pages until they
+/// add up.
 ///
 /// That is why `GetAppDependencies` itself is not wrapped as a one-shot closure here -- the
 /// `FnOnce(Result<P, SteamError>)` shape used by every other method in this file would hand over

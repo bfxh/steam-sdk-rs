@@ -100,9 +100,10 @@ pub enum ChatMemberStateChange {
 
     /// Steam sent a code this binding does not name, or a combination of the flags below.
     ///
-    /// The field is a bitmask -- `isteammatchmaking.h:961` calls these "Flags describing how a
-    /// users lobby state has changed" -- and this wrapper reads only the five single flags, so a
-    /// combination lands here rather than panicking. Reading it as flags instead of one state is
+    /// The field is a bitmask -- `isteammatchmaking.h:531-541` names five flags, one bit each from
+    /// 0x0001 to 0x0010, under the header's own note that these are "fields specific to a chat
+    /// member" -- and this wrapper reads only those five, so a combination lands here rather than
+    /// panicking. Reading it as flags instead of one state is
     /// the open change; until then `Unknown` is the honest answer for anything unnamed.
     Unknown,
 }

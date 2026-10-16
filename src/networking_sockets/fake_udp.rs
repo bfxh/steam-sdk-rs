@@ -121,7 +121,8 @@ impl FakeUDPPort {
     ///
     /// A payload above [`FAKE_UDP_MAX_MESSAGE_BYTES`] is refused here with
     /// `InvalidParameter` rather than sent, because Steam documents that size as "not allowed and
-    /// cannot be sent". Staying under [`FAKE_UDP_RECOMMENDED_MTU`] is recommended but never enforced.
+    /// cannot be sent" (`steamnetworkingfakeip.h:17-18`). Staying under [`FAKE_UDP_RECOMMENDED_MTU`]
+    /// is recommended but never enforced.
     pub fn send_to_fake_ip(
         &self,
         address: SocketAddr,
