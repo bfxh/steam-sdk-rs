@@ -220,7 +220,8 @@ impl AchievementHelper<'_> {
     /// is 0, `GetImageSize` fails, the icon is not the 64x64 this getter insists on, or
     /// `GetImageRGBA` fails.
     ///
-    /// A zero handle is ambiguous by design -- "A return value of 0 may indicate we are still
+    /// A zero handle is ambiguous by design -- `isteamuserstats.h:135-137` warns that "A return
+    /// value of 0 may indicate we are still
     /// fetching data, and you can wait for the `UserAchievementIconFetched_t` callback which
     /// will notify you when the bits are ready. If the callback still returns zero, then there
     /// is no image set for the specified achievement." So retry after that callback before

@@ -992,6 +992,32 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   Steam writes as "game should exit - steam will terminate the game", and one generic fragment. The
   paraphrases are now written as prose rather than as quotes, because a quotation mark is a claim that
   the words are somebody else's.
+- **A third ledger column makes the gate's own blind spot a number, and the fifth criterion that was
+  measured and refused** (`header_citations.py`, `baselines/header_citations.txt`). Of 124 spans, 39 sat
+  in comment blocks that carry no quotation marks at all -- not judged, not debt, just unverified, and
+  therefore invisible in a way that reads like coverage. They are now `<path>~undeclared`, shrink-only
+  like the other two columns, so "go read the header and quote the real sentence" is a direction the gate
+  rewards instead of a chore nobody can see.
+  The tempting way to convert those 39 automatically was: if a block names a Steam symbol, the symbol
+  must appear inside the span it cites. Tried on the corpus, twice -- loose (CamelCase names, substring
+  membership: 67 claims, 20 flags) and tight (whole-identifier vocabulary, only `k_E*` / `ISteam*` /
+  `SteamAPI_*` / `*_t`: 26 claims, 7 flags). Every one of the seven tight flags was read and **none was
+  a defect**: this crate cites a header's *doc comment* rather than its declaration line as a matter of
+  course, and the neighbouring prose routinely names a symbol belonging to the next sentence
+  (`user_stats/stats.rs` cites `isteamuserstats.h:134` for the icon-handle sentence while
+  `UserAchievementIconFetched_t` comes up because the following sentence explains how the crate resolves
+  the handle -- the identifier is at 135 and 428). Precision 0 out of 7, so the rule is recorded as a
+  negative result in the ruler's own docstring instead of shipping, and the coverage work is done the
+  slow way: **fourteen spans in `src/user/voice.rs` and `src/user/mod.rs` now carry the sentences they
+  cite** (`"It is suggested to start with a 20kb buffer and reallocate as necessary."`,
+  `"GetVoice() should continue to be called until it returns k_eVoiceResultNotRecording"`,
+  `"gets whether the users phone number is verified"`, and eleven more), quoted as Steam wrote them --
+  including their grammar, which the entries now say out loud rather than repair.
+  Ledger after this unit: **125 spans, 0 judged wrong, 21 unjudged phrases, 25 undeclared spans**
+  (from 44 and 39; the joiner fix accounts for most of the first drop and the fourteen anchors for the
+  second). `module_sizes`: `src/user/voice.rs` 437 -> 445, `src/user/mod.rs` 375 -> 381,
+  `src/user_stats/stats.rs` 276 -> 277 (registered total 27838 -> 27853, the +15 being exactly those
+  three), and canaries 43 -> **46**.
 - **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
   `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named
@@ -1332,6 +1358,28 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **The citation gate could not see a sentence Steam had wrapped, and one real mis-citation hid behind
+  that** (`scripts/ci/header_citations.py`, `src/user_stats/stats.rs`). The ruler joined header lines
+  with their `//` markers still attached, so any phrase spanning two or more header lines was
+  unmatchable -- the haystack read `... about widgets and gadgets // and this sentence keeps ...` while
+  the prose quoted it clean. Measured here: of 93 quotes sitting in single-citation blocks, **25 matched
+  their header only once the marker was stripped**. Two damages followed. Verbatim quotes were filed as
+  paraphrase debt, inflating `~unjudged`; and every `WRONG-PLACE` verdict whose phrase crossed a line
+  break was **suppressed**, which is how `src/user_stats/stats.rs` got away with citing
+  `isteamuserstats.h:134` while quoting the sentence that lives at 135-137. That one surfaced the moment
+  the joiner was fixed and is now cited at `135-137`.
+  How it was found matters more than the fix: I added twelve verbatim quotes to anchor unverified
+  citations and the debt column moved the *wrong way* (+5). A ruler that reports more "unverifiable"
+  text after the text became more quotable is a broken observation layer, not a corpus that got worse --
+  the same shape as the doc-pointer incident where the parser matched a path suffix inside a longer,
+  correct path. Two cross-line assertions pin it (canaries reach **46** across this unit, from 43 at the
+  previous commit): a phrase spanning header lines
+  4-5 matches when cited `4-5`, and is red when cited `5` alone.
+  **The bug had already been laundered into a style rule.** The hand-written tables in `fake_ip.rs` and
+  `fake_udp.rs` require each phrase to sit inside a *single* header line, their own comment saying a
+  phrase across a break "would fail for the wrong reason". That constraint was work around the defect,
+  not a property of the problem. It still holds and the tables still pass, but it is no longer
+  load-bearing, and the next person to read it should not conclude that cross-line quotes are forbidden.
 - **`to_steam_result` no longer panics on a result code this crate has no name for.** It read
   `error => Err(error.try_into().unwrap())`, so any code outside `SteamError`'s mapped list aborted inside
   the *caller's* frame -- on a value Steam chose, not one the caller passed in wrong. Measured rather than

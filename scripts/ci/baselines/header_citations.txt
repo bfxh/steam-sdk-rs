@@ -1,44 +1,62 @@
-# SDK-header line citations, per file. Two keys per file that cites a header:
-#   <path>                 findings the gate judges red (target: 0, and it must stay 0)
-#   <path>~unjudged        citations with no verbatim phrase to check -- debt that may only shrink
-# Recorded 2026-10-16 from the first green run of scripts/ci/header_citations.py, whose own
-# summary line reads: 17 files cite the SDK, 124 spans, 0 judged wrong, 44 unjudged.
-# Composition, measured: 124 citation spans over 99 comment blocks -- 115 named (`isteamuser.h:168`),
-# 7 short (`h:910-911`), 6 bare continuations (`:866`). The short and bare forms inherit the header
-# named before them in the same block, which is how the sentences use them; a prototype that parsed
-# only the named form counted 119 and could not see the difference between "no citation there" and
-# "a citation written the way prose writes it".
+# SDK-header line citations, per file. Three keys per file that cites a header:
+#   <path>                findings the gate judges red (target: 0, and it must stay 0)
+#   <path>~unjudged       phrases it could not match verbatim -- the author's own wording in
+#                         quotation marks, or a fragment several headers share. Debt: shrink-only.
+#   <path>~undeclared     citation spans in blocks carrying no checkable phrase at all -- the blind
+#                         spot, counted rather than left silent. Debt: shrink-only.
+# Recorded 2026-10-16 by scripts/ci/header_citations.py, whose own summary reads: 17 files cite the
+# SDK, 125 spans, 0 judged wrong, 21 unjudged phrases, 25 spans with nothing to check. This ledger's
+# first entry the same day read 124 / 44 / 39; it moved because (a) the joiner kept the header lines'
+# `//` markers, which hid 25 verbatim quotes, and (b) fourteen spans in src/user/voice.rs and
+# src/user/mod.rs were anchored with the real sentences they cite.
 src/networking_messages.rs 0
-src/networking_messages.rs~unjudged 1
+src/networking_messages.rs~unjudged 0
+src/networking_messages.rs~undeclared 1
 src/networking_utils.rs 0
 src/networking_utils.rs~unjudged 0
+src/networking_utils.rs~undeclared 1
 src/input/core.rs 0
-src/input/core.rs~unjudged 1
+src/input/core.rs~unjudged 0
+src/input/core.rs~undeclared 0
 src/input/effects.rs 0
 src/input/effects.rs~unjudged 1
+src/input/effects.rs~undeclared 3
 src/input/origins.rs 0
 src/input/origins.rs~unjudged 0
+src/input/origins.rs~undeclared 0
 src/input/session.rs 0
 src/input/session.rs~unjudged 0
+src/input/session.rs~undeclared 1
 src/matchmaking/chat.rs 0
 src/matchmaking/chat.rs~unjudged 0
+src/matchmaking/chat.rs~undeclared 0
 src/networking_sockets/fake_ip.rs 0
-src/networking_sockets/fake_ip.rs~unjudged 5
+src/networking_sockets/fake_ip.rs~unjudged 4
+src/networking_sockets/fake_ip.rs~undeclared 9
 src/networking_sockets/fake_udp.rs 0
-src/networking_sockets/fake_udp.rs~unjudged 12
+src/networking_sockets/fake_udp.rs~unjudged 4
+src/networking_sockets/fake_udp.rs~undeclared 2
 src/ugc/answers.rs 0
-src/ugc/answers.rs~unjudged 2
+src/ugc/answers.rs~unjudged 0
+src/ugc/answers.rs~undeclared 0
 src/user/answers.rs 0
 src/user/answers.rs~unjudged 2
+src/user/answers.rs~undeclared 3
 src/user/buffers.rs 0
-src/user/buffers.rs~unjudged 5
+src/user/buffers.rs~unjudged 4
+src/user/buffers.rs~undeclared 1
 src/user/duration.rs 0
 src/user/duration.rs~unjudged 4
+src/user/duration.rs~undeclared 2
 src/user/mod.rs 0
-src/user/mod.rs~unjudged 2
+src/user/mod.rs~unjudged 0
+src/user/mod.rs~undeclared 0
 src/user/passthrough.rs 0
 src/user/passthrough.rs~unjudged 1
+src/user/passthrough.rs~undeclared 2
 src/user/voice.rs 0
-src/user/voice.rs~unjudged 7
+src/user/voice.rs~unjudged 1
+src/user/voice.rs~undeclared 0
 src/user_stats/stats.rs 0
-src/user_stats/stats.rs~unjudged 1
+src/user_stats/stats.rs~unjudged 0
+src/user_stats/stats.rs~undeclared 0

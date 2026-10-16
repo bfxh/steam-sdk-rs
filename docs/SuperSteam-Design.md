@@ -13,7 +13,7 @@
 > - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
 > - **最大的单文件模块已目录化（不是全部）**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜；
 >   `ls src/*.rs | wc -l` 实测仍有 **24 个**单文件模块直接躺在 `src/` 下，最大的是 `input.rs` 725、
->   `error.rs` 603 等叶子模块——`input.rs` 725 与 `utils.rs` 710 已在 2026-10-16 分别拆进 `src/input/`、`src/utils/`，所以现在的第二名是 `networking_types/config.rs` 629）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 261、`fake_ip.rs` 493、`fake_udp.rs` 424、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/utils/`（`text_input.rs` 178、`mod.rs` 142、`filtering.rs` 103、`ipv6.rs` 60、`identity.rs` 56、`warning.rs` 54、`overlay.rs` 47、`param_strings.rs` 47、`client_state.rs` 42、`battery.rs` 34、`callbacks.rs` 29）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 57、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
+>   `error.rs` 603 等叶子模块——`input.rs` 725 与 `utils.rs` 710 已在 2026-10-16 分别拆进 `src/input/`、`src/utils/`，所以现在的第二名是 `networking_types/config.rs` 629）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 381、`voice.rs` 445、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 261、`fake_ip.rs` 493、`fake_udp.rs` 425、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/utils/`（`text_input.rs` 178、`mod.rs` 142、`filtering.rs` 103、`ipv6.rs` 60、`identity.rs` 56、`warning.rs` 54、`overlay.rs` 47、`param_strings.rs` 47、`client_state.rs` 42、`battery.rs` 34、`callbacks.rs` 29）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 57、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
 > - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 155 个（140 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；同一晚先记 129、再记 153，两次都被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
 > - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
 >
@@ -1396,7 +1396,7 @@ struct Callbacks {
   7 处缩写（`h:910-911`）、6 处续引（`:866`）；只认全名的原型数到 119，于是把"这里没引用"和
   "引用按散文的写法出现"混成了一回事。四类判红：越界、整段空行、短语确实属于被引头文件但落在本块
   所有 span 之外、短语属于另一个本块没引的头文件。其余（引号里是本仓自己的转述，或本块没有可核对的
-  短语）按文件登记成 `~unjudged` 债，**当前 44 条**，只能变短。
+  短语）按文件登记成 `~unjudged` 债，**首跑登记 44 条**（同一天两次修正后为 21，见下面两条），只能变短。
   判决以注释块为单位做并集，不做"引用↔短语"配对：原型按最近短语配对时，一个三引用一短语的块会把
   同一条判三次——那是启发式的失败伪装成文档的失败。多头文件共有的通用短语（"not allowed" 在四个头
   文件里逐字出现）算债不算违规：首版把它判红，一条就占了当时全部违规的 1/4，而爱哭狼的门没人信。
@@ -1405,6 +1405,22 @@ struct Callbacks {
   Steam 原文——**该头文件只有 886 行**，那句话在整个 vendored SDK 里逐字不存在，它是本仓自己的注释
   戴了引号和一个不存在的行号。反证 10 条断言进 `canaries.py`（总数 33→43）：命中 span、偏一行、
   整段空行、越过 EOF、`h:` 缩写两种结局、跨头文件误引、纯转述记 1 条债、无源目录退出 2。
+- **同一条门的第三列与被否证的第二种尺**（同日，`26da7e1` 之后）。124 处里有 **39 处所在注释块根本
+  没有引号**——既没被判、也不在债里，属于"看起来像覆盖"的静默区。现按 `<path>~undeclared` 登记，
+  同样只能变短。
+  把 39 自动转正的最自然做法是"块里点了 Steam 的符号名 ⇒ 符号必须落在被引 span 内"。**量了两次就否掉
+  了**：松版（含 CamelCase、子串归属）67 次主张 20 条判红；紧版（整词归属、只认 `k_E*`/`ISteam*`/
+  `SteamAPI_*`/`*_t`）26 次主张 7 条判红——7 条逐个复核，**一条真错都不是**。根因是本仓引用**习惯指向
+  头文件的文档注释行而不是声明行**，且邻近散文常提下一句才用到的符号。精确率 0 的判据就是爱哭狼，
+  于是这条以"负结果"写进尺子自己的 docstring，不改判据；覆盖靠笨办法挣：给 `src/user/voice.rs`、
+  `src/user/mod.rs` 的 **14 处**补上它们本来在引的句子。现值：**125 span / 0 违规 / 21 无逐字对应 /
+  25 无可核对短语**。
+  这一批还翻出尺子自己的一个观察层缺陷：它按原样拼接头文件的行，`//` 留在句中，于是**任何跨行原文永远
+  匹配不上**——单引用块里 93 条引号有 **25 条**只在剥掉注释符后才匹配，跨行的 WRONG-PLACE 判红也一并被
+  压掉（`user_stats/stats.rs` 引 `:134` 却引了 135-137 那句，就是这么露出来的）。发现方式是账的方向
+  不对劲：我补了 12 条逐字引用，`~unjudged` 反而 **+5**。反证加两条（`canaries.py` 43→46）。
+  ⚠ 附带清掉一条"被洗成风格规则"的缺陷：`fake_ip.rs`/`fake_udp.rs` 手写引用表要求每条短语落在**单行**内，
+  注释还写着"跨行会因错误的原因失败"——那是在绕这个 bug，不是问题本身的性质。
 
 ### 7.2 测试策略
 

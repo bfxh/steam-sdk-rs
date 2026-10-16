@@ -329,6 +329,7 @@ HEADER_FIXTURE = """// line one
 // the phrase that matters is right here on line two
 
 // line four says something else entirely about widgets and gadgets
+// and this sentence keeps talking on the line after it
 """
 OTHER_FIXTURE = "// a sentence that only lives in the other header, about trampolines\n"
 
@@ -368,17 +369,33 @@ def canary_header_citations():
          '/// `fake.h:2` quotes "a sentence that only lives in the other header"\n', 1),
         ("the author's own summary in quotes is debt, not a verdict",
          '/// `fake.h:2` is "a paraphrase no header contains verbatim at all"\n', 0),
+        # Both halves of this pair exist because the real ruler once joined header lines with their
+        # `//` markers still attached, which makes any phrase Steam wrapped across two lines
+        # unmatchable: measured on the repository, 25 of 93 verbatim quotes were invisible to it, and
+        # the WRONG-PLACE verdicts for those quotes were suppressed along with them.
+        ("a phrase wrapped over two header lines matches",
+         '/// `fake.h:4-5` says "widgets and gadgets and this sentence keeps talking"\n', 0),
+        ("the same wrapped phrase cited one line short is red",
+         '/// `fake.h:4` says "widgets and gadgets and this sentence keeps talking"\n', 1),
     ):
         code, _ = run(body)
         expect(f"header_citations: {label}", code, want)
 
     _, output = run('/// `fake.h:2` is "a paraphrase no header contains verbatim at all"\n')
     checks += 1
-    if "src/lib.rs~unjudged 1" in output:
-        print("  ok   the paraphrase is registered as exactly one unit of debt")
+    if "src/lib.rs~unjudged 1" in output and "src/lib.rs~undeclared 0" in output:
+        print("  ok   a paraphrase is one unit of unjudged debt and anchors the block (undeclared 0)")
     else:
-        print(f"  FAIL paraphrase debt missing from [{output.strip()}]")
-        failures.append("header_citations: paraphrase debt")
+        print(f"  FAIL paraphrase columns wrong: [{output.strip()}]")
+        failures.append("header_citations: paraphrase columns")
+
+    _, output = run('/// the flag lives at `fake.h:2` with nothing quoted\n')
+    checks += 1
+    if "src/lib.rs~undeclared 1" in output and "src/lib.rs~unjudged 0" in output:
+        print("  ok   a phrase-less citation is registered as one undeclared span")
+    else:
+        print(f"  FAIL undeclared column wrong: [{output.strip()}]")
+        failures.append("header_citations: undeclared column")
 
     shutil.rmtree(src)
     done = subprocess.run(

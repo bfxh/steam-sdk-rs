@@ -36,8 +36,26 @@ Five outcomes:
 The unjudged column exists because 41 of the 119 phrases matched and 44 did not; scoring the second
 group as verified would be the same lie as a green exit code from a ruler that read nothing.
 
-Output is ``<path> <red>`` and ``<path>~unjudged <n>`` for every source file that cites a header,
-plus ``#scanned <files>`` so an empty scan cannot pass.
+A third column, `~undeclared`, counts *spans in blocks that carry no checkable phrase at all* -- 39 of
+the 124 today. They are neither judged nor paraphrase-debt, so without this column they are a blind
+spot that reads like coverage. Naming the number is what makes "go add the real quote" a direction the
+gate rewards instead of a chore nobody can see.
+
+**The fifth criterion that was measured and rejected.** The obvious way to reach those 39 is: if a
+block names a Steam symbol, the symbol must appear inside the span it cites. Tried on the real corpus,
+twice -- loose (CamelCase names, substring membership: 67 claims, 20 flags) and tight (whole-identifier
+vocabulary, only `k_E*` / `ISteam*` / `SteamAPI_*` / `*_t`: 26 claims, 7 flags). All seven tight flags
+were read and none was a defect: this repository cites a header's *doc comment* rather than its
+declaration line as a matter of course, and the neighbouring prose often names a symbol belonging to
+the next sentence (`user_stats/stats.rs` cites `isteamuserstats.h:134` for "Gets the icon of the
+achievement, which is a handle to be used in `ISteamUtils::GetImageRGBA()`", while
+`UserAchievementIconFetched_t` appears there because the *following* sentence explains how the crate
+resolves the handle; the identifier itself is at 135 and 428). A verdict with that precision is the
+wolf this file already refuses to cry, so the rule lives here as a recorded negative result rather than
+in the gate.
+
+Output is ``<path> <red>``, ``<path>~unjudged <n>`` and ``<path>~undeclared <n>`` for every source file
+that cites a header, plus ``#scanned <rows>`` so an empty scan cannot pass.
 """
 import os
 import re
@@ -60,6 +78,24 @@ def norm(text):
     return re.sub(r"\s+", " ", text.replace("`", "").replace("*", "")).strip().lower()
 
 
+def strip_comment(text):
+    """Remove a header line's comment marker so phrases can match across line breaks.
+
+    This is not cosmetic. Header prose is `// ...` / `/// ...` lines, and a sentence Steam wrapped
+    over two of them has the marker in the middle of it. Joining raw lines therefore produced a
+    haystack no verbatim quote could match: measured the same day the gate shipped, 5 of 12 quotes
+    copied straight out of the headers landed in the paraphrase column, and every WRONG-PLACE verdict
+    whose phrase crossed a line break was silently suppressed. The hand-written citation tables had
+    already been constrained around this bug (one phrase per single line) instead of the joiner being
+    fixed, which is how a parsing defect ends up encoded as a documentation style rule.
+    """
+    return re.sub(r"^\s*(?://+|/\*+|\*+|//)\s?", "", text)
+
+
+def header_norm(lines):
+    return norm(" ".join(strip_comment(line) for line in lines))
+
+
 def load_headers(sdk_dir):
     """Every vendored header as (lines, normalised-whole-text), keyed by file name."""
     headers = {}
@@ -68,7 +104,7 @@ def load_headers(sdk_dir):
             continue
         with open(os.path.join(sdk_dir, name), encoding="utf-8", errors="replace") as handle:
             lines = handle.read().splitlines()
-        headers[name] = (lines, norm(" ".join(lines)))
+        headers[name] = (lines, header_norm(lines))
     return headers
 
 
@@ -131,7 +167,7 @@ def resolve(line, block, headers, sdk_dir):
                     "sentence cites"
                 )
                 continue
-            spans.setdefault(name, []).append(norm(" ".join(window)))
+            spans.setdefault(name, []).append(header_norm(window))
     return spans, problems
 
 
@@ -183,11 +219,27 @@ def judge_quotes(line, block, spans, headers):
     return problems, unjudged
 
 
+def anchored(block):
+    """Does this block carry at least one quotation-marked phrase the gate could try to check?
+
+    A phrase that turns out to be the author's own paraphrase still anchors the block -- it is judged,
+    and lands in `~unjudged`. What does *not* anchor is a citation whose block has no phrase at all:
+    nothing about its line number can be verified, and before this column existed those spans were
+    invisible rather than counted. Measured on the repository: 39 of 124 spans sit in such blocks.
+    """
+    return any(
+        len([piece for piece in (norm(x) for x in ELISION.split(quote.group(1)))
+             if len(piece) >= MIN_PHRASE]) > 0
+        for quote in QUOTE.finditer(block)
+    )
+
+
 def scan(path, headers, sdk_dir):
     with open(path, encoding="utf-8", errors="replace") as handle:
         lines = handle.read().splitlines()
     problems = []
     unjudged = 0
+    undeclared = 0
     spans = 0
     cited = False
     for line, block in comment_blocks(lines):
@@ -195,12 +247,15 @@ def scan(path, headers, sdk_dir):
         if not found and not resolved:
             continue
         cited = True
-        spans += sum(len(pairs) for pairs in citation_spans(block).values())
+        pairs = sum(len(v) for v in citation_spans(block).values())
+        spans += pairs
+        if not anchored(block):
+            undeclared += pairs
         problems.extend(resolved)
         found_quotes, extra = judge_quotes(line, block, found, headers)
         problems.extend(found_quotes)
         unjudged += extra
-    return cited, problems, unjudged, spans
+    return cited, problems, unjudged, undeclared, spans
 
 
 def main():
@@ -225,27 +280,31 @@ def main():
 
     red = 0
     debt = 0
+    invisible = 0
     rows = 0
     span_total = 0
     messages = []
     for path in sources:
-        cited, found, unjudged, spans = scan(path, headers, sdk_dir)
+        cited, found, unjudged, undeclared, spans = scan(path, headers, sdk_dir)
         if not cited:
             continue
         print(f"{path} {len(found)}")
         print(f"{path}~unjudged {unjudged}")
-        rows += 2
+        print(f"{path}~undeclared {undeclared}")
+        rows += 3
         span_total += spans
         red += len(found)
         debt += unjudged
+        invisible += undeclared
         messages.extend(f"{path} {problem}" for problem in found)
 
     print(f"#scanned {rows}", file=sys.stderr)
     for message in messages:
         print(f"::error:: {message}", file=sys.stderr)
     print(
-        f"header citations: {rows // 2} files cite the SDK, {span_total} spans, "
-        f"{red} judged wrong, {debt} unjudged and registered (may only shrink)",
+        f"header citations: {rows // 3} files cite the SDK, {span_total} spans, "
+        f"{red} judged wrong, {debt} unjudged phrases, {invisible} spans with nothing to check "
+        f"(all three debt columns may only shrink)",
         file=sys.stderr,
     )
     if red:

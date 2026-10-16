@@ -28,7 +28,9 @@ use super::*;
 /// into a `u32` (`voice_len`) -- so a 4 MiB buffer from a caller is honoured, not refused.
 pub const MAX_VOICE_BYTES: usize = 1 << 20;
 
-/// Where [`User::decode_voice`] starts, in bytes -- `isteamuser.h:113` names this figure.
+/// Where [`User::decode_voice`] starts, in bytes. Steam picks the number at
+/// `isteamuser.h:113`: "It is suggested to start with a 20kb buffer and reallocate as
+/// necessary."
 const FIRST_DECODE_BUFFER: usize = 20 * 1024;
 
 /// How many buffer sizes [`User::read_compressed_voice`] will try before it gives up.
@@ -36,7 +38,8 @@ const CAPTURE_ATTEMPTS: usize = 4;
 
 /// Steam's answer to one of the voice calls, with the success case removed.
 ///
-/// The codes are `EVoiceResult` (`steamclientpublic.h:151-163`, discriminants 0..9). That
+/// The codes are `EVoiceResult`, which `steamclientpublic.h:150-163` introduces as "Error
+/// codes for use with the voice functions" (discriminants 0..9). That
 /// declaration carries no comments, so each sentence below is the name read plainly rather than
 /// quoted header text; the header's actual prose is cited where it constrains behaviour -- the
 /// drain rule on [`User::stop_voice_recording`] and the buffer-size promise on
@@ -47,8 +50,9 @@ pub enum VoiceError {
     /// Voice is not initialised yet.
     #[error("voice is not initialised")]
     NotInitialized,
-    /// Nothing is recording. After [`User::stop_voice_recording`] this is the signal that the
-    /// buffer has finally drained (`isteamuser.h:75-76`).
+    /// Nothing is recording. Steam's own drain rule at `isteamuser.h:75-76` is what makes this
+    /// usable as a stop signal: "GetVoice() should continue to be called until it returns
+    /// k_eVoiceResultNotRecording" (their lower-case `k_e` spelling, not ours).
     #[error("voice is not recording")]
     NotRecording,
     /// Recording, but no audio has been captured yet.
@@ -153,8 +157,9 @@ fn grow_for_capture(current: usize) -> usize {
     current.saturating_mul(2).min(MAX_VOICE_BYTES)
 }
 
-/// The next decode buffer size, using the number Steam promised to write back
-/// (`isteamuser.h:111-112`) as a floor, never as the whole answer: a reported size below the
+/// The next decode buffer size, using the number Steam promised to write back as a floor,
+/// never as the whole answer: `isteamuser.h:111-112` says "If the output buffer is not large
+/// enough, then *nBytesWritten will be set to the required buffer size". A reported size below the
 /// current attempt would loop forever, and one above the cap is refused by the caller.
 fn grow_for_decode(reported: usize, current: usize) -> usize {
     reported.max(current.saturating_mul(2)).min(MAX_VOICE_BYTES)
@@ -185,8 +190,9 @@ impl User {
     /// How many bytes of captured compressed audio `read_compressed_voice` could take right now.
     ///
     /// Only the compressed count is asked for: the two other arguments of `GetAvailableVoice` are
-    /// named `_Deprecated` and the header tells most applications to leave them NULL/zero
-    /// (`isteamuser.h:79-83`, `:96-97`).
+    /// named `_Deprecated`, and `isteamuser.h:79-83` tells callers "Most applications will only
+    /// use compressed data and should ignore the other parameters"; `:96-97` repeats it as
+    /// "most applications should ignore all of these details".
     pub fn available_compressed_voice(&self) -> Result<usize, VoiceError> {
         let mut compressed: u32 = 0;
         let raw = unsafe {
@@ -220,8 +226,10 @@ impl User {
                 buffer.as_mut_ptr() as *mut c_void,
                 declared,
                 &mut written as *mut u32,
-                // The deprecated uncompressed half: never asked for, so nothing is discarded
-                // (`isteamuser.h:90-92`).
+                // The deprecated uncompressed half: never asked for, so nothing is
+                // discarded. Steam's warning at `isteamuser.h:90-92` is the reason --
+                // "uncompressed audio will cause GetVoice to discard any leftover compressed
+                // audio".
                 false,
                 std::ptr::null_mut(),
                 0,

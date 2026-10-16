@@ -48,22 +48,26 @@ impl User {
         unsafe { sys::SteamAPI_ISteamUser_BIsBehindNAT(self.user) }
     }
 
-    /// Whether the account's phone number is verified (`isteamuser.h:196`).
+    /// Whether the account's phone number is verified; `isteamuser.h:196` reads "gets whether
+    /// the users phone number is verified", grammar and all.
     pub fn is_phone_verified(&self) -> bool {
         unsafe { sys::SteamAPI_ISteamUser_BIsPhoneVerified(self.user) }
     }
 
-    /// Whether the account has two-factor authentication enabled (`isteamuser.h:199`).
+    /// Whether the account has two-factor authentication enabled; `isteamuser.h:199` reads
+    /// "gets whether the user has two factor enabled on their account".
     pub fn is_two_factor_enabled(&self) -> bool {
         unsafe { sys::SteamAPI_ISteamUser_BIsTwoFactorEnabled(self.user) }
     }
 
-    /// Whether the account's phone number is currently identifying (`isteamuser.h:202`).
+    /// Whether the account's phone number is currently identifying; `isteamuser.h:202` reads
+    /// "gets whether the users phone number is identifying".
     pub fn is_phone_identifying(&self) -> bool {
         unsafe { sys::SteamAPI_ISteamUser_BIsPhoneIdentifying(self.user) }
     }
 
-    /// Whether the account's phone number is awaiting (re)verification (`isteamuser.h:205`).
+    /// Whether the account's phone number is awaiting (re)verification; `isteamuser.h:205`
+    /// reads "gets whether the users phone number is awaiting (re)verification".
     pub fn is_phone_requiring_verification(&self) -> bool {
         unsafe { sys::SteamAPI_ISteamUser_BIsPhoneRequiringVerification(self.user) }
     }
@@ -236,9 +240,10 @@ impl User {
 
     /// The user's trading-card badge level for one card series of this game.
     ///
-    /// Both numbers come from `isteamuser.h:175-177`: series is 1 when the game has only one set
-    /// of cards, and a user can hold two badges per series -- regular, which tops out at 5, and
-    /// foil, which tops out at 1.
+    /// Both numbers are Steam's, at `isteamuser.h:175-177`: "if you only have one set of cards,
+    /// the series will be 1", and "the user has can have two different badges for a series; the
+    /// regular (max level 5) and the foil (max level 1)" -- that third person singularity is
+    /// theirs, quoted rather than repaired.
     pub fn game_badge_level(&self, series: i32, foil: bool) -> i32 {
         unsafe {
             sys::SteamAPI_ISteamUser_GetGameBadgeLevel(
@@ -257,7 +262,8 @@ impl User {
     /// inline buffer `StoreAuthURLResponse_t::m_szURL` (`isteamuser.h:378`) by cutting at the first
     /// NUL *inside that buffer*, so a URL that fills it cannot make this read past what Steam owns.
     /// That response carries no result code -- the struct is the callback id and the URL, nothing
-    /// else (`isteamuser.h:375-379`) -- so the only failure this path can report is the transport
+    /// else: `isteamuser.h:373-379`, which Steam introduces as "sent to your game in response to
+    /// ISteamUser::RequestStoreAuthURL" -- so the only failure this path can report is the transport
     /// one.
     pub fn request_store_auth_url<F>(&self, redirect_url: &str, cb: F)
     where
