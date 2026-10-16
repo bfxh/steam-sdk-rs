@@ -25,6 +25,7 @@ mod fake_ip;
 mod fake_udp;
 
 pub use connection::*;
+pub use fake_ip::*;
 pub use fake_udp::*;
 
 mod auth;

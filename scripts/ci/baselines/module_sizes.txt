@@ -1,4 +1,4 @@
-src/lib.rs 814
+src/lib.rs 829
 src/networking_types/config.rs 629
 src/error.rs 603
 src/ugc/answers.rs 599
@@ -6,9 +6,9 @@ src/ugc/mod.rs 598
 src/matchmaking_servers.rs 580
 src/timeline.rs 578
 src/http.rs 566
+src/callback.rs 560
 src/ugc/types.rs 559
 src/app.rs 550
-src/callback.rs 543
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 513
 src/parties.rs 499
@@ -19,6 +19,7 @@ src/user/voice.rs 437
 src/networking_messages.rs 416
 src/ugc/update.rs 404
 src/friends/friend.rs 401
+src/networking_sockets/fake_ip.rs 395
 src/user/duration.rs 393
 src/networking_types/end.rs 384
 src/user_stats/leaderboard.rs 384
@@ -36,7 +37,7 @@ src/user_stats/global_stats.rs 280
 src/user_stats/stats.rs 276
 src/networking_types/connection_info.rs 271
 src/safe_ugc.rs 269
-src/networking_sockets/mod.rs 260
+src/networking_sockets/mod.rs 261
 src/networking.rs 257
 src/html_surface/callbacks.rs 247
 src/remote_storage/files.rs 247
@@ -51,7 +52,6 @@ src/user/buffers.rs 206
 src/matchmaking/queries.rs 205
 src/inventory/items.rs 204
 src/identity.rs 198
-src/networking_sockets/fake_ip.rs 195
 src/parental.rs 191
 src/networking_types/identity.rs 182
 src/remote_storage/api.rs 182

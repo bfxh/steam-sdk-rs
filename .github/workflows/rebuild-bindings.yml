@@ -129,14 +129,18 @@ jobs:
             printf '### 绑定重生成：有漂移\n\n'
             printf -- '- 行数：+%s / -%s\n' "$added" "$deleted"
             sed 's/^/- /' /tmp/drift.txt
-            printf -- '- 判定口径与被数到的行见上；完整 diff 见附件 `bindings-drift`\n'
+            printf -- '- 判定口径与被数到的行见上；完整 diff 见附件 `drift-diff`\n'
           } >> "$summary"
           sed 's/^/drift: /' /tmp/drift.txt
 
+      # 名字不能以 `bindings-` 开头：下面两个作业都用 `pattern: bindings-*` 收集生成代码并
+      # `path: steamworks-sys/src/`，同名前缀会把这份诊断 diff 一起下载进源码目录。实测就是这么
+      # 把 `steamworks-sys/src/bindings.diff` 提交进 41cf3fb 的 -- apply 的 `git add steamworks-sys/src`
+      # 把落进源码树里的诊断附件一并暂存了。
       - uses: actions/upload-artifact@v4
         if: steps.drift.outputs.changed == 'true'
         with:
-          name: bindings-drift
+          name: drift-diff
           path: /tmp/bindings.diff
 
       - name: Explain
@@ -181,7 +185,20 @@ jobs:
           rustfmt --edition 2021 steamworks-sys/src/*_bindings.rs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add steamworks-sys/src
+          # 点名文件而不是点目录：`git add steamworks-sys/src` 会把任何落在源码目录里的东西一并
+          # 暂存，包括上面那个下载进来的诊断附件。改名只挡住这一次，这里才是把这扇门焊死。
+          git add steamworks-sys/src/*_bindings.rs
+          # awk 而不是 grep -v：`grep` 没有输出行时退出 1，在 `set -euo pipefail` 下会把"暂存区
+          # 干净"这条正路当成失败退出，于是只能给它补一条恒真的兜底 -- 而本仓 shell_hatches
+          # 台账数的正是这种把判决洗成绿的兜底，连注释里出现那个字面量都算一条。awk 恒退出 0，
+          # 判决只由下面那个 if 做。
+          extra=$(git diff --cached --name-only \
+            | awk '$0 !~ /^steamworks-sys\/src\/(linux|linuxarm|macos|windows)_bindings\.rs$/')
+          if [ -n "$extra" ]; then
+            echo "暂存区里有非绑定文件，拒绝提交："
+            echo "$extra"
+            exit 1
+          fi
           git diff --cached --quiet && { echo "无改动可提交"; exit 0; }
           git commit -m "chore: regenerate bindings from the bundled SDK headers"
           git push origin "HEAD:${BRANCH}"

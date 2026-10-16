@@ -36,8 +36,8 @@ m_cubParam = 0xffffffff (4294967295 B) → as c_int = -1           ⚠ 负数！
 ```
 
 且 **两侧转换口径不一致**：
-- `src/lib.rs:170` resize 用 `m_cubParam as usize`（64 位无截断，分配 4GB）
-- `src/lib.rs:176` C 调用用 `m_cubParam as _` → `c_int`（>2^31-1 变负）
+- `src/lib.rs:323` resize 用 `m_cubParam as usize`（64 位无截断，分配 4GB）
+- `src/lib.rs:329` C 调用用 `m_cubParam as _` → `c_int`（>2^31-1 变负）
 
 ### A2. 类型定义核查（原清单 A3）
 
@@ -105,7 +105,7 @@ void *pTmpCallResult = malloc( pCallback->m_cubParam );  // 同样无上限
 最小修复——加一个合理性上限 + 统一转换口径：
 
 ```rust
-// src/lib.rs:170
+// src/lib.rs:323
 const MAX_CALL_RESULT_SIZE: usize = 64 * 1024 * 1024; // 64MB，覆盖所有已知回调
 let size = apicall.m_cubParam as usize;
 if size > MAX_CALL_RESULT_SIZE {

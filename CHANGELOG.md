@@ -484,6 +484,46 @@ plus the callbacks the wrapper can deliver.
   FakeIP is in the public API; it is registered, not guessed. Neither new method has a test or a
   mutation control: both need a live `ISteamNetworkingSockets` to answer anything, and there is no
   branch in them for a test to pin.
+  *The paragraph above about `GetFakeIP` being blocked by the generated layer is superseded by the next
+  entry: `41cf3fb` regenerated the bindings and the struct stopped being a shell.*
+- FakeIP read-back, plus its completion message on the callback pipe: `NetworkingSockets::get_fake_ip()
+  -> Result<FakeIpAllocation, SteamError>`, `FakeIpAllocation { ip, ports, identity }`, and `FakeIpResult`
+  registered in `CallbackResult`, all in `src/networking_sockets/fake_ip.rs`. `ISteamNetworkingSockets.called`
+  28 -> 29 and the total to **643 of 913**; `NetworkingSockets`' inherent surface 15 -> 16.
+  `idxFirstPort` is deliberately not a parameter: `isteamnetworkingsockets.h:865` says it "is currently
+  reserved and must be zero", so the wrapper passes 0 instead of exposing a knob with one legal value, and
+  `:866` -- "Make sure and check `SteamNetworkingFakeIPResult_t::m_eResult`" -- is why the answer is a
+  `Result` rather than the struct. Both lines are in the file's citation table, so they are re-checked
+  against the vendored header on every run rather than trusted from this prose.
+  The address is `Ipv4Addr::from(u32)` with no byte swap because `steamnetworkingtypes.h:205` defines the
+  integer as `aa.bb.cc.dd`, and `ports` keeps only the leading run of Steam's eight-entry array
+  (`steamnetworkingfakeip.h:124-130`), so a zero in the middle ends the reservation instead of being
+  skipped. The four refusals Steam names (`:98-102`) keep their own `SteamError` variants rather than
+  collapsing into `Generic`, because `:104-105` singles Busy out as the only failure a poller may tolerate.
+  `SetGlobalCallback_FakeIPResult` is still not wrapped, but the reason changed: not the layout -- which is
+  now real, `windows_bindings.rs:27038-27046` with `k_iCallback = 1223` at `:27053` -- but that this payload
+  already arrives through the installed-callback stream, while the SDK's global callback is a bare function
+  pointer with nowhere to put a capture. Wrapping it would offer a second, weaker route to a message that
+  is already delivered.
+  Six tests, all offline, and four mutation controls:
+  `take_while` -> `filter` in `allocated_ports` -> `only_the_leading_ports_of_the_reservation_are_reported`
+  red; deleting the `FakeIpResult::ID` arm of `CallbackResult::from_raw` -> `the_fake_ip_result_reaches_the_stream`
+  red; collapsing every mapped code into `Generic` -> both of `the_four_fake_ip_refusals_keep_their_names`
+  and `an_unmapped_result_code_is_an_error_and_not_a_success` red; reading `k_EResultNone` as success ->
+  the second of those red. Each file was restored with `cp` and checked byte-for-byte with `cmp`, and the
+  suite is green at 146 passed on the restored tree. The wrong half of this work was not caught by any
+  mutation but by two tests that already existed; that is recorded under **Fixed**.
+  One test that nearly shipped is worth naming as *not* written: `assert_eq!(FakeIpResult::ID,
+  sys::SteamNetworkingFakeIPResult_t_k_iCallback)` looks like it pins the callback number, but
+  `impl_callback!` *defines* `ID` as that exact constant, so the assertion cannot fail for any reason
+  except someone editing the macro. The id is pinned indirectly instead, by the dispatch mutation above.
+
+Ledgers for this commit: `api_coverage` `ISteamNetworkingSockets.called` 28 -> 29 (total 643),
+`type_surface` `NetworkingSockets` 15 -> 16, `module_sizes` `src/networking_sockets/fake_ip.rs` 195 -> 395,
+`src/callback.rs` 543 -> 560, `src/lib.rs` 814 -> 829, `src/networking_sockets/mod.rs` 260 -> 261, and the
+lib test floor raised to what the run actually reports. `package_inventory`, `sdk_vendored`,
+`no_panic_sites` and `shell_hatches` compare **unchanged**; the last of those is the interesting one, see
+the drift-artifact entry under **Added -- CI and release automation**.
 - `ISteamNetworkingMessages` is now a **complete** interface: 6 of 6, where it had been 5 of 6. Added
   `close_session_with_user(&NetworkingIdentity) -> bool` and
   `close_channel_with_user(&NetworkingIdentity, i32) -> bool`, which fill the last two entries of
@@ -874,6 +914,25 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   script and takes its two `$GITHUB_OUTPUT` keys from stdout, and the four fixtures -- noise-only,
   struct materialised, token at column one, empty diff -- are pinned as canaries, so a future edit that
   reintroduces the hole turns the gate red instead of quietly narrowing it.
+- **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
+  `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
+  bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named
+  `bindings-drift`, so it matched its own glob: `apply` downloaded the diff *into the crate's source
+  directory*, ran `git add steamworks-sys/src`, and committed `steamworks-sys/src/bindings.diff` --
+  33,637 bytes of diff, present in `41cf3fb` and listed by `git ls-files`. It is removed here.
+  Two changes, and neither one alone is enough: the artifact is now `drift-diff`, which cannot match the
+  collection glob, *and* `apply` stages `steamworks-sys/src/*_bindings.rs` by name, then refuses the
+  commit outright if `git diff --cached --name-only` shows any path that is not one of the four. The
+  rename only fixes this run's name; the staged-by-name guard is what makes the class of mistake
+  unreachable -- a future artifact, or anything else that lands in that directory, now stops the job
+  instead of riding into a commit that a human has to notice.
+  The guard filters with `awk` rather than `grep -v`, and that is not a style choice: `grep` exits 1 when
+  it prints nothing, so under `set -euo pipefail` the *passing* path -- nothing extra staged -- aborts,
+  and the only way to stop that is a fail-open fallback. `shell_hatches.py` counts exactly that fallback,
+  and it counts it **inside comments too**: the first draft merely mentioned the token in prose and the
+  ledger went 9 -> 10 for a comment. That is the ruler telling you the literal belongs nowhere in a
+  workflow file, so the reworded version keeps the ledger where it was. Every `run:` body in the file was
+  then syntax-checked with `bash -n` -- 8 bodies, 0 failures.
 - **`ledgers are tracked, populated and read`** (`scripts/ci/baseline_files.py`). This repo's gates
   *are* files, and two failure modes had already happened once each: a shipped gate whose baseline
   was swallowed by a `*.txt` ignore rule (so CI judged against a file that existed only on the
@@ -1171,6 +1230,35 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 
 ### Fixed
+
+- **`to_steam_result` no longer panics on a result code this crate has no name for.** It read
+  `error => Err(error.try_into().unwrap())`, so any code outside `SteamError`'s mapped list aborted inside
+  the *caller's* frame -- on a value Steam chose, not one the caller passed in wrong. Measured rather than
+  reasoned: filling a zeroed `SteamNetworkingFakeIPResult_t` and decoding it aborted with
+  ``called `Result::unwrap()` on an `Err` value: Unknown(0)``, because `k_EResultNone` is 0 and 0 is exactly
+  what a status field holds when Steam never wrote the struct. The FakeIP read-back found it by stepping on
+  it; it was not a pre-existing risk someone had noticed.
+  An unnamed code now decodes to `SteamError::Generic` -- the coarsest true thing that can be said, and the
+  variant Steam's own `k_EResultFail` already maps to (`src/error.rs:24-26`) -- while the exact number stays
+  reachable through `SteamError::try_from(code) -> InvalidSteamError::Unknown(code)`. Measured against the
+  generated layer, only two of the 130 `k_EResult*` constants have no variant: `k_EResultOK`, which is not
+  an error, and `k_EResultNone`.
+  **`k_EResultNone` stays an error on purpose, and that answers a question this file carried from upstream.**
+  The line above the `Ok` arm was commented out by the original author as
+  `// sys::EResult::k_EResultNone => Ok(()), TODO: I'm not sure if this is considered a success`
+  (`git show 41cf3fb:src/lib.rs:99`). Resolving it to *no* is a behaviour decision, not a bug fix, so it is
+  written down: a status nobody wrote must not read as an operation that worked.
+  **The first fix was wrong and the existing tests are what caught it.** Written as
+  `.map(|_| ()).map_err(|_| SteamError::Generic)`, it turned *named* failures into `Ok(())` -- the opposite
+  bug, and a silent one. Two pre-existing tests went red immediately,
+  `ugc::answers::answer_tests::answered_prefers_the_io_failure_over_steam_s_result` and
+  `ugc::answers::answer_tests::dependency_answers_decode_both_ids_and_their_own_callback_numbers`; the
+  shape became an explicit `match`, and those two names were re-measured by re-applying the wrong body and
+  reading the failure list rather than recalled into this sentence. The two arms now have their own mutation
+  controls (`the_four_fake_ip_refusals_keep_their_names` for the named-code arm,
+  `an_unmapped_result_code_is_an_error_and_not_a_success` for the fallback), and the restored tree is
+  byte-identical to the backup under `cmp`.
+
 
 - **Eleven numeric and attribution claims in this changelog and the design doc were wrong, and are
   corrected in place.** A separate read-only review of the seven most recent commits re-measured every

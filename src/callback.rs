@@ -1,5 +1,6 @@
 use super::*;
 use crate::networking_messages::*;
+use crate::networking_sockets::FakeIpResult;
 use crate::networking_types::*;
 use crate::networking_utils::*;
 use crate::screenshots::*;
@@ -40,6 +41,7 @@ pub enum CallbackResult {
     LobbyDataUpdate(LobbyDataUpdate),
     LobbyEnter(LobbyEnter),
     MicroTxnAuthorizationResponse(MicroTxnAuthorizationResponse),
+    FakeIpResult(FakeIpResult),
     NetConnectionStatusChanged(NetConnectionStatusChanged),
     NetworkingMessagesSessionFailed(NetworkingMessagesSessionFailed),
     NetworkingMessagesSessionRequest(NetworkingMessagesSessionRequest),
@@ -78,6 +80,7 @@ pub enum CallbackResult {
 impl CallbackResult {
     pub unsafe fn from_raw(discriminator: i32, data: *mut c_void) -> Option<Self> {
         Some(match discriminator {
+            FakeIpResult::ID => Self::FakeIpResult(FakeIpResult::from_raw(data)),
             NetConnectionStatusChanged::ID => {
                 Self::NetConnectionStatusChanged(NetConnectionStatusChanged::from_raw(data))
             }
@@ -474,6 +477,20 @@ mod stream_coverage {
                 "{name} is streamed now; the debt list entry is stale"
             );
         }
+    }
+
+    #[test]
+    fn the_fake_ip_result_reaches_the_stream() {
+        // The chat-family test below proves this shape of check; this one pins the payload added with
+        // `get_fake_ip`, where the risk is real: a `CallbackResult` variant written without its
+        // `from_raw` arm compiles, and the events simply never arrive.
+        let payload = [0u8; 64];
+        let decoded =
+            unsafe { CallbackResult::from_raw(FakeIpResult::ID, payload.as_ptr() as *mut c_void) };
+        assert!(
+            matches!(decoded, Some(CallbackResult::FakeIpResult(_))),
+            "FakeIpResult's callback id is not dispatched by CallbackResult::from_raw"
+        );
     }
 
     #[test]

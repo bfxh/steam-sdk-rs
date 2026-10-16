@@ -1,1 +1,1 @@
-153  # lib tests reached with --all-features, measured 2026-10-16 with the FakeUDP datagram port (3 tests added)
+161  # lib tests reached with --all-features, measured 2026-10-16 after the FakeIP read-back landed

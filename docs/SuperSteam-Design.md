@@ -13,7 +13,7 @@
 > - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
 > - **最大的单文件模块已目录化（不是全部）**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜；
 >   `ls src/*.rs | wc -l` 实测仍有 **24 个**单文件模块直接躺在 `src/` 下，最大的是 `input.rs` 725、
->   `error.rs` 603 等叶子模块——`input.rs` 725 与 `utils.rs` 710 已在 2026-10-16 分别拆进 `src/input/`、`src/utils/`，所以现在的第二名是 `networking_types/config.rs` 629）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 260、`fake_udp.rs` 317、`fake_ip.rs` 195、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/utils/`（`text_input.rs` 178、`mod.rs` 142、`filtering.rs` 103、`ipv6.rs` 60、`identity.rs` 56、`warning.rs` 54、`overlay.rs` 47、`param_strings.rs` 47、`client_state.rs` 42、`battery.rs` 34、`callbacks.rs` 29）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 57、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
+>   `error.rs` 603 等叶子模块——`input.rs` 725 与 `utils.rs` 710 已在 2026-10-16 分别拆进 `src/input/`、`src/utils/`，所以现在的第二名是 `networking_types/config.rs` 629）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 375、`voice.rs` 437、`duration.rs` 393、`auth.rs` 244、`buffers.rs` 206、`passthrough.rs` 69、`answers.rs` 62、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 261、`fake_ip.rs` 395、`fake_udp.rs` 317、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/utils/`（`text_input.rs` 178、`mod.rs` 142、`filtering.rs` 103、`ipv6.rs` 60、`identity.rs` 56、`warning.rs` 54、`overlay.rs` 47、`param_strings.rs` 47、`client_state.rs` 42、`battery.rs` 34、`callbacks.rs` 29）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 57、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
 > - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 155 个（140 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；同一晚先记 129、再记 153，两次都被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
 > - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
 >
@@ -40,7 +40,7 @@
 |---|------|------|--------|
 | 1 | 同一回调类型重复注册会静默覆盖前一个；**陈旧 Handle drop 会按 ID 误杀新注册；内部自动注册与用户注册同表互杀** | src/callback.rs:198 `HashMap::insert`、callback.rs:167 `remove`（已复现，见 defect-01 文档） | 高 |
 | 2 | 可重入死锁：持锁运行用户闭包。**PR #259 已修复「回调内调 API」场景；仍存「回调内注册回调/嵌套派发/丢弃 Handle」+ 新发现「call_result 内链式调 API」共四种死锁**（**2026-10-14 更新：这四种已全部判死，见下方"缺陷 #2 状态"**） | Issue #253 + PR #259（已合并）；实测见 0.6 节与 defect-02 文档 | 高（**E 场景使影响面回升**） |
-| 3 | `apicall_result.resize(m_cubParam)` 无上限校验 + u32→i32 静默负数转换 | src/lib.rs:170/176（已实测，见 0.4 节） | 低 |
+| 3 | `apicall_result.resize(m_cubParam)` 无上限校验 + u32→i32 静默负数转换 | src/lib.rs:323/329（已实测，见 0.4 节） | 低 |
 | 4 | 接口指针仅 `debug_assert` 判空，release 下裸指针解引用 | `null_guard_test.rs` 实测：release 下 **Illegal instruction (退出码 132)** | 高（已复现） |
 | 5 | 77 处 `CString::new(...).unwrap()` 遇内嵌 NUL 直接 panic（原 73，漏 4 处跨行链式） | src/friends.rs:124 等 15 文件（已复现，双口径复核见 defect-05） | 高 |
 | 6 | UGC builder 方法失败即 panic（`canonicalize().unwrap()` + `assert!`，**25 个 panic 点**） | `ugc_builder_panic_test.rs` 实测；**归因订正：暂存未提交，公开状态未变更**（见 defect-06 文档） | 中（已复现） |
@@ -105,7 +105,7 @@
 
 **真实缺陷是可重入死锁，不是数据竞争。** 机制如下：
 
-- `src/lib.rs:255-257` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 lib.rs:146-149 同样如此）。
+- `src/lib.rs:270-272` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 `src/lib.rs:290-292` 同样如此）。
 - 用户在任何 Steam 回调内部调用 `register_callback`（或 `run_callbacks`）都需要同一把 `callbacks` 锁。
 - `std::sync::Mutex` 不可重入 → 自锁 → 线程永久挂起。
 
@@ -662,7 +662,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
-| ISteamNetworkingSockets |   28 |  47 | ISteamUGC |   97 |  99 |
+| ISteamNetworkingSockets |   29 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 642 / 913**（33 个接口；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28 与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见上面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 643 / 913**（33 个接口；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -705,15 +705,26 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
   交给 Steam 回调进来。但那套实现**一次都没有调用**绑定给这四个接口生成的入口函数，
   所以台账读 0：这里 0 的含义是"入口没被调"，不是"接口不存在于本仓"。
 
-FakeIP 那一族四个入口都在 `isteamnetworkingsockets.h`。**2026-10-16 补掉两个**：
-`begin_async_request_fake_ip`（h:862）与 `create_listen_socket_p2p_fake_ip`（h:878），落在
-`src/networking_sockets/fake_ip.rs`，`ISteamNetworkingSockets.called` 26→28。这一对能在读不到完成
-消息的情况下封，靠的是头文件自己那句 h:875-877「you do not need to wait for the request to
-complete」；`bool` 不改成 `Result` 是因为 h:835-836 把 `false` 定义成「已有一个请求在跑」，两个答案都
-是正常状态。**余下三个阻碍各不相同**：`GetFakeIP`（h:867）与
-`ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` 堵在生成层——`SteamNetworkingFakeIPResult_t`
-被绑成空壳 `_unused: [u8; 0]`（`steamworks-sys/src/windows_bindings.rs:17499-17501`，真定义在
-`steamnetworkingfakeip.h:93`），要动的是 bindgen 输入清单与四个重生成文件，属于生成层的决定。**2026-10-16 已改 `steamworks-sys/build.rs`：输入变成一个 bundle TU（`steam_api_flat.h` + `steam_gameserver.h` + `steamnetworkingfakeip.h`），因为该头不能单独解析（`steamnetworkingtypes.h:47` 的 `#error` 要求同 TU 内先由 `steamclientpublic.h` 定义 pack 宏，宏不跨 TU）；绑定文件本身要等 `Rebuild bindings` 工作流在四个原生 runner 上重生成并按下 `commit_bindings` 才落盘，本机无 libclang（实测 `C:/Program Files/LLVM` 不存在）所以无法预览。**
+FakeIP 那一族四个入口都在 `isteamnetworkingsockets.h`。**2026-10-16 补掉三个**：
+`begin_async_request_fake_ip`（h:862）、`get_fake_ip`（h:867）与 `create_listen_socket_p2p_fake_ip`（h:878），
+落在 `src/networking_sockets/fake_ip.rs`，`ISteamNetworkingSockets.called` 26→29。
+分配那两个能在读不到完成消息的情况下封，靠的是头文件自己那句 h:875-877「you do not need to wait for the
+request to complete」；`bool` 不改成 `Result` 是因为 h:835-836 把 `false` 定义成「已有一个请求在跑」，两个答案都
+是正常状态。读回那个不接 `idxFirstPort` 参数：h:865 说它 "is currently reserved and must be zero"，所以封装
+固定传 0，而不是把只有一个合法值的旋钮摆到公开面上；h:866「Make sure and check
+`SteamNetworkingFakeIPResult_t::m_eResult`」则是它返回 `Result` 而非结构体的理由。四个失败码
+（`steamnetworkingfakeip.h:98-102`）各留自己的 `SteamError` 变体而不塌成 `Generic`，因为同一文件 `:104-105`
+把 `Busy` 单独挑出来当作轮询者唯一可以容忍的失败。
+**剩下两处的阻碍各不相同，而生成层那条已经不成立了**：`SteamNetworkingFakeIPResult_t` 原先确实被绑成空壳
+`_unused: [u8; 0]`，真定义在 `steamnetworkingfakeip.h:93`。2026-10-16 改了 `steamworks-sys/build.rs`：输入变成
+一个 bundle TU（`steam_api_flat.h` + `steam_gameserver.h` + `steamnetworkingfakeip.h`），因为该头不能单独解析
+（`steamnetworkingtypes.h:47` 的 `#error` 要求同 TU 内先由 `steamclientpublic.h` 定义 pack 宏，宏不跨 TU）；
+四个绑定文件由 `Rebuild bindings` 工作流在原生 runner 上重生成、按下 `commit_bindings` 才落盘（落在 `41cf3fb`），
+本机无 libclang（实测 `C:/Program Files/LLVM` 不存在）所以改完无法预览。落盘后它是实体：`windows_bindings.rs`
+的结构体在 27038-27046、`k_iCallback = 1223` 在 27053、`GetFakeIP` 的声明在 26011-26015。
+于是 `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` **仍然不封，但原因换了**：不是版式认不出来，而是
+同一条完成消息已经作为 `FakeIpResult` 走本仓的 installed-callback 流到达，SDK 那个全局回调只收裸函数指针、
+没有地方放捕获，封它等于给同一条消息再开一条更弱的通路。
 `GetRemoteFakeIPForConnection`（h:895）技术上可达（`SteamNetworkingIPAddr` 绑定具体，
 `From<sys::SteamNetworkingIPAddr> for SteamIpAddr` 已在
 `src/networking_types/addresses.rs:183-187`），但本仓所有面向地址的公开 API 都说
@@ -951,8 +962,8 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 | `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11774`）——裸 C 函数指针回调，头文件 h:872 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
 | `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
 
-顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 `src/lib.rs:170` 的 `resize` 行为"里的
-`resize` 现在在 `src/lib.rs:308`（拆分后行号漂移，本轮按内容重测；原句描述的行为本身没变）。
+顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 resize 那一行"的行为，其 `resize`
+现在在 `src/lib.rs:323`（拆分与本行改动都让行号漂移过，本轮按内容重测；原句描述的行为本身没变）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 
@@ -1300,7 +1311,7 @@ apicall_result.resize(size as usize, 0u8);
 
 ### 本地代码现状
 
-`src/lib.rs:133-140` 已是拆分后的结构（即 #259 的修复已在代码中）：
+`src/lib.rs:148-155` 已是拆分后的结构（即 #259 的修复已在代码中）：
 
 ```rust
 struct Callbacks {
@@ -1373,7 +1384,7 @@ struct Callbacks {
 
 ### 7.2 测试策略
 
-现状问题：20 个测试中 `basic_test`（src/lib.rs:780）依赖真实 Steam 客户端，无 Steam 的 CI 必然 panic，导致该测试实际无法在 CI 运行——14 个模块因此零覆盖。
+现状问题：20 个测试中 `basic_test`（原在 `src/lib.rs`，拆分后在 `src/lib_tests.rs:12`）依赖真实 Steam 客户端，无 Steam 的 CI 必然 panic，导致该测试实际无法在 CI 运行——14 个模块因此零覆盖。
 
 方案：三层测试
 1. **纯逻辑层**（无需 Steam）：SteamId 位运算、错误映射、字符串转换 → 可 100% 覆盖
@@ -1667,7 +1678,7 @@ SuperSteam 的价值主张需相应收敛：**不是「做一个更快的绑定�
 已在 https://github.com/Noxime/steamworks-rs/issues/253#issuecomment-6093232733 发布补充评论（账号 `bfxh`），内容为：
 
 1. 核实 #259 对当前 `master` 的实际效果（主场景确已修复）
-2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:133-140` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
+2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:148-155` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
 3. 指出维护者倾向的方案 4 可消除 B 和 C，但 **D 在方案 4 下依然存在**（`process_callbacks` 用户同样会在回调内丢弃 handle）
 4. 表示愿意提 PR，但先确认方向
 

@@ -96,9 +96,24 @@ pub type SteamResult<T = ()> = Result<T, SteamError>;
 /// Convert a raw result to a Rust [`Result`] type.
 pub(crate) fn to_steam_result(result: sys::EResult) -> SteamResult {
     match result {
-        // sys::EResult::k_EResultNone => Ok(()), TODO: I'm not sure if this is considered a success
         sys::EResult::k_EResultOK => Ok(()),
-        error => Err(error.try_into().unwrap()),
+        // An answer this enum has no variant for becomes `Fail` rather than a panic. The `unwrap()`
+        // that used to sit here ran on any code outside the mapped list -- `k_EResultNone` (0) above
+        // all, since zero is what an unwritten status field holds -- and so panicked inside the
+        // caller's frame on a value Steam chose. Measured: reading a FakeIP result whose status was
+        // never filled aborted with `called `Result::unwrap()` on an `Err` value: Unknown(0)`, from
+        // the test `the_fake_ip_result_reaches_the_stream`.
+        // `Generic` is the coarsest true thing that can be said about such a code -- it is the
+        // variant Steam's own `k_EResultFail` decodes to (`src/error.rs:24-26`) -- and
+        // `k_EResultNone` stays an error on purpose: the open
+        // question this file used to carry as a TODO -- whether None counts as success -- resolves to
+        // no, because a status nobody wrote must not read as an operation that worked. Anyone who
+        // needs the exact number still has it: `SteamError::try_from(code)` returns
+        // `InvalidSteamError::Unknown(code)`.
+        error => match SteamError::try_from(error) {
+            Ok(code) => Err(code),
+            Err(_) => Err(SteamError::Generic),
+        },
     }
 }
 

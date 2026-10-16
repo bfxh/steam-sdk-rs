@@ -1,20 +1,26 @@
-//! The two FakeIP calls that are safe to reach today: asking Steam to reserve a block of fake
-//! ports, and opening a listen socket on one of them by *index*.
+//! The FakeIP allocation surface: ask Steam for a block of fake ports, read the assignment back,
+//! open a listen socket on one of them *by index*, and take the completion message off the callback
+//! pipe.
 //!
-//! Both are deliberately fire-and-collect-later. `isteamnetworkingsockets.h:875-877` says the
-//! listen socket does not have to wait for the allocation to finish, and `:836-837` says a
-//! `SteamNetworkingFakeIPResult_t` is posted when the request completes -- which is exactly the
-//! message this crate cannot yet read. The remaining two FakeIP functions are therefore *not*
-//! wrapped here, for one reason that lives in the generated layer rather than in this file:
-//! `SteamNetworkingFakeIPResult_t` is declared as an opaque shell (`steamworks-sys` binds it as
-//! `_unused: [u8; 0]` at `windows_bindings.rs:17499-17501`), so `GetFakeIP` could not be handed a
-//! struct with the header's real fields (`steamnetworkingfakeip.h:93`), and
-//! `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` would have to accept a callback over a
-//! layout we cannot name. Regenerating the bindings with that header in the input list is the
-//! prerequisite for both, and it is a decision about the generated layer rather than about this
-//! module.
+//! Three of the four FakeIP entry points in `isteamnetworkingsockets.h` are here (h:862, h:867,
+//! h:878). The fourth, `GetRemoteFakeIPForConnection` (h:895), is not blocked by the generated layer
+//! any more than these three were: `SteamNetworkingIPAddr` binds with a real layout and already
+//! converts at `src/networking_types/addresses.rs:183-187`. What blocks it is a public-type decision
+//! -- every address-facing API in this crate speaks `std::net::SocketAddr` and keeps `SteamIpAddr`
+//! private -- so it is registered as a design question rather than guessed. See the FakeIP paragraph
+//! of `docs/SuperSteam-Design.md`.
+//!
+//! `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` is deliberately not wrapped either. The
+//! same completion payload (`SteamNetworkingFakeIPResult_t`, `steamnetworkingfakeip.h:93`) reaches
+//! callers as [`FakeIpResult`] through this crate's installed-callback stream, and the SDK's global
+//! callback takes a bare function pointer with nowhere to put a capture, so wrapping it would offer a
+//! second, weaker route to a message that already arrives.
 
 use super::*;
+use crate::callback::Callback;
+use crate::to_steam_result;
+use std::ffi::c_void;
+use std::net::Ipv4Addr;
 
 impl NetworkingSockets {
     /// Asks Steam to reserve a block of FakeIP ports for this user or game server.
@@ -79,10 +85,100 @@ impl NetworkingSockets {
             Ok(ListenSocket::new(handle, self.sockets, self.inner.clone()))
         }
     }
+
+    /// Reads back the FakeIP block Steam assigned, once the request has succeeded.
+    ///
+    /// No port index is offered as an argument on purpose: `isteamnetworkingsockets.h:865` documents
+    /// `idxFirstPort` as "currently reserved and must be zero", so the wrapper passes 0 instead of
+    /// exposing a knob with exactly one legal value, and `:866` -- "Make sure and check
+    /// SteamNetworkingFakeIPResult_t::m_eResult" -- is the reason this returns a `Result` rather than
+    /// the struct. The whole reservation comes back at once; the per-port list is
+    /// [`FakeIpAllocation::ports`].
+    ///
+    /// Steam's four refusals are all reported through [`SteamError`] rather than as an empty answer:
+    /// they are named at `steamnetworkingfakeip.h:98-102` -- Busy (the request has not completed, and
+    /// `:104-105` singles it out as the one failure a poller may tolerate), InvalidParameter,
+    /// LimitExceeded (too many ports asked for, or a second request after one had succeeded) and
+    /// NoMatch (never asked). A struct Steam left untouched reads as its zero value, and `EResult`'s
+    /// zero is not OK (`windows_bindings.rs:408` numbers `k_EResultOK` as 1), so "never answered" still
+    /// comes back `Err` instead of a successful-looking allocation with a zero address.
+    pub fn get_fake_ip(&self) -> Result<FakeIpAllocation, SteamError> {
+        let mut raw = std::mem::MaybeUninit::<sys::SteamNetworkingFakeIPResult_t>::zeroed();
+        unsafe {
+            sys::SteamAPI_ISteamNetworkingSockets_GetFakeIP(self.sockets, 0, raw.as_mut_ptr());
+            fake_ip_allocation(&raw.assume_init())
+        }
+    }
+}
+
+/// The FakeIP block Steam assigned: one address and the ports actually granted.
+///
+/// `identity` is the local `ISteamNetworkingSockets` object the reservation belongs to, which
+/// `steamnetworkingfakeip.h:110-114` explains is needed because a process can hold more than one (a
+/// user's, and a local game server's).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FakeIpAllocation {
+    /// Our assigned fake IPv4 address, and not exclusively ours: `:116-122` says Steam tries to
+    /// avoid sharing an IP but cannot promise it, and may hand back an address another host is using.
+    pub ip: Ipv4Addr,
+    /// The granted ports in reservation order. Steam fills only the leading slots of its eight-entry
+    /// array (`:124-130`), so the trailing zeros are dropped instead of reported as ports; and
+    /// `isteamnetworkingsockets.h:831-832` warns they are neither ordered nor contiguous, so no
+    /// caller should assume `ports[i + 1]` follows `ports[i]`.
+    pub ports: Vec<u16>,
+    /// Which local sockets object holds this reservation.
+    pub identity: NetworkingIdentity,
+}
+
+/// Steam's answer to a FakeIP allocation request, as it arrives on the callback pipe.
+///
+/// Posted when [`begin_async_request_fake_ip`](NetworkingSockets::begin_async_request_fake_ip)
+/// completes (`isteamnetworkingsockets.h:836-837`), carrying the same status the polling read
+/// reports, so the outcome here is a `Result` and not a status field to remember to check.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FakeIpResult {
+    pub outcome: Result<FakeIpAllocation, SteamError>,
+}
+
+impl_callback!(cb: SteamNetworkingFakeIPResult_t => FakeIpResult {
+    FakeIpResult {
+        outcome: fake_ip_allocation(&cb),
+    }
+});
+
+fn fake_ip_allocation(
+    raw: &sys::SteamNetworkingFakeIPResult_t,
+) -> Result<FakeIpAllocation, SteamError> {
+    to_steam_result(raw.m_eResult).map(|()| FakeIpAllocation {
+        ip: fake_ipv4(raw.m_unIP),
+        ports: allocated_ports(raw.m_unPorts),
+        identity: NetworkingIdentity::from(raw.m_identity),
+    })
+}
+
+/// Steam keeps a fake IPv4 in one host-order integer whose documented shape is "aa.bb.cc.dd as
+/// `0xaabbccdd`" (`steamnetworkingtypes.h:205`, the comment on the accessor that returns the same
+/// representation). `Ipv4Addr::from(u32)` reads its argument in exactly that order -- most significant
+/// octet first -- so no byte swapping belongs here, and the test that pins this is what stops a future
+/// edit from "fixing" it by hand.
+fn fake_ipv4(bits: u32) -> Ipv4Addr {
+    Ipv4Addr::from(bits)
+}
+
+/// The leading run of granted ports, per Steam's own rule that only the first entries are non-zero
+/// (`steamnetworkingfakeip.h:126-129`). This takes a prefix rather than filtering, so a zero inside
+/// the array ends the reservation instead of being quietly skipped.
+fn allocated_ports(ports: [u16; 8]) -> Vec<u16> {
+    ports
+        .iter()
+        .copied()
+        .take_while(|port| *port != 0)
+        .collect()
 }
 
 #[cfg(test)]
 mod fake_ip_tests {
+    use super::*;
     use std::path::Path;
 
     /// Every line citation this file's docs make against `isteamnetworkingsockets.h`, as
@@ -138,6 +234,18 @@ mod fake_ip_tests {
             877,
             "However, you do not need to wait for the",
         ),
+        (
+            "idxFirstPort has one legal value",
+            865,
+            865,
+            "idxFirstPort is currently reserved and must be zero",
+        ),
+        (
+            "the result field must be checked",
+            866,
+            866,
+            "Make sure and check SteamNetworkingFakeIPResult_t::m_eResult",
+        ),
     ];
 
     fn sockets_header() -> Option<Vec<String>> {
@@ -190,6 +298,98 @@ mod fake_ip_tests {
             !shifted.contains(phrase),
             "the fixture span already contains {phrase:?}, so the check above would not have \
              noticed a citation that drifted by a few lines"
+        );
+    }
+
+    #[test]
+    fn a_fake_ipv4_integer_reads_as_the_octets_steam_documents() {
+        // `steamnetworkingtypes.h:205`: aa.bb.cc.dd is 0xaabbccdd, so 1.2.3.4 must not come back as
+        // 4.3.2.1 -- byte-swapping this is exactly the mistake the line below would catch.
+        assert_eq!(fake_ipv4(0x0102_0304), Ipv4Addr::new(1, 2, 3, 4));
+        assert_eq!(fake_ipv4(0x7f00_0001), Ipv4Addr::new(127, 0, 0, 1));
+        assert_eq!(fake_ipv4(0), Ipv4Addr::UNSPECIFIED);
+    }
+
+    #[test]
+    fn only_the_leading_ports_of_the_reservation_are_reported() {
+        assert_eq!(allocated_ports([1, 2, 0, 0, 0, 0, 0, 0]), vec![1, 2]);
+        assert_eq!(allocated_ports([0; 8]), Vec::<u16>::new());
+        assert_eq!(allocated_ports([9, 0, 0, 0, 0, 0, 0, 0]), vec![9]);
+        // A zero in the middle ends the reservation; it is not silently skipped over.
+        assert_eq!(allocated_ports([5, 0, 6, 0, 0, 0, 0, 0]), vec![5]);
+    }
+
+    #[test]
+    fn the_two_fake_udp_size_limits_also_arrive_from_the_bindings() {
+        // `fake_udp.rs` already pins these two numbers to the SDK *source*. This pins them to what the
+        // generated layer compiled, so a bindgen input that stops carrying the header is a compile
+        // error here rather than a test that quietly has nothing left to compare.
+        assert_eq!(
+            sys::k_cbSteamNetworkingSocketsFakeUDPPortRecommendedMTU as usize,
+            crate::networking_sockets::FAKE_UDP_RECOMMENDED_MTU
+        );
+        assert_eq!(
+            sys::k_cbSteamNetworkingSocketsFakeUDPPortMaxMessageSize as usize,
+            crate::networking_sockets::FAKE_UDP_MAX_MESSAGE_BYTES
+        );
+    }
+
+    /// `steamnetworkingfakeip.h:98-102` names the four refusals and `:104-105` singles Busy out as the
+    /// one a poller is allowed to tolerate. That distinction survives only while each code lands on its
+    /// own variant: folding them into `Generic` would make "not yet" read exactly like "fatal", which is
+    /// the one thing the header tells the caller not to do.
+    #[test]
+    fn the_four_fake_ip_refusals_keep_their_names() {
+        assert_eq!(
+            to_steam_result(sys::EResult::k_EResultOK),
+            Ok(()),
+            "OK is not an error and must not reach the refusal path at all"
+        );
+        assert_eq!(
+            to_steam_result(sys::EResult::k_EResultBusy),
+            Err(SteamError::Busy),
+            "a poller has to be able to tell 'the request has not completed' from a fatal answer"
+        );
+        assert_eq!(
+            to_steam_result(sys::EResult::k_EResultInvalidParam),
+            Err(SteamError::InvalidParameter)
+        );
+        assert_eq!(
+            to_steam_result(sys::EResult::k_EResultLimitExceeded),
+            Err(SteamError::LimitExceeded)
+        );
+        assert_eq!(
+            to_steam_result(sys::EResult::k_EResultNoMatch),
+            Err(SteamError::NoMatch)
+        );
+    }
+
+    /// The other half of the same contract. Measured against the generated layer, only two of the 130
+    /// `k_EResult*` codes have no `SteamError` variant: `k_EResultOK` (1), which is not an error, and
+    /// `k_EResultNone` (0) -- which is exactly what a status field holds when Steam never wrote the
+    /// struct. `k_EResultNone` therefore has to fall to the catch-all error and never to the `Ok` arm:
+    /// reading 0 as "fine, here is your allocation" is the failure the `unwrap()` in `to_steam_result`
+    /// used to turn into an abort on `Unknown(0)`.
+    #[test]
+    fn an_unmapped_result_code_is_an_error_and_not_a_success() {
+        assert_eq!(
+            sys::EResult::k_EResultNone as i32,
+            0,
+            "the zero value of an untouched struct must be the code the fallback sees"
+        );
+        let none = to_steam_result(sys::EResult::k_EResultNone);
+        assert!(
+            matches!(none, Err(SteamError::Generic)),
+            "k_EResultNone decoded as {none:?}; an unnamed code must be the catch-all error"
+        );
+        // And the catch-all really is only for nameless codes: this one has a variant, and keeping it
+        // distinguishable from `Generic` is what lets a caller act on the difference. Written after two
+        // regex rulers -- one that required a trailing comma, one that read past the end of the macro
+        // call -- both reported it as unnamed; the compiler's answer is the one recorded here.
+        let later = to_steam_result(sys::EResult::k_EResultTryLater);
+        assert!(
+            matches!(later, Err(SteamError::TryLater)),
+            "k_EResultTryLater decoded as {later:?}"
         );
     }
 }
