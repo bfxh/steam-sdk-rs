@@ -92,7 +92,6 @@ pub const _HAS_CXX17: u32 = 0;
 pub const _HAS_CXX20: u32 = 0;
 pub const _HAS_CXX23: u32 = 0;
 pub const _HAS_CXX26: u32 = 0;
-pub const _HAS_NODISCARD: u32 = 1;
 pub const _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE: u32 = 1;
 pub const _CRT_BUILD_DESKTOP_APP: u32 = 1;
 pub const _ARGMAX: u32 = 100;
@@ -110,7 +109,7 @@ pub const _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_COUNT: u32 = 0;
 pub const _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES: u32 = 1;
 pub const _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_MEMORY: u32 = 0;
 pub const _CRT_SECURE_CPP_OVERLOAD_SECURE_NAMES_MEMORY: u32 = 0;
-pub const _STATIC_INLINE_UCRT_FUNCTIONS: u32 = 1;
+pub const _STATIC_INLINE_UCRT_FUNCTIONS: u32 = 0;
 pub const EPERM: u32 = 1;
 pub const ENOENT: u32 = 2;
 pub const ESRCH: u32 = 3;
@@ -17494,11 +17493,6 @@ pub struct SteamDatagramHostedAddress {
 pub struct SteamDatagramGameCoordinatorServerLogin {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct SteamNetworkingFakeIPResult_t {
-    _unused: [u8; 0],
-}
 pub type FnSteamNetConnectionStatusChanged = ::std::option::Option<
     unsafe extern "C" fn(arg1: *mut SteamNetConnectionStatusChangedCallback_t),
 >;
@@ -19215,11 +19209,6 @@ pub struct ISteamNetworkingConnectionSignaling {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ISteamNetworkingSignalingRecvContext {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ISteamNetworkingFakeUDPPort {
     _unused: [u8; 0],
 }
 #[repr(C)]
@@ -27019,6 +27008,115 @@ extern "C" {
         pszInternalCheckInterfaceVersions: *const ::std::os::raw::c_char,
         pOutErrMsg: *mut SteamErrMsg,
     ) -> ESteamAPIInitResult;
+}
+pub const k_cbSteamNetworkingSocketsFakeUDPPortRecommendedMTU: ::std::os::raw::c_int = 1200;
+pub const k_cbSteamNetworkingSocketsFakeUDPPortMaxMessageSize: ::std::os::raw::c_int = 4096;
+#[repr(C)]
+pub struct ISteamNetworkingFakeUDPPort__bindgen_vtable(::std::os::raw::c_void);
+#[doc = " ISteamNetworkingFakeUDPPort\n\n Acts like a UDP port, sending and receiving datagrams addressed using\n FakeIP addresses.\n\n See: ISteamNetworkingSockets::CreateFakeUDPPort"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ISteamNetworkingFakeUDPPort {
+    pub vtable_: *const ISteamNetworkingFakeUDPPort__bindgen_vtable,
+}
+#[test]
+fn bindgen_test_layout_ISteamNetworkingFakeUDPPort() {
+    assert_eq!(
+        ::std::mem::size_of::<ISteamNetworkingFakeUDPPort>(),
+        8usize,
+        concat!("Size of: ", stringify!(ISteamNetworkingFakeUDPPort))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ISteamNetworkingFakeUDPPort>(),
+        8usize,
+        concat!("Alignment of ", stringify!(ISteamNetworkingFakeUDPPort))
+    );
+}
+#[doc = " A struct used to describe a \"fake IP\" we have been assigned to\n use as an identifier.  This callback is posted when\n ISteamNetworkingSoockets::BeginAsyncRequestFakeIP completes.\n See also ISteamNetworkingSockets::GetFakeIP"]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct SteamNetworkingFakeIPResult_t {
+    #[doc = " Status/result of the allocation request.  Possible failure values are:\n - k_EResultBusy - you called GetFakeIP but the request has not completed.\n - k_EResultInvalidParam - you called GetFakeIP with an invalid port index\n - k_EResultLimitExceeded - You asked for too many ports, or made an\n   additional request after one had already succeeded\n - k_EResultNoMatch - GetFakeIP was called, but no request has been made\n\n Note that, with the exception of k_EResultBusy (if you are polling),\n it is highly recommended to treat all failures as fatal."]
+    pub m_eResult: EResult,
+    #[doc = " Local identity of the ISteamNetworkingSockets object that made\n this request and is assigned the IP.  This is needed in the callback\n in the case where there are multiple ISteamNetworkingSockets objects.\n (E.g. one for the user, and another for the local gameserver)."]
+    pub m_identity: SteamNetworkingIdentity,
+    #[doc = " Fake IPv4 IP address that we have been assigned.  NOTE: this\n IP address is not exclusively ours!  Steam tries to avoid sharing\n IP addresses, but this may not always be possible.  The IP address\n may be currently in use by another host, but with different port(s).\n The exact same IP:port address may have been used previously.\n Steam tries to avoid reusing ports until they have not been in use for\n some time, but this may not always be possible."]
+    pub m_unIP: uint32,
+    pub m_unPorts: [uint16; 8usize],
+}
+pub const SteamNetworkingFakeIPResult_t_k_iCallback: SteamNetworkingFakeIPResult_t__bindgen_ty_1 =
+    SteamNetworkingFakeIPResult_t__bindgen_ty_1::k_iCallback;
+#[repr(i32)]
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum SteamNetworkingFakeIPResult_t__bindgen_ty_1 {
+    k_iCallback = 1223,
+}
+pub const SteamNetworkingFakeIPResult_t_k_nMaxReturnPorts:
+    SteamNetworkingFakeIPResult_t__bindgen_ty_2 =
+    SteamNetworkingFakeIPResult_t__bindgen_ty_2::k_nMaxReturnPorts;
+#[repr(i32)]
+#[non_exhaustive]
+#[doc = " Port number(s) assigned to us.  Only the first entries will contain\n nonzero values.  Entries corresponding to ports beyond what was\n allocated for you will be zero.\n\n (NOTE: At the time of this writing, the maximum number of ports you may\n request is 4.)"]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum SteamNetworkingFakeIPResult_t__bindgen_ty_2 {
+    k_nMaxReturnPorts = 8,
+}
+#[test]
+fn bindgen_test_layout_SteamNetworkingFakeIPResult_t() {
+    const UNINIT: ::std::mem::MaybeUninit<SteamNetworkingFakeIPResult_t> =
+        ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<SteamNetworkingFakeIPResult_t>(),
+        160usize,
+        concat!("Size of: ", stringify!(SteamNetworkingFakeIPResult_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<SteamNetworkingFakeIPResult_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(SteamNetworkingFakeIPResult_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_eResult) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_eResult)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_identity) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_identity)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_unIP) as usize - ptr as usize },
+        140usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_unIP)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_unPorts) as usize - ptr as usize },
+        144usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_unPorts)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
