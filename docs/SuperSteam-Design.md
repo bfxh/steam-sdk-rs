@@ -713,7 +713,7 @@ complete」；`bool` 不改成 `Result` 是因为 h:835-836 把 `false` 定义�
 是正常状态。**余下三个阻碍各不相同**：`GetFakeIP`（h:867）与
 `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` 堵在生成层——`SteamNetworkingFakeIPResult_t`
 被绑成空壳 `_unused: [u8; 0]`（`steamworks-sys/src/windows_bindings.rs:17499-17501`，真定义在
-`steamnetworkingfakeip.h:93`），要动的是 bindgen 输入清单与四个重生成文件，属于生成层的决定；
+`steamnetworkingfakeip.h:93`），要动的是 bindgen 输入清单与四个重生成文件，属于生成层的决定。**2026-10-16 已改 `steamworks-sys/build.rs`：输入变成一个 bundle TU（`steam_api_flat.h` + `steam_gameserver.h` + `steamnetworkingfakeip.h`），因为该头不能单独解析（`steamnetworkingtypes.h:47` 的 `#error` 要求同 TU 内先由 `steamclientpublic.h` 定义 pack 宏，宏不跨 TU）；绑定文件本身要等 `Rebuild bindings` 工作流在四个原生 runner 上重生成并按下 `commit_bindings` 才落盘，本机无 libclang（实测 `C:/Program Files/LLVM` 不存在）所以无法预览。**
 `GetRemoteFakeIPForConnection`（h:895）技术上可达（`SteamNetworkingIPAddr` 绑定具体，
 `From<sys::SteamNetworkingIPAddr> for SteamIpAddr` 已在
 `src/networking_types/addresses.rs:183-187`），但本仓所有面向地址的公开 API 都说

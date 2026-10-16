@@ -106,8 +106,10 @@ jobs:
         name: Does the tree differ?
         # 必须分两类报，否则这扇门会被环境噪音糊住：实测一次重生成产生 12 KB diff，
         # 内容全是 macOS 的 libc++/SDK 版本宏（_LIBCPP_*、__MAC_26_*）和 Windows 的
-        # ucrt 常量（_STATIC_INLINE_UCRT_FUNCTIONS 1->0），**SteamAPI_ 相关 0 行**。
-        # 只有 api_changed=true 才意味着绑定的 API 面真的变了。
+        # ucrt 常量（_STATIC_INLINE_UCRT_FUNCTIONS 1->0），**Steam API 面 0 行**。
+        # 只有 api_changed=true 才意味着绑定的 API 面真的变了。判定本身在
+        # `scripts/ci/bindings_drift.py`：四份夹具的正反例由 `canaries.py` 钉住，因为它原先是
+        # 内联 shell，谁都复算不了它到底数到了什么。
         run: |
           set -uo pipefail
           summary="$GITHUB_STEP_SUMMARY"
@@ -119,21 +121,17 @@ jobs:
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
           read -r added deleted <<<"$(git diff --numstat -- steamworks-sys/src | awk '{a+=$1; d+=$2} END{print a" "d}')"
-          api_lines=$(git diff -U0 -- steamworks-sys/src | grep -cE '^[+-][^+-].*(SteamAPI_|ISteam)' || true)
-          if [ "${api_lines:-0}" -gt 0 ]; then
-            echo "api_changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "api_changed=false" >> "$GITHUB_OUTPUT"
-          fi
-          git diff -- steamworks-sys/src > /tmp/bindings.diff
+          git diff -U0 -- steamworks-sys/src > /tmp/bindings.diff
+          # stdout is the two `$GITHUB_OUTPUT` keys, stderr is the human line the summary quotes.
+          git diff -U0 -- steamworks-sys/src \
+            | python3 scripts/ci/bindings_drift.py >> "$GITHUB_OUTPUT" 2>/tmp/drift.txt
           {
             printf '### 绑定重生成：有漂移\n\n'
             printf -- '- 行数：+%s / -%s\n' "$added" "$deleted"
-            printf -- '- 触及 Steam API 面的行数（`SteamAPI_`/`ISteam`）：%s\n' "${api_lines:-0}"
-            printf -- '- `api_changed=%s`（0 行时说明差异来自 runner 的 libc++/SDK/ucrt 版本，不是 API）\n' "$([ "${api_lines:-0}" -gt 0 ] && echo true || echo false)"
-            printf -- '- 完整 diff 见附件 `bindings-drift`\n'
+            sed 's/^/- /' /tmp/drift.txt
+            printf -- '- 判定口径与被数到的行见上；完整 diff 见附件 `bindings-drift`\n'
           } >> "$summary"
-          printf 'diff: +%s/-%s, api-affecting lines=%s\n' "$added" "$deleted" "${api_lines:-0}"
+          sed 's/^/drift: /' /tmp/drift.txt
 
       - uses: actions/upload-artifact@v4
         if: steps.drift.outputs.changed == 'true'

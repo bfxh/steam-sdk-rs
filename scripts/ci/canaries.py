@@ -260,8 +260,68 @@ def canary_api_coverage():
     expect("the real invocation still judges", run_script(ruler, []).returncode, 0)
 
 
+NOISE_FIXTURE = """--- a/steamworks-sys/src/macos_bindings.rs
++++ b/steamworks-sys/src/macos_bindings.rs
+@@ -1,3 +1,3 @@
+-const _LIBCPP_VERSION: u32 = 190000;
++const _LIBCPP_VERSION: u32 = 200000;
++const __MAC_26_0: u32 = 260000;
+-const _STATIC_INLINE_UCRT_FUNCTIONS: u32 = 1;
++const _STATIC_INLINE_UCRT_FUNCTIONS: u32 = 0;
+"""
+
+STRUCT_FIXTURE = """--- a/steamworks-sys/src/windows_bindings.rs
++++ b/steamworks-sys/src/windows_bindings.rs
+@@ -17499,3 +17499,7 @@
+-pub struct SteamNetworkingFakeIPResult_t {
+-    _unused: [u8; 0],
+-}
++pub struct SteamNetworkingFakeIPResult_t {
++    pub m_eResult: EResult,
++    pub m_unIP: u32,
++}
+"""
+
+COLUMN_ONE_FIXTURE = """--- a/x
++++ b/x
+@@ -1 +1 @@
++SteamAPI_ISteamNetworkingSockets_GetFakeIP(self: *mut c_void);
+"""
+
+
+def canary_bindings_drift():
+    """The bindings classifier must separate runner noise from a real surface change -- and it must
+    see a surface line that starts immediately after the diff sign, which is the case the inline
+    `^[+-][^+-].*(...)` pattern it replaced ate one character past."""
+    print("bindings_drift.py -- noise is noise, and a struct is not")
+    ruler = ROOT / CI / "bindings_drift.py"
+
+    def verdict(diff):
+        done = subprocess.run([sys.executable, str(ruler)], input=diff, capture_output=True,
+                              text=True, encoding="utf-8", errors="replace")
+        return " ".join(done.stdout.split())
+
+    global checks
+    for label, diff, want in (
+        ("a bindings diff of pure libc++/ucrt noise", NOISE_FIXTURE,
+         "changed=true api_changed=false"),
+        ("a callback struct gaining its real fields", STRUCT_FIXTURE,
+         "changed=true api_changed=true"),
+        ("a surface line whose token starts at column one", COLUMN_ONE_FIXTURE,
+         "changed=true api_changed=true"),
+        ("an empty diff", "", "changed=false api_changed=false"),
+    ):
+        got = verdict(diff)
+        checks += 1
+        if got == want:
+            print(f"  ok   {label}: {got}")
+        else:
+            print(f"  FAIL {label}: got [{got}] want [{want}]")
+            failures.append(f"bindings_drift: {label}")
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_doc_pointers, canary_baseline_files,
-            canary_api_coverage)
+            canary_api_coverage, canary_bindings_drift)
 
 
 def main():

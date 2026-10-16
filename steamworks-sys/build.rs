@@ -76,16 +76,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             panic!("Unsupported OS");
         };
         let binding_path = Path::new(&format!("src/{}_bindings.rs", target_os)).to_owned();
+        // One bundle TU rather than one `.header()` per file, because
+        // `steamnetworkingfakeip.h` cannot be parsed on its own: it reaches
+        // `steamnetworkingtypes.h`, which stops with `#error "Must define
+        // VALVE_CALLBACK_PACK_SMALL or VALVE_CALLBACK_PACK_LARGE"` unless something earlier in the
+        // same translation unit defined that macro -- and only `steamclientpublic.h` does, through
+        // `steam_api.h`. Macros do not cross translation units, so the fake-IP header is appended
+        // to the bundle that already worked instead of being handed to bindgen as a second input.
+        // Without it, `SteamNetworkingFakeIPResult_t` stays the forward declaration at
+        // `isteamnetworkingsockets.h:11` and bindgen emits an opaque `_unused: [u8; 0]` shell, which
+        // is what made `GetFakeIP` and the FakeIP-result payload un-wrappable in the safe layer.
         let bindings = bindgen::Builder::default()
-            .header(
-                sdk_loc
-                    .join("public/steam/steam_api_flat.h")
-                    .to_string_lossy(),
-            )
-            .header(
-                sdk_loc
-                    .join("public/steam/steam_gameserver.h")
-                    .to_string_lossy(),
+            .header_contents(
+                "steam_bindings_bundle.h",
+                "#include <steam/steam_api_flat.h>\n\
+                 #include <steam/steam_gameserver.h>\n\
+                 #include <steam/steamnetworkingfakeip.h>\n",
             )
             .clang_arg("-xc++")
             .clang_arg("-std=c++11")

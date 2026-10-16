@@ -1,4 +1,5 @@
+# total 9
 .github/workflows/ci.yml 0
 .github/workflows/quality-extra.yml 6
-.github/workflows/rebuild-bindings.yml 1
+.github/workflows/rebuild-bindings.yml 0
 .github/workflows/release.yml 3
