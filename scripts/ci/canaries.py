@@ -18,10 +18,11 @@ Not covered, registered here rather than glossed over:
 
   * `clippy_gate.py` and `test_floor.sh` -- failing them usefully needs a real cargo build. Their
     anti-vacuity floors (artifact counts, "0 tests ran") are exercised by the real runs in CI.
-  * `workflow_inputs.py` -- it reads `.github/workflows` relative to the checkout and judges
-    tracked paths; a fixture would have to reproduce half this repo.
   * `package_inventory.py` / `sdk_vendored.py` -- they wrap `cargo package --list` and the vendored
     hash manifest; a fixture would be a copy of the crate.
+
+`workflow_inputs.py` is on that list in the git history and no longer belongs here: the fixture it
+was said to need turned out to be one workflow file and a `git add`.
 
 Usage: `python3 scripts/ci/canaries.py`. Exits 1 if a gate failed to judge as expected, 2 if the
 suite itself could not run (which is not a pass either).
@@ -244,9 +245,16 @@ def canary_cstring_unwraps():
         write(tmp / "src" / "prose.rs",
               "// Upstream used CString::new(name).unwrap() here.\n"
               "pub fn clean(value: &str) -> Result<CString, ()> { CString::new(value).map_err(|_| ()) }\n")
+        # And an out-of-line test file -- this crate's shape for its bigger suites (`mod lib_tests;`
+        # under `#[cfg(test)]`, so nothing inside the file marks it as test code) -- is not debt: a
+        # test choosing to `unwrap` its own fixture is not something a caller can trigger.
+        write(tmp / "src" / "fixture_tests.rs",
+              "pub fn fixture(value: &str) -> CString { CString::new(value).unwrap() }\n")
         for i in range(20):  # the ruler's own floor is 20 scanned sources
             write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
         out = run_script(dst, ["src"], cwd=tmp)
+        expect("a whole-file test module is not debt",
+               0 if "fixture_tests.rs" not in out.stdout else 1, 0)
         expect("a caller-supplied unwrap is a site",
                0 if "src/caller.rs 1" in out.stdout else 1, 0)
         expect("a literal with no nul is not a site",
@@ -622,12 +630,103 @@ def canary_shell_hatches():
     shutil.rmtree(root, ignore_errors=True)
 
 
+CLEAN_WORKFLOW = """name: probe
+on: push
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: clippy (no -D warnings)
+        run: cargo clippy --locked --all-targets {paths} --message-format short
+      - name: check (all targets, rustc warnings denied)
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --locked --all-targets
+"""
+
+# Eight references: the ruler refuses a scan of fewer than MIN_REFERENCES paths, so a fixture
+# under that floor would go red for "not looking" and the canary would pass for the wrong reason.
+FILLER_PATHS = " ".join(f"scripts/ci/filler{i}.py" for i in range(8))
+
+
+def canary_workflow_inputs():
+    """The warnings ban has three shapes that must each be able to break it.
+
+    `workflow_inputs.py` used to be registered as un-canariable ("a fixture would have to reproduce
+    half this repo"). The fixture turned out to be one workflow file and a `git add`: the ruler reads
+    those and nothing else about the checkout. It is worth the ten lines because the fact it judges
+    is the one this repo got wrong three times on 2026-10-18 -- as a workspace-wide
+    `RUSTFLAGS: -D warnings`, as a `-p steamworks` one, and as a crate-level `#![deny(warnings)]`
+    (which is not the same guarantee: clippy eats crate attributes too, and the accepted style tier
+    became 99 errors).
+    """
+    print("workflow_inputs.py -- a missing, moved or misplaced warnings ban each judge red")
+    ruler = ROOT / CI / "workflow_inputs.py"
+    tmp, dst = fixture(ruler)
+    try:
+        for i in range(8):
+            write(tmp / "scripts" / "ci" / f"filler{i}.py", "print(0)\n")
+
+        def run(workflow=CLEAN_WORKFLOW.format(paths=FILLER_PATHS)):
+            write(tmp / ".github" / "workflows" / "a.yml", workflow)
+            git(tmp, "add", "-A")
+            done = run_script(dst, cwd=tmp)
+            return done.returncode, done.stdout + done.stderr
+
+        code, out = run()
+        expect("clean workflow fixture is a pass, not an empty scan", code, 0)
+
+        no_ban = CLEAN_WORKFLOW.format(paths=FILLER_PATHS).replace(
+            "        env:\n          RUSTFLAGS: -D warnings\n", "")
+        code, out = run(workflow=no_ban)
+        expect("a silently removed warnings ban is red", code, 1)
+
+        # The ban goes onto the clippy step *in addition to* the check step, so this fixture can only
+        # be red for the tier rule: a moved ban (check step left clean) would also trip the
+        # "ban must exist" floor, and the assertion would pass for the wrong reason -- measured, and
+        # it is exactly what the first version of this canary did.
+        on_clippy = CLEAN_WORKFLOW.format(paths=FILLER_PATHS).replace(
+            "      - name: clippy (no -D warnings)\n        run:",
+            "      - name: clippy (no -D warnings)\n        env:\n          RUSTFLAGS: -D warnings\n        run:")
+        code, out = run(workflow=on_clippy)
+        expect("the ban also placed on the clippy step is red", code, 1)
+        expect("and it says which step, not just that something is wrong",
+               0 if "clippy carries" in out else 1, 0)
+
+        inline_build = CLEAN_WORKFLOW.format(paths=FILLER_PATHS).replace(
+            "        env:\n          RUSTFLAGS: -D warnings\n        run: cargo check --locked --all-targets",
+            '        run: RUSTFLAGS="-D warnings" cargo build --locked')
+        code, out = run(workflow=inline_build)
+        expect("the ban inline on a build step is red", code, 1)
+        expect("and it names the step it is on rather than only the missing one",
+               0 if "neither check nor" in out else 1, 0)
+
+        no_clippy = CLEAN_WORKFLOW.format(paths=FILLER_PATHS).replace(
+            "cargo clippy", "cargo fmt")
+        code, out = run(workflow=no_clippy)
+        expect("a scan that saw no clippy step is red, not clean", code, 1)
+
+        # Anti-vacuity for the older halves, so the new checks cannot be the only live ones.
+        interpolating = CLEAN_WORKFLOW.format(paths=FILLER_PATHS).replace(
+            "    timeout-minutes: 30\n",
+            "    timeout-minutes: 30\n    permissions:\n      contents: ${{ github.ref_type }}\n")
+        code, out = run(workflow=interpolating)
+        expect("permissions interpolation is still red", code, 1)
+
+        code, out = run(workflow=CLEAN_WORKFLOW.format(paths="scripts/ci/not_there.py " + FILLER_PATHS))
+        expect("an untracked referenced path is still red", code, 1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
             canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
-            canary_shell_hatches)
+            canary_shell_hatches, canary_workflow_inputs)
 
 
 def main():

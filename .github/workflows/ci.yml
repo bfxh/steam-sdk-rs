@@ -70,21 +70,33 @@ jobs:
       - name: clippy (no -D warnings)
         run: cargo clippy --locked --all-targets $EXAMPLES $FEATURES --message-format short
 
-      - name: check (all targets)
-        run: cargo check --locked --all-targets $EXAMPLES $FEATURES
-
-      # rustc 的 warning 在这里是判定，不是提示：实测本仓手写代码 `--all-targets` 下 rustc 只有 2 条，
-      # 而它们恰好是一条**空断言**——测试里 `matches!(x, Err(InvalidHandle))` 因为该类型没 import，
-      # 被当成"绑定一个变量"，于是那条测试对错误类型什么都没断言，只有 rustc 知道。clippy 的 style 组
-      # 仍按原样不 -D（理由见上面那条 step）。
-      # 范围刻意是 `-p steamworks`：第一版写的是整工作区，结果三个 1.80.0 作业全红而 stable 全绿——
-      # 红在 `steamworks-sys` 的 bindgen 产物上（`struct ISteamContentServer is never constructed`、
-      # `struct obstack is never constructed`，新 rustc 不报）。那是生成物，重跑 bindgen 就回来，
-      # 和本仓其它尺子一律跳过 `*bindings.rs` 是同一个判断。
-      - name: check (hand-written crate, rustc warnings denied)
+      # rustc 的 warning 在这道 step 里是判定，不是提示：实测本仓手写代码 `--all-targets` 下 rustc
+      # 只有 2 条，而它们恰好是一条**空断言**——测试里 `matches!(x, Err(InvalidHandle))` 因为该类型
+      # 没 import，被当成"绑定一个变量"，于是那条测试对错误类型什么都没断言，只有 rustc 知道。
+      #
+      # 为什么写成这一步的 `RUSTFLAGS` 而不是 `src/lib.rs` 里的 `#![deny(warnings)]`（两个版本都试过，
+      # 都是实测）：
+      #   1. 保证必须在 `cargo check` 这一路上，因为 clippy 那一路不能 -D：`deny(warnings)` 写在
+      #      crate 里时 clippy 也会吃到它（clippy 的 lint 就是 rustc 的 lint），上面那条 clippy step
+      #      会因 style 组的 99 条直接判红——本仓刻意把 clippy 分成两档：correctness/suspicious 由
+      #      `scripts/ci/clippy_gate.py` 零容忍，其余只提示（见上面 step 的注释）。放在 `RUSTFLAGS`
+      #      上就只约束 rustc 自己的 lint，不改变 clippy 那一档。
+      #   2. `RUSTFLAGS` 会传给同一次调用里构建的依赖，而 `steamworks-sys` 是工作区成员（cargo 对
+      #      成员不施加 `--cap-lints allow`），所以生成物里的 `dead_code` 也算到这里。第一版因此判红：
+      #      三个 1.80.0 作业全红、stable 全绿，红在 `struct ISteamContentServer is never constructed`
+      #      （本仓另外还报过 `obstack`；本机 windows-gnu 1.80.0 只复现前者）。改成 `-p steamworks`
+      #      没用——包筛选只决定给谁建，不决定 flags 传给谁。正确的落点是 `steamworks-sys/src/lib.rs`
+      #      里一条写明理由的 `#![allow(dead_code)]`：bindgen 为每个 C vtable 出一个 struct，而这层
+      #      只把 `*mut ISteamX` 交回 Steam，从不构造它们。A/B 是同一命令、同一工具链、只改那一行：
+      #      没有 allow 时 rc=101，有 allow 时 rc=0。
+      # 覆盖面：这一步编的是根包 `steamworks` 与它的同调用依赖；`$EXAMPLES` 一直是未定义变量
+      # （展开为空），examples 那四个成员由下面 `--workspace --features steamworks/futures` 那一步
+      # 编译，但不带这条 -D。`scripts/ci/workflow_inputs.py` 盯住形状：-D 只能出现在 check 那一步，
+      # clippy 那一步不许出现，整条 workflow 一条都不许少。
+      - name: check (all targets, rustc warnings denied)
         env:
           RUSTFLAGS: -D warnings
-        run: cargo check --locked -p steamworks --all-targets $FEATURES
+        run: cargo check --locked --all-targets $EXAMPLES $FEATURES
 
       - name: doc
         # 文档链接必须是干净的：本机实测 `RUSTDOCFLAGS=-D warnings cargo doc`

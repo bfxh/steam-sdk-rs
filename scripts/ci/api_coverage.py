@@ -39,6 +39,17 @@ def strip_comments(text):
     return "\n".join(line.split("//")[0] for line in text.splitlines())
 
 
+# A file that is itself test material: this crate keeps its bigger suites out of line
+# (`src/lib_tests.rs`, `src/ugc/ugc_tests.rs`), where no `#[cfg(test)]` sits inside the file -- the
+# attribute is on the `mod` declaration -- so `strip_test_modules` cannot see them. Naming is the
+# rule, and `main` refuses rather than skipping when such a file calls a Steam interface.
+TEST_MATERIAL = re.compile(r"(^|_)(tests?|probe)\.rs$")
+
+
+def is_test_material(path):
+    return bool(TEST_MATERIAL.search(path.name))
+
+
 def strip_test_modules(text):
     """Blank file-scope `#[cfg(test)]` module bodies, **keeping one output line per input line**.
 
@@ -111,10 +122,9 @@ def main(bindings_path=BINDINGS, source_root=SOURCE_ROOT):
     called = {interface: set() for interface in declared}
     for path in sorted(source_root.rglob("*.rs")):
         raw = path.read_text(encoding="utf-8", errors="replace")
-        # A file that is itself test material (`ugc_tests.rs`, `lib_tests.rs`, `tests.rs`) is
-        # not a wrapper, so it is skipped whole. `test_only_calls` above cannot see those: they
-        # carry no `#[cfg(test)]` inside, because the attribute sits on the `mod` declaration.
-        if re.search(r"(^|_)(tests?|probe)\.rs$", path.name):
+        # `test_only_calls` above cannot see those files: they carry no `#[cfg(test)]` inside,
+        # because the attribute sits on the `mod` declaration in the parent module.
+        if is_test_material(path):
             if CALLED.search(strip_comments(raw)):
                 print(
                     f"::error:: {path} is test material but calls a Steam interface -- decide "

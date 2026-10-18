@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from api_coverage import strip_test_modules  # noqa: E402  (one test-scoping rule, not two)
+from api_coverage import is_test_material, strip_test_modules  # noqa: E402  (one test-scoping rule, not two)
 
 CALL = re.compile(r"CString::new\s*\(")
 LITERAL = re.compile(r'^(?:&?r?#*"|r"|#")')
@@ -101,18 +101,28 @@ def conversions(text):
 
 
 def violations(root):
+    """Returns (sites, fallible conversions, files actually read).
+
+    The third number is what the `#scanned <N>` marker must carry: counting files that were skipped
+    would let the marker prove a scan that did not happen.
+    """
     found = []
     total = 0
+    read = 0
     for path in sorted(Path(root).rglob("*.rs")):
-        if "bindings" in path.name:
+        # Generated bindings and out-of-line test files are skipped by the same two rules every other
+        # ruler here uses -- the latter matters because a test choosing to `unwrap` a fixture is not
+        # something a caller can trigger, which is what this ledger counts.
+        if "bindings" in path.name or is_test_material(path):
             continue
+        read += 1
         text = strip_test_modules(blank_comments(path.read_text(encoding="utf-8", errors="replace")))
         for line, method, argument in conversions(text):
             total += 1
             infallible = LITERAL.match(argument) and not NUL_ESCAPE.search(argument)
             if not infallible:
                 found.append(f"{path.as_posix()}:{line}: CString::new({argument[:40]}){method}")
-    return found, total
+    return found, total, read
 
 
 def main():
@@ -121,8 +131,7 @@ def main():
         print(f"::error:: {root} is not a directory -- the ruler has nothing to look at",
               file=sys.stderr)
         return 2
-    found, total = violations(root)
-    files = sum(1 for path in root.rglob("*.rs") if "bindings" not in path.name)
+    found, total, files = violations(root)
     if files < 20 or total == 0:
         print(f"::error:: scanned {files} sources and {total} CString conversions; an empty scan "
               "is not a pass", file=sys.stderr)

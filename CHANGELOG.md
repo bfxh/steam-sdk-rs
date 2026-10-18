@@ -1467,6 +1467,70 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **The CString ledger could have counted a test's own fixture as user-facing debt, and the rule that
+  stops it was already in this repo under a different name** (`scripts/ci/api_coverage.py`,
+  `scripts/ci/cstring_unwraps.py`, `canaries.py`). This crate keeps its bigger suites out of line --
+  `src/lib_tests.rs` and `src/ugc/ugc_tests.rs` are `#[cfg(test)] mod name;`, so nothing *inside* those
+  files is marked as test code and `strip_test_modules` cannot see them. Measured while sizing the next
+  class of work: 173 panic-capable expressions in "non-test" sources, of which **92 sat in exactly those
+  two files** -- a 1.1x overcount that would have sent the next unit after the wrong number.
+  The fix is not a new rule: `api_coverage.main` already refused to treat such files as wrappers, via an
+  inline name regex plus a hard error if one turned out to call a Steam interface. That predicate is now
+  `api_coverage.is_test_material`, named once and reused, so the debt ledger skips the same files the
+  coverage ledger does -- after I had already written a second, weaker mechanism (`out_of_line_test_mods`,
+  which inferred test files from `mod` declarations and silently skipped them); the duplicate is removed
+  rather than kept alongside, and the surviving rule is the stricter of the two because it *refuses*
+  instead of quietly excluding.
+  Two honesty details that came out of the same change. `#scanned` now counts the files the ruler
+  actually read (125, not 127) -- a marker proving "I looked" must not count files it skipped. And the
+  new canary assertion ("a whole-file test module is not debt") was disproved rather than trusted: with
+  the predicate disabled in a throwaway copy, `fixture_tests.rs` does appear as a site, so the
+  assertion passes for a reason (74 canary assertions, up from 73).
+
+- **Retracted a second time: the `-p steamworks` rescope did not fix the warnings gate either, and
+  neither did the crate-level `#![deny(warnings)]` that replaced it** (`.github/workflows/ci.yml`,
+  `steamworks-sys/src/lib.rs`, `scripts/ci/workflow_inputs.py`, `scripts/ci/canaries.py`).
+  `8f59be4` claimed its package filter "keeps the assertion actually being made". It did not: cargo
+  applies `RUSTFLAGS` to every crate it builds in that invocation, and package selection decides who
+  gets *built*, not who gets the *flags*. Same three `1.80.0` jobs, same `dead_code` error.
+  The third attempt moved the ban into the crate and deleted the `RUSTFLAGS`. It compiles clean on
+  both toolchains, and it is still the wrong mechanism: a clippy lint *is* a rustc lint, so a crate
+  attribute is honoured by the clippy step too. Measured with `#![deny(warnings)]` in `src/lib.rs`,
+  `cargo clippy --locked --all-targets --all-features` failed with **99 errors** in this crate -- the
+  style backlog (`result_unit_err`, `type_complexity`, doc-tabs) that the repo deliberately keeps
+  advisory, with only `clippy::correctness` and `clippy::suspicious` denied by `clippy_gate.py` and no
+  baseline to slide on. A gate that silently re-tieres the tool next to it is not the same guarantee.
+  So the fix is the one line the first two attempts were working around: `#![allow(dead_code)]` in
+  `steamworks-sys/src/lib.rs`, with the reason written next to it. That file is hand-written (three
+  `allow` attributes and four `include!`s), so it survives a bindgen rerun; the generated
+  `*_bindings.rs` is not touched and its warnings stay honest. The A/B is one command, one toolchain,
+  one line: `RUSTFLAGS="-D warnings" cargo +1.80.0 check --locked --all-targets` exits 101 on
+  "struct `ISteamContentServer` is never constructed" without the allow and 0 with it (this platform
+  reproduces one of the two errors the CI matrix reported -- `obstack` does not fire here), and stable
+  `--all-features` is 0 either way, which is exactly why only MSRV jobs ever saw it. The ban is now a
+  property of the one `check (all targets, rustc warnings denied)` step rather than of two steps: a
+  second `cargo check -p steamworks` after it would be a cache hit, i.e. a step that prints `Finished`
+  and decides nothing.
+  Two things pin the shape so it cannot regress quietly. `workflow_inputs.py` gained a fourth fact --
+  the ban must exist, must be on a `cargo check` step, must not be on a `cargo clippy` step, and a scan
+  that saw no clippy step at all is refused rather than passed -- and `workflow_inputs.py` is no longer
+  on this file's un-canariable list: the fixture it was said to need turned out to be one workflow file
+  and a `git add`. 83 canary assertions, up from 74. Two of them passed for the wrong reason at first
+  and were rebuilt: the "ban moved onto clippy" fixture also tripped the exists-floor, so the ban now
+  stays on the check step too and only the tier rule can fire (proved by neutralising that rule in a
+  throwaway copy -- the fixture goes green). And a `python … && cargo …` chain whose python half died on
+  an assertion printed `rc=1` as though cargo had run; the without-allow number above is from the
+  re-run, not from that line.
+  The offer in the entry below -- install the pinned MSRV toolchain so MSRV-only behaviour is visible
+  before a push -- is taken: `1.80.0-x86_64-pc-windows-gnu` is installed here and the local replay runs
+  both `-D warnings` shapes. Both mistakes reached CI for the same reason: the chain had no 1.80.0
+  compile in it at all.
+  Registered rather than changed: `$EXAMPLES` in those two command lines has never been assigned in
+  either workflow, so it expands to empty and the steps compile the root package plus its
+  same-invocation dependencies -- not the four `examples/*` members, which are built by the
+  `--features steamworks/futures` step without the ban. Deleting the token would change what the line
+  claims to cover, and I have not measured the examples under `-D warnings`.
+
 - **Retracted: the rustc-warnings gate did not only bite hand-written code, and MSRV said so**
   (`.github/workflows/ci.yml`). The step as written in `ee60ab9` denied warnings for the whole workspace
   and its comment asserted that cargo's `--cap-lints allow` would keep generated and third-party code out
