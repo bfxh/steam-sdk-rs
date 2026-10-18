@@ -46,6 +46,7 @@ src/remote_storage/files.rs 247
 src/remote_storage/mod.rs 247
 src/networking_types/addresses.rs 246
 src/user/auth.rs 244
+src/remote_storage/api.rs 223
 src/friends/chat.rs 216
 src/networking_types/events.rs 212
 src/user/buffers.rs 210
@@ -54,7 +55,6 @@ src/matchmaking/queries.rs 205
 src/inventory/items.rs 204
 src/identity.rs 198
 src/parental.rs 191
-src/remote_storage/api.rs 182
 src/networking_types/state.rs 180
 src/remote_play.rs 180
 src/input/origins.rs 178

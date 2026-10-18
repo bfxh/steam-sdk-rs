@@ -4,6 +4,19 @@
 
 use super::*;
 
+/// How many cloud files the enumeration may reserve for.
+///
+/// `GetFileCount` is declared "virtual int32 GetFileCount() = 0;" (`isteamremotestorage.h:228`): a
+/// signed count. `files` used to compare it against -1 literally and cast everything else straight
+/// into `Vec::with_capacity(count as usize)`, so any other negative answer -- -2, `INT_MIN` -- became
+/// ~1.8e19 elements and the allocation aborts the caller's thread. The sibling enumeration in this
+/// same file, `local_file_changes`, already asked `count <= 0` of the identically signed
+/// "virtual int32 GetLocalFileChangeCount() = 0;" (`:315`); both now go through one guard, so the
+/// asymmetry cannot come back.
+fn file_count(raw: ::std::os::raw::c_int) -> usize {
+    usize::try_from(raw).unwrap_or(0)
+}
+
 impl RemoteStorage {
     /// Toggles whether the steam cloud is enabled for the application
     pub fn set_cloud_enabled_for_app(&self, enabled: bool) {
@@ -33,15 +46,15 @@ impl RemoteStorage {
     /// Returns information about all files in the cloud storage
     pub fn files(&self) -> Vec<SteamFileInfo> {
         unsafe {
-            let count = sys::SteamAPI_ISteamRemoteStorage_GetFileCount(self.rs);
-            if count == -1 {
+            let count = file_count(sys::SteamAPI_ISteamRemoteStorage_GetFileCount(self.rs));
+            if count == 0 {
                 return Vec::new();
             }
-            let mut files = Vec::with_capacity(count as usize);
+            let mut files = Vec::with_capacity(count);
             for idx in 0..count {
                 let mut size = 0;
                 let name = CStr::from_ptr(sys::SteamAPI_ISteamRemoteStorage_GetFileNameAndSize(
-                    self.rs, idx, &mut size,
+                    self.rs, idx as _, &mut size,
                 ));
                 files.push(SteamFileInfo {
                     name: name.to_string_lossy().into_owned(),
@@ -135,11 +148,13 @@ impl RemoteStorage {
     /// Steam hands back its own buffer for each name, so every name is copied
     /// out before the next query.
     pub fn local_file_changes(&self) -> Vec<LocalFileChange> {
-        let count = unsafe { sys::SteamAPI_ISteamRemoteStorage_GetLocalFileChangeCount(self.rs) };
-        if count <= 0 {
+        let count = file_count(unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_GetLocalFileChangeCount(self.rs)
+        });
+        if count == 0 {
             return Vec::new();
         }
-        let mut changes = Vec::with_capacity(count as usize);
+        let mut changes = Vec::with_capacity(count);
         for index in 0..count {
             let mut change =
                 sys::ERemoteStorageLocalFileChange::k_ERemoteStorageLocalFileChange_Invalid;
@@ -148,7 +163,7 @@ impl RemoteStorage {
             let raw = unsafe {
                 sys::SteamAPI_ISteamRemoteStorage_GetLocalFileChange(
                     self.rs,
-                    index,
+                    index as _,
                     &mut change,
                     &mut path_kind,
                 )
@@ -178,5 +193,31 @@ impl RemoteStorage {
         } else {
             Err(SteamError::IOFailure)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The count guard, judged without a client. Both enumeration calls need Steam to produce a
+    //! count, but the decision taken *from* the count is pure, and that decision is what used to abort.
+    use super::file_count;
+
+    /// The old code singled out -1 and cast everything else, so -2 or `INT_MIN` reached
+    /// `Vec::with_capacity(count as usize)` and became ~1.8e19 elements -- an abort inside a safe
+    /// method, from a value the caller never supplied.
+    #[test]
+    fn any_negative_count_enumerates_nothing() {
+        assert_eq!(file_count(-1), 0);
+        assert_eq!(file_count(-2), 0);
+        assert_eq!(file_count(i32::MIN), 0);
+    }
+
+    /// The other half: a real count is not rounded, narrowed or re-interpreted on the way through.
+    #[test]
+    fn a_real_count_survives_the_guard_unchanged() {
+        assert_eq!(file_count(0), 0);
+        assert_eq!(file_count(1), 1);
+        assert_eq!(file_count(37), 37);
+        assert_eq!(file_count(i32::MAX), usize::try_from(i32::MAX).unwrap());
     }
 }

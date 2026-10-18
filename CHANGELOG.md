@@ -1435,6 +1435,27 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **`RemoteStorage::files` singled out -1 and cast every other negative into a capacity**
+  (`src/remote_storage/api.rs`). `GetFileCount` is "virtual int32 GetFileCount() = 0;"
+  (`isteamremotestorage.h:228`), a signed count; the loop guarded `count == -1` and then did
+  `Vec::with_capacity(count as usize)`, so -2, `INT_MIN`, or any other negative answer became ~1.8e19
+  elements and the allocation aborted the caller's thread -- inside a safe method, on a value the
+  caller never supplied. The sibling enumeration in the same file already asked `count <= 0` of the
+  identically signed `GetLocalFileChangeCount` (`:315`), so both calls now share one `file_count`
+  guard and the asymmetry that let one side be safe and the other not cannot come back. Two tests,
+  one per direction: every negative enumerates nothing, and a real count (including `i32::MAX`) passes
+  through unrounded -- the second because a guard that quietly swallowed large counts would be a data
+  bug dressed as a fix. Two mutations replayed (cast straight through, clamp everything) and both went
+  red; file restored byte-identical from a `cp` backup.
+  **What this does not close, stated rather than implied:** a *positive* absurd count still reaches
+  `with_capacity`, because putting a ceiling on the number of cloud files would be inventing a policy
+  Steam never stated (and the guard's own test insists large counts survive). The residual symptom of
+  that case is an allocation failure, not out-of-bounds memory, and it needs the same value Steam would
+  have to lie about. Also left alone deliberately: `GetFileNameAndSize` reports the size as `int32` and
+  the wrapper widens it to `u64`, so a negative size would surface as ~1.8e19 bytes rather than a
+  failure -- clamping it to zero would fabricate a file length, so it stays as an observation until
+  there is a documented answer to give.
+
 - **A downloaded leaderboard could publish uninitialised heap as player data**
   (`src/user_stats/leaderboard.rs`). Inside the `DownloadLeaderboardEntries` callback, three of Steam's
   own numbers were used as sizes without being checked, and this is the path that fills `Vec<i32>` for

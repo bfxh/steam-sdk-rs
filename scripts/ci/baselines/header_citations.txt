@@ -64,6 +64,9 @@ src/networking_types/identity.rs~undeclared 0
 src/networking_types/message.rs 0
 src/networking_types/message.rs~unjudged 0
 src/networking_types/message.rs~undeclared 0
+src/remote_storage/api.rs 0
+src/remote_storage/api.rs~unjudged 0
+src/remote_storage/api.rs~undeclared 0
 src/ugc/answers.rs 0
 src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0
