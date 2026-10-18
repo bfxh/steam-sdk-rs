@@ -1422,6 +1422,26 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **`shell_hatches.py` was counting vocabulary, not holes: 4 of its 9 registered hatches were
+  comment prose** (`scripts/ci/shell_hatches.py`). It searched each workflow file's whole text for
+  `|| true`, `2>/dev/null`, `--no-verify` &c. -- and this repository's workflows *write those
+  literals out to explain why a step no longer uses them*. Measured on the files as they stood:
+  `quality-extra.yml` counted 6 where the runner executes 3, `release.yml` counted 3 where it
+  executes 2, so the ledger's "may only go down" was a rule about wording: rewording a comment moved
+  the number, and a genuine new hatch could hide inside the sentence describing it. The counter now
+  skips lines whose first non-space character is `#` and still counts a hatch that has a trailing
+  comment, because that line is code the runner executes. The ledger is re-recorded 9 -> 5 with that
+  reason in its header -- the shrink is the ruler getting honest, not four holes being repaired.
+  Three canaries pin it (49 -> **52**), and the mutation was replayed rather than argued: restoring
+  whole-file counting turns two of them red -- the all-prose fixture stops reporting an empty scan
+  (exit 2 -> 0, i.e. the green-that-checks-nothing this gate exists to catch) and the one-hatch
+  fixture reports 3 instead of 1 -- while the third assertion, that a trailing comment still counts,
+  stays green under that mutation by design; it is the guard against the opposite over-stripping.
+  The two `cargo package --no-verify` invocations that remain are the release path's own trade, and
+  the failure class they could hide was checked rather than assumed: a packaged crate missing what
+  it builds from is pinned against by `package_inventory`, which carries 63 `lib/steam` entries and
+  all three headers the bundled bindgen translation unit includes.
+
 - **A docs citation two lines off, and the measured reason the ruler stays out of `docs/`.**
   `defect-06-ugc-builder-deep-dive.md` cited `isteamugc.h:29` for
   `k_UGCUpdateHandleInvalid` being all-ones `uint64`; line 29 of that header is blank and the constant

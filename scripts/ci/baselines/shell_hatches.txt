@@ -1,5 +1,17 @@
-# total 9
+# total 5
+#
+# Re-recorded 2026-10-18, 9 -> 5. That is NOT four hatches removed: the counter used to search the
+# whole file, so four of the nine were *comment prose* -- `quality-extra.yml` writing out `|| true`
+# to explain why the install step no longer uses it, `release.yml` doing the same for the switch it
+# keeps. `shell_hatches.count_hatches` now reads code lines only, which makes this number mean
+# "escape hatches the runner executes": 3 in the advisory workflow -- two capture a tool's output
+# that is then judged structurally (`udeps` must show it read the dep graph; `geiger` must yield
+# parseable JSON, or a table containing `unsafe`), and the third is a best-effort detail dump inside
+# a branch that already exits 1 -- and 2 in `cargo package --no-verify`, whose risk class (a
+# packaged crate missing the inputs it builds from) is covered separately by `package_inventory`:
+# the vendored headers `build.rs` feeds to bindgen are pinned there, 63 `lib/steam` entries, and all
+# three `#include` targets of the bundled translation unit are present. What remains may only go down.
 .github/workflows/ci.yml 0
-.github/workflows/quality-extra.yml 6
+.github/workflows/quality-extra.yml 3
 .github/workflows/rebuild-bindings.yml 0
-.github/workflows/release.yml 3
+.github/workflows/release.yml 2

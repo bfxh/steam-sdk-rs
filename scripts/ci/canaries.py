@@ -415,8 +415,81 @@ def canary_header_citations():
     shutil.rmtree(root, ignore_errors=True)
 
 
+PROSE_ONLY_YAML = """# An escape hatch is a line the runner executes. This file executes nothing: every mention of
+# `|| true` below is prose explaining why the step stopped using it, and prose that names
+# `2>/dev/null` is not a hole in the pipeline.
+name: prose-only
+'on': push
+"""
+
+ONE_HATCH_YAML = """# prose again: the old form was `cargo geiger || true` with no judgement of the output,
+# and `2>/dev/null` swallowed a missing interpreter.
+name: one-hatch
+'on': push
+jobs:
+  advisory:
+    run: |
+      cargo geiger > geiger.json || true
+      python3 judge.py geiger.json
+"""
+
+TRAILING_YAML = """name: trailing-comment-counts
+'on': push
+jobs:
+  advisory:
+    run: |
+      cargo audit --json || true   # the old fallback here was 2>/dev/null, which is worse
+"""
+
+
+def canary_shell_hatches():
+    """The hatch counter must count the lines a runner executes and nothing else.
+
+    Measured on the real repository 2026-10-18: 4 of the 9 registered hatches were comment prose --
+    this repository's own habit of writing out `|| true` to explain why a step no longer uses it.
+    Left alone, that makes the ledger a vocabulary test: reword a comment and the count moves, while
+    a genuine new hatch can hide behind the prose it is described in.
+    """
+    print("shell_hatches.py -- prose is not a hatch, trailing comments are, an all-prose scan reports")
+    root = Path(tempfile.mkdtemp(prefix="hatch-canary-"))
+    ruler = root / "shell_hatches.py"
+    shutil.copyfile(ROOT / CI / "shell_hatches.py", ruler)
+    global checks
+
+    def run(text):
+        wf = root / "wf"
+        shutil.rmtree(wf, ignore_errors=True)
+        write(wf / "a.yml", text)
+        done = run_script(ruler, ["wf"], cwd=root)
+        return done.returncode, done.stdout
+
+    code, out = run(PROSE_ONLY_YAML)
+    expect("hatch counter: prose-only file is an empty scan, not a green one", code, 2)
+
+    code, out = run(ONE_HATCH_YAML)
+    checks += 1
+    if code == 0 and "wf/a.yml 1" in out:
+        print("  ok   hatch counter: one code-line hatch, two prose mentions ignored")
+    else:
+        print(f"  FAIL hatch counter counted prose (want 'wf/a.yml 1', exit 0): exit={code} "
+              f"[{out.strip()}]")
+        failures.append("hatch counter: prose counted")
+
+    code, out = run(TRAILING_YAML)
+    checks += 1
+    if code == 0 and "wf/a.yml 2" in out:
+        print("  ok   hatch counter: a trailing comment after code still counts both patterns")
+    else:
+        print(f"  FAIL hatch counter skipped a trailing comment (want 'wf/a.yml 2'): exit={code} "
+              f"[{out.strip()}]")
+        failures.append("hatch counter: trailing comment missed")
+
+    shutil.rmtree(root, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_doc_pointers, canary_baseline_files,
-            canary_api_coverage, canary_bindings_drift, canary_header_citations)
+            canary_api_coverage, canary_bindings_drift, canary_header_citations,
+            canary_shell_hatches)
 
 
 def main():
