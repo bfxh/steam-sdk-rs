@@ -1422,6 +1422,22 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **A docs citation two lines off, and the measured reason the ruler stays out of `docs/`.**
+  `defect-06-ugc-builder-deep-dive.md` cited `isteamugc.h:29` for
+  `k_UGCUpdateHandleInvalid` being all-ones `uint64`; line 29 of that header is blank and the constant
+  is at `:31`. Now corrected.
+  Why the citation gate does not simply widen to the docs, measured: those files carry **73 numbered
+  header citations** (42 in the short `h:910` form), and only RANGE and BLANK are decidable there --
+  the docs quote Steam as Chinese translation, so the verbatim-phrase half cannot follow. Running just
+  those two verdicts over the docs flags **3**, of which this one is the only defect: the other two are
+  sentences *about the ruler*, in `SuperSteam-Design.md`'s record of this gate -- it quotes `h:910-911`
+  as the example of the short form and quotes `isteammatchmaking.h:961` precisely to state that the
+  header ends at 886. Narrating a wrong citation requires writing the wrong number, so a docs-side
+  verdict would go red exactly where the prose is doing its careful work; the precision of such a gate
+  would be 1 in 3, which is the third time this unit has been measured down instead of built. The
+  convention stays what the docs already do: correct the number in place, keep the wrong one in the
+  dated CHANGELOG record.
+
 - **Four pointers into the generated bindings had rotted, and nothing judged them red**
   (`docs/defect-03-resize-deep-dive.md`, `docs/SuperSteam-Design.md`). `header_citations.py` judges
   citations into the SDK headers; `doc_pointers.py` judges that a documented *path* resolves. Neither

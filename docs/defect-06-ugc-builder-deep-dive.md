@@ -79,7 +79,7 @@ virtual SteamAPICall_t SubmitItemUpdate(UGCUpdateHandle_t handle, const char *pc
 - ✅ 暂存会话被放弃（**无释放 API**——全头文件无 release/abort/cancel 函数，`k_UGCUpdateHandleInvalid` 只是无效值常量）
 - ❌ **「公开物品状态已被改动、无法回滚」不成立**——commit 从未发生
 
-同时按 A3 纪律订正一个量级词：`k_UGCUpdateHandleInvalid` 是 `uint64` 全 1（`isteamugc.h:29`），不是本节相关的计数问题，仅记录避免误用。
+同时按 A3 纪律订正一个量级词：`k_UGCUpdateHandleInvalid` 是 `uint64` 全 1（`isteamugc.h:31`），不是本节相关的计数问题，仅记录避免误用。
 
 ### A5. 上游时效性
 

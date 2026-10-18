@@ -68,6 +68,20 @@ is the evidence, write the span from the item's declaration through the field. A
 rewritten that way, **no live pointer fails the rule** -- which is what makes the convention worth
 following rather than an excuse for not building the gate.
 
+**And a third refusal: the same ruler pointed at ``docs/``.** Those files hold **73 numbered
+header citations** (42 of them in the short ``h:910`` form), which nothing judges -- this walk takes
+``*.rs`` and builds blocks out of ``//`` lines, so a Markdown paragraph is invisible to it. Only RANGE
+and BLANK are mechanically decidable there, because the docs quote Steam as Chinese translation rather
+than verbatim, so the phrase-matching half cannot follow. Run that way over the docs today: **3 red, of
+which 1 was a real defect** (``defect-06-ugc-builder-deep-dive.md`` cited ``isteamugc.h:29`` for
+``k_UGCUpdateHandleInvalid``; that line is blank and the constant is at 31) **and 2 were prose about
+this ruler itself** -- ``SuperSteam-Design.md`` quotes ``h:910-911`` as the worked example of the short
+citation form, and quotes ``isteammatchmaking.h:961`` precisely to say that header ends at 886.
+Narrating a wrong citation requires writing the wrong number, so a docs-side verdict would be red on
+the sentences doing the most careful work. The docs stay unjudged, and the convention is the one already in force there:
+a citation whose number was wrong is corrected in place, with the old number kept in ``CHANGELOG.md``
+where it is a dated record.
+
 Output is ``<path> <red>``, ``<path>~unjudged <n>`` and ``<path>~undeclared <n>`` for every source file
 that cites a header, plus ``#scanned <rows>`` so an empty scan cannot pass.
 """
