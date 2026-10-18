@@ -1467,6 +1467,50 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Steam declares nine connection states; this crate had names for six**
+  (`src/networking_types/state.rs`, `src/networking_types/events.rs`). The table on
+  `NetworkingConnectionState` stopped at `ProblemDetectedLocally`, while the SDK header continues with
+  three negative ones: "k_ESteamNetworkingConnectionState_FinWait = -1," (`steamnetworkingtypes.h:430`),
+  "k_ESteamNetworkingConnectionState_Linger = -2" (`steamnetworkingtypes.h:446`) and
+  "Connection is completely inactive and ready to be destroyed" /
+  "k_ESteamNetworkingConnectionState_Dead = -3," (`steamnetworkingtypes.h:448-449`). Those are states a
+  connection passes through, and `SteamNetConnectionStatusChangedCallback_t` carries one of them in
+  `m_eOldState` -- which the status callback filled with `cb.m_eOldState.try_into().unwrap()`. So the
+  crate's answer to a value its own header declares was, in one path, an abort; and in two others a
+  lie-shaped fallback, because `NetConnectionInfo::state()` returned `Err(InvalidConnectionState)` for
+  them, which made `independent_connection_callback` return early and drop the event, and made
+  `into_listen_socket_event` report `UnknownType` where the state was known to Steam.
+  Now: `#[non_exhaustive]` on the enum, a variant for each of the three states, and `Unknown(i32)` that
+  keeps any other discriminant verbatim -- including the `__Force32Bit` width filler, which is not a state
+  and is not guessed at. One total table, `state_from_raw`, is what both directions read, and the callback
+  calls it directly, so the `unwrap` is gone rather than wrapped.
+  Shape, stated plainly because the maintainer's pick caused it: adding variants plus
+  `#[non_exhaustive]` stops a downstream exhaustive `match` compiling, and the outgoing
+  `From<NetworkingConnectionState> for sys::ESteamNetworkingConnectionState` became `TryFrom` -- an
+  unnamed number has no constant to carry it back, so refusing is the only honest answer, and the old
+  infallible `From` could never have been asked. Nothing in this repository used that direction: the
+  generated bindings mention the state enum only as three struct fields (`m_eState` twice, `m_eOldState`
+  once) and never as a call parameter, so no Steam API consumes it. `TryFrom<sys::E...> for
+  NetworkingConnectionState` keeps `Error = InvalidConnectionState` although its arm is now unreachable,
+  because `state()`'s public signature and `NetConnectionError::UnknownType` name that type; retiring it
+  would be a wider break than this one, and the impl's doc says so.
+  Five tests: the nine-row table, the regression itself (a teardown previous state is a state, not an
+  error, and not the dummy `None`), `__Force32Bit` arriving as `Unknown(2147483647)` with its number
+  intact, a round trip through the raw enum for all nine, and the one genuinely reachable failure in the
+  outgoing direction. Five mutants, all caught by `assert_eq!` rather than by aborting: dropping the
+  `FinWait` arm and mapping `Connected` to `FindingRoute` are each caught by two tests, while losing
+  `Unknown`'s number, sending `Unknown` back as `None`, and swapping `Linger` for `Dead` on the way out are
+  each caught by exactly one -- which is how those three were checked to be load-bearing, not incidental.
+  Not claimed: that a live client was observed sending one of these states. That needs a session and is
+  registered as uncovered. What is claimed is narrower and checkable in the tree: the header declares
+  them, the callback carries a previous state, and this crate had no name for them.
+  Ledger trail: `header_citations` 188 -> 192 spans across 35 files, all three debt columns 0 (the four new
+  spans are the declarations quoted above); `type_surface` unchanged at 857 -- no new public item;
+  production panic-capable expressions **33 -> 32**; `module_sizes` took the table, its docs and the tests
+  (`src/networking_types/state.rs` 180 -> 361, `src/networking_types/events.rs` 217 -> 224), registered
+  total 29534 -> 29722.
+
+
 
 - **A listen-socket dispatch stops aborting on a state number it cannot name**
   (`src/networking_sockets_callback.rs`). `listen_socket_callback` read the connection's state with
@@ -2541,6 +2585,18 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Breaking, by the maintainer's pick: `NetworkingConnectionState` is now `#[non_exhaustive]` with four
+  more variants, and its outgoing conversion is no longer infallible**
+  (`src/networking_types/state.rs`). `FinWait`, `Linger`, `Dead` and `Unknown(i32)` were added, so a
+  downstream `match` that listed the six old variants without a wildcard stops compiling -- that is the
+  point of the change, since the alternative was a callback that aborted on a state Steam's own header
+  declares (see the entry under **Fixed**). `impl From<NetworkingConnectionState> for
+  sys::ESteamNetworkingConnectionState` became `impl TryFrom<...> with Error = InvalidConnectionState`: an
+  `Unknown` number has no constant in this SDK's header to carry it back, so the direction must be able to
+  refuse. Nothing in this repository used it -- the bindings mention the enum only as struct fields, never
+  as a call parameter -- and `state()`'s signature still names `InvalidConnectionState`, which is why that
+  error type is kept rather than removed.
 
 - **`chat-example` no longer copies the lobby id to the clipboard, and six advisories left with it**
   (`examples/chat-example/Cargo.toml`, `examples/chat-example/src/main.rs`, its `README.md`, and

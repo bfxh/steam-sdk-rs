@@ -27,6 +27,7 @@ src/user/duration.rs 396
 src/html_surface/browser.rs 387
 src/networking_sockets/mod.rs 383
 src/user/mod.rs 382
+src/networking_types/state.rs 361
 src/lib_tests.rs 354
 src/inventory/result.rs 346
 src/networking_types/message.rs 342
@@ -47,7 +48,7 @@ src/remote_storage/mod.rs 247
 src/networking_types/addresses.rs 246
 src/user/auth.rs 244
 src/remote_storage/api.rs 227
-src/networking_types/events.rs 217
+src/networking_types/events.rs 224
 src/friends/chat.rs 216
 src/html_surface/mod.rs 215
 src/user/buffers.rs 210
@@ -57,7 +58,6 @@ src/identity.rs 198
 src/utils/text_input.rs 195
 src/parental.rs 191
 src/server/lifecycle.rs 182
-src/networking_types/state.rs 180
 src/remote_play.rs 180
 src/input/origins.rs 178
 src/friends/clans.rs 174

@@ -106,6 +106,9 @@ src/networking_types/identity.rs~undeclared 0
 src/networking_types/message.rs 0
 src/networking_types/message.rs~unjudged 0
 src/networking_types/message.rs~undeclared 0
+src/networking_types/state.rs 0
+src/networking_types/state.rs~unjudged 0
+src/networking_types/state.rs~undeclared 0
 src/remote_storage/api.rs 0
 src/remote_storage/api.rs~unjudged 0
 src/remote_storage/api.rs~undeclared 0

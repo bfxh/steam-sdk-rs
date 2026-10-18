@@ -57,7 +57,10 @@ impl_callback!(cb: SteamNetConnectionStatusChangedCallback_t => NetConnectionSta
     Self {
         connection: cb.m_hConn,
         connection_info: cb.m_info.into(),
-        old_state: cb.m_eOldState.try_into().unwrap(),
+        // Total table, so a status change out of `Dead`, `FinWait` or `Linger` -- three states Steam
+        // declares and this crate used to have no name for -- reaches the listener as itself instead of
+        // aborting the callback that was asked to deliver it.
+        old_state: state_from_raw(cb.m_eOldState),
     }
 });
 
@@ -125,6 +128,10 @@ impl NetConnectionStatusChanged {
                     return Err(NetConnectionError::InvalidRemote);
                 }
             }
+            // The teardown states Steam declares -- `FinWait`, `Linger`, `Dead` -- and any number whose
+            // name this SDK does not carry: a listen socket has nothing to do with them, and they are
+            // reported as the state they are instead of as a failure to read one.
+            Ok(other) => Err(UnhandledType(other)),
             Err(err) => Err(NetConnectionError::UnknownType(err)),
         }
     }
