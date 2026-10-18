@@ -133,6 +133,9 @@ src/user/passthrough.rs~undeclared 0
 src/user/voice.rs 0
 src/user/voice.rs~unjudged 0
 src/user/voice.rs~undeclared 0
+src/user_stats/achievements.rs 0
+src/user_stats/achievements.rs~unjudged 0
+src/user_stats/achievements.rs~undeclared 0
 src/user_stats/leaderboard.rs 0
 src/user_stats/leaderboard.rs~unjudged 0
 src/user_stats/leaderboard.rs~undeclared 0
@@ -142,3 +145,6 @@ src/user_stats/stats.rs~undeclared 0
 src/utils/strings.rs 0
 src/utils/strings.rs~unjudged 0
 src/utils/strings.rs~undeclared 0
+src/utils/text_input.rs 0
+src/utils/text_input.rs~unjudged 0
+src/utils/text_input.rs~undeclared 0

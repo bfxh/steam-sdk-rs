@@ -72,6 +72,14 @@ impl Utils {
     ///
     /// This must be called within the `show_gamepad_text_input` callback. Returns `Some(String)` if user submitted the
     /// text, and `None` otherwise
+    ///
+    /// The text is read lossily. Steam's own contract for the fill is
+    /// "virtual bool GetEnteredGamepadTextInput( char *pchText, uint32 cchText ) = 0;"
+    /// (`isteamutils.h:153`) -- a boolean for whether there was an answer, with nothing said about encoding.
+    /// The buffer's bytes were typed by a person through the Big Picture keyboard, so a stray byte is a
+    /// reason to repair the text, not to throw away the submission the boolean already reported: the
+    /// `expect(..)` that used to sit here panicked in the caller's frame on exactly that byte, and
+    /// `None` would have read as a cancelled dialog.
     pub fn get_entered_gamepad_text_input(
         &self,
         dismissed_data: &GamepadTextInputDismissed,
@@ -85,7 +93,7 @@ impl Utils {
                 buf.as_mut_ptr().cast(),
                 len,
             )
-            .then(|| String::from_utf8(buf).expect("Steamworks returned invalid UTF-8 string"))
+            .then(|| String::from_utf8_lossy(&buf).into_owned())
         }
     }
 

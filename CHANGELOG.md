@@ -1467,6 +1467,39 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **`get_achievement_names` panicked on the two ordinary states of an achievement list**
+  (`src/user_stats/achievements.rs`). `get_num_achievements` answers `Err(())` whenever Steam's count is
+  zero -- a mapping this file documents itself ("Returns 0 if the current App ID has no achievements",
+  plus the note that AppId 480 returns an error) -- and the names getter read that answer with
+  `.expect("Failed to get number of achievements")`. So asking a game for its achievement names before
+  `request_current_stats()` had landed, or asking one that defines none at all, aborted the caller's
+  frame from a function whose return type is already `Option`. It propagates now (`.ok()?`), and the
+  count decision moved into `achievement_count`, a pure function three tests judge: positive counts come
+  through as themselves, zero is the documented error case rather than a panic, and an anti-vacuity test
+  asserts `achievement_count(0)` really is an `Err` -- because without it, mutating the mapping to be
+  total would have left the getter's own tests green. Four mutants, all caught: `> 1`, `Ok(0)`, off-by-one
+  each died on an `assert_eq!`, and replacing the error with `panic!` died by aborting, which is the
+  behaviour the two tests name; the anti-vacuity test is what caught the `Ok(0)` and `panic!` pair rather
+  than leaving them to the value assertions.
+- **A stray byte from the Big Picture keyboard no longer discards a submission**
+  (`src/utils/text_input.rs`). `get_entered_gamepad_text_input` filled its buffer and then ran
+  `String::from_utf8(buf).expect("Steamworks returned invalid UTF-8 string")`. Steam's own contract for
+  the fill is "virtual bool GetEnteredGamepadTextInput( char *pchText, uint32 cchText ) = 0;"
+  (`isteamutils.h:153`): a boolean for whether there was an answer, and nothing about encoding. The
+  bytes are whatever the overlay produced, so the read is lossy now -- `None` would have been
+  indistinguishable from the user cancelling, while the boolean had already said there was an answer.
+  No lock is claimed for this one: the change is a single standard-library call inside an `unsafe` block
+  that needs a live client to reach, and the crate's lossy-reading convention is tested where it lives
+  (`src/utils/strings.rs`).
+  Both drafts earned the same lesson twice more: my prose inside double quotes -- three paraphrases and a
+  hedged restatement -- was counted as 4 then 3 `~unjudged` spans, and the debt was paid by rewriting the
+  sentences in the crate's own voice rather than by registering the growth. `header_citations` now reads
+  188 spans across 34 files with all three columns at 0. Production panic-capable expressions:
+  **38 -> 36**. `module_sizes` moved where the docs and tests landed and nowhere else --
+  `src/user_stats/achievements.rs` 91 -> 138, `src/utils/text_input.rs` 187 -> 195, registered total
+  29370 -> 29425.
+
+
 - **Retracted: "the verdict always completes" for `quality-extra` -- `cancel-in-progress: false` only
   protects the run that is already running** (`.github/workflows/quality-extra.yml`). The comment written
   when the advisory trio was split out of `ci.yml` explained, correctly, that three ~14-minute jobs had

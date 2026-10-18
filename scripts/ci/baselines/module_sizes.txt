@@ -54,8 +54,8 @@ src/user/buffers.rs 210
 src/matchmaking/queries.rs 206
 src/inventory/items.rs 204
 src/identity.rs 198
+src/utils/text_input.rs 195
 src/parental.rs 191
-src/utils/text_input.rs 187
 src/server/lifecycle.rs 182
 src/networking_types/state.rs 180
 src/remote_play.rs 180
@@ -69,6 +69,7 @@ src/friends/callbacks.rs 152
 src/user_stats/stat_callback.rs 152
 src/utils/mod.rs 146
 src/ugc/read.rs 142
+src/user_stats/achievements.rs 138
 src/inventory/prices.rs 132
 src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
@@ -89,7 +90,6 @@ src/networking_sockets/connect.rs 100
 src/networking_sockets/status.rs 98
 src/input/layers.rs 96
 src/friends/followers.rs 91
-src/user_stats/achievements.rs 91
 src/friends/overlay.rs 88
 src/input/effects.rs 88
 src/friends/list.rs 85
