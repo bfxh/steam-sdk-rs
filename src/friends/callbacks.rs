@@ -136,15 +136,12 @@ pub struct GameRichPresenceJoinRequested {
 }
 
 impl_callback!(cb: GameRichPresenceJoinRequested_t => GameRichPresenceJoinRequested {
-    // Convert from &[i8] to &[u8] because c_char in C is signed.
-    // Technically, this C string does not have to be UTF-8, but I think for all realistic uses it will be.
-    let as_bytes = cb.m_rgchConnect.map(|c| c as u8);
-    let connect = CStr::from_bytes_until_nul(&as_bytes)
-        .expect("Connect string payload was not a valid C string");
-    let connect = connect
-        .to_str()
-        .expect("Connect string payload was not valid UTF-8")
-        .to_string();
+    // "char m_rgchConnect[k_cchMaxRichPresenceValueLength];" (isteamfriends.h:570, with
+    // "enum { k_cchMaxRichPresenceValueLength = 256 };" at :125) is an array inside a callback
+    // payload: the header promises no terminator and no encoding. Reading it as a C string and then
+    // demanding UTF-8 -- the two `.expect(..)` calls this used -- aborts the callback that was asked
+    // to decode it, which is the failure mode `src/utils/strings.rs` exists to avoid.
+    let connect = crate::utils::fixed_string(&cb.m_rgchConnect);
 
     let friend_steam_id = SteamId::from_raw(cb.m_steamIDFriend.m_steamid.m_unAll64Bits);
 

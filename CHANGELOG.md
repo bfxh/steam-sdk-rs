@@ -1467,6 +1467,34 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **The rich-presence join callback stops aborting on the payload it was asked to decode**
+  (`src/friends/callbacks.rs`). `GameRichPresenceJoinRequested_t` carries
+  "char m_rgchConnect[k_cchMaxRichPresenceValueLength];" (`isteamfriends.h:570`, with
+  "enum { k_cchMaxRichPresenceValueLength = 256 };" at `:125`) -- an array, with no terminator promised
+  and no encoding declared. The bridge read it with `CStr::from_bytes_until_nul(..).expect(..)` and then
+  `.to_str().expect(..)`, and the comment sitting above those two lines already conceded the case it
+  panicked on: "Technically, this C string does not have to be UTF-8, but I think for all realistic uses
+  it will be." This crate has since grown the total reader for exactly that shape -- `fixed_string` in
+  `src/utils/strings.rs`, whose module doc names this failure mode ("a reader that demands UTF-8 can
+  abort the callback it is running in") -- and this site was simply left behind. It now uses that helper:
+  valid UTF-8 decodes identically, an unterminated array reads as the array's own text instead of
+  unwinding through dispatch, and stray bytes become U+FFFD.
+  No new test is claimed here, and the reason is stated rather than papered over: the two panics lived
+  inside an `impl_callback!` block, which expands into the callback dispatch path, so the only thing a
+  fixture could assert without a running client is `fixed_string` itself -- already judged by
+  `stops_at_the_first_terminator`, `an_unterminated_array_is_bounded_by_the_array` and
+  `invalid_utf8_is_replaced_not_fatal` in its own module. What
+  remains unjudged is the one-line wiring claim "this callback uses that helper", registered as uncovered
+  like every other macro-body wiring in this crate.
+  Panic-capable expressions in production sources: **40 -> 38**; `module_sizes` registered total
+  29373 -> 29370. One process note, because it is the kind of thing that gets quietly re-recorded: my
+  first version of that citation wrapped both header lines in backticks, and `header_citations.py`'s
+  phrase matcher looks for double quotes -- so the two new spans arrived as `~undeclared` debt, 0 -> 2.
+  The ledger was re-recorded back out (`git checkout`) and the debt paid in the currency the rule wants,
+  by quoting the lines verbatim in the form the rest of the crate uses; 186 spans now, all three columns
+  0.
+
+
 - **A server-list ping that is not a `u64` no longer aborts the list** (`src/matchmaking_servers.rs`).
   `GameServerItem::from_ptr` built its `Duration` field with `raw.m_nPing.try_into().unwrap()` -- a
   fallible conversion of an `int` Steam wrote, whose failure mode was a panic while decoding a query

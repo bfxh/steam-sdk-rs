@@ -64,8 +64,8 @@ src/friends/clans.rs 174
 src/server/config.rs 173
 src/music.rs 163
 src/friends/clan_chat.rs 157
-src/friends/callbacks.rs 155
 src/utils/strings.rs 153
+src/friends/callbacks.rs 152
 src/user_stats/stat_callback.rs 152
 src/utils/mod.rs 146
 src/ugc/read.rs 142

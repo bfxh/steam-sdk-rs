@@ -58,6 +58,9 @@ src/networking_messages.rs~undeclared 0
 src/networking_utils.rs 0
 src/networking_utils.rs~unjudged 0
 src/networking_utils.rs~undeclared 0
+src/friends/callbacks.rs 0
+src/friends/callbacks.rs~unjudged 0
+src/friends/callbacks.rs~undeclared 0
 src/html_surface/browser.rs 0
 src/html_surface/browser.rs~unjudged 0
 src/html_surface/browser.rs~undeclared 0
