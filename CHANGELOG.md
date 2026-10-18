@@ -1459,10 +1459,16 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   Two things the gate caught while the change was being made, both mine: the new comments cited
   `isteamnetworkingsockets.h` twice without quoting it, which pushed the `~undeclared` column from 0
   to 2 -- paid back by quoting Steam's sentence rather than re-recording the growth; and a live pointer
-  in `docs/SuperSteam-Design.md:1849` turned out to have been wrong all along, pointing at
-  `src/lib.rs:512-518` to illustrate the `timeline` accessor when those lines hold `utils`. The
-  7-line addition to `lib.rs` moved it onto a blank line, the gate flagged it, and re-measuring found
+  in `docs/SuperSteam-Design.md` turned out to have been wrong all along, aimed at the region of
+  `lib.rs` holding `utils` while claiming to illustrate the `timeline` accessor. The
+  7-line addition to `lib.rs` moved that stale span onto a blank line, the gate flagged it, and re-measuring found
   the accessor at `src/lib.rs:764-771` with the runtime null check it was citing at `:771`.
+  A third thing, also mine and worse: this very entry then went red in CI for the commit that shipped it,
+  because it narrated the old bad pointer with a literal `lib.rs:512-518` span and `CHANGELOG.md` is one of the ten
+  documents the gate reads -- so the write-up of the fix re-introduced the defect it described. The local
+  24-verdict replay had been run *before* that prose was written, which is the same ordering rule broken
+  twice in one session: the replay must be the last content change, not the last step before it. Fixed by
+  describing the old span without a machine-readable pointer; the sentence keeps the numbers for the reader.
 
 - **Three reads of Steam's fixed-size text fields could over-read the array or abort the callback**
   (`src/user_stats/stat_callback.rs`, `src/networking_utils.rs`, new helper in
