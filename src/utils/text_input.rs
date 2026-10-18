@@ -3,6 +3,7 @@
 //! came back, report its length, and dismiss it again.
 
 use super::*;
+use crate::utils::try_c_string;
 
 pub enum GamepadTextInputMode {
     Normal,
@@ -101,9 +102,17 @@ impl Utils {
     where
         F: FnMut(GamepadTextInputDismissed) + 'static + Send,
     {
+        // Refused before the callback is registered, so a rejected call leaves no handler behind.
+        let description = match try_c_string(description) {
+            Some(description) => description,
+            None => return false,
+        };
+        let existing_text = match existing_text.map(try_c_string) {
+            None => None,
+            Some(None) => return false,
+            Some(Some(text)) => Some(text),
+        };
         unsafe {
-            let description = CString::new(description).unwrap();
-            let existing_text = existing_text.map(|s| CString::new(s).unwrap());
             std::mem::forget(register_callback(&self._inner, dismissed_cb));
             sys::SteamAPI_ISteamUtils_ShowGamepadTextInput(
                 self.utils,

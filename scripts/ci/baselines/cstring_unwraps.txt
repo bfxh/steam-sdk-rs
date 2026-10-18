@@ -31,20 +31,21 @@
 # ("Handle was dropped" in NetConnection::drop), and no site is inside a #[cfg(test)] module any
 # more: the ruler blanks file-scope test modules through api_coverage.strip_test_modules, which had
 # to become line-preserving first because its dropped lines shifted every reported `path:line`.
+# Re-recorded a third time for the bool tranche: 9 more sites gone (set_rich_presence x2,
+# set_lobby_data x2, delete_lobby_data, set_input_action_manifest_file_path,
+# init_for_game_server, show_gamepad_text_input x2) -- those nine *have* a failure channel, so they
+# now refuse with `false` instead of cutting, which is why the register is 22 across 13 files and
+# not simply shorter.
 src/app.rs 1
 src/friends/friend.rs 1
-src/friends/rich_presence.rs 2
 src/input/actions.rs 3
-src/input/core.rs 1
-src/matchmaking/mod.rs 5
+src/matchmaking/mod.rs 2
 src/matchmaking/queries.rs 4
 src/networking_types/config.rs 1
 src/remote_storage/api.rs 1
 src/screenshots.rs 1
 src/server/lifecycle.rs 1
-src/ugc/mod.rs 1
 src/user/mod.rs 1
 src/user_stats/achievements.rs 1
 src/user_stats/stats.rs 1
 src/user_stats/stats_io.rs 4
-src/utils/text_input.rs 2

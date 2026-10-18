@@ -2,18 +2,26 @@
 //! and asking Steam to fetch a friend's presence.
 
 use super::*;
+use crate::utils::try_c_string;
 
 impl Friends {
     /// Set rich presence for the user. Unsets the rich presence if `value` is None or empty.
     ///
     /// See [Steam API](https://partner.steamgames.com/doc/api/ISteamFriends#SetRichPresence)
     ///
-    /// # Panics
-    ///
-    /// Panics if the `key` or `value` str slices contain a null byte.
+    /// Returns `false` without asking Steam when either slice contains a nul byte: that key cannot be
+    /// stored, and truncating at the nul would set a *different* key than the caller named while still
+    /// reporting success.
     pub fn set_rich_presence(&self, key: &str, value: Option<&str>) -> bool {
-        let key = CString::new(key).unwrap();
-        let value = value.map(|v| CString::new(v).unwrap());
+        let key = match try_c_string(key) {
+            Some(key) => key,
+            None => return false,
+        };
+        let value = match value.map(try_c_string) {
+            None => None,
+            Some(None) => return false,
+            Some(Some(value)) => Some(value),
+        };
         let value_ptr = value
             .as_ref()
             .map_or(std::ptr::null(), |value| value.as_ptr());

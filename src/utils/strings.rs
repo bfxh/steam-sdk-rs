@@ -44,6 +44,20 @@ pub(crate) fn c_string_prefix(value: &str) -> CString {
     CString::new(head).unwrap_or_default()
 }
 
+/// The `CString` for a caller's string, or `None` when it cannot be expressed at all.
+///
+/// The counterpart to [`c_string_prefix`] for the setters that *can* report a refusal -- anything
+/// returning `bool`, `Option<_>` or `Result<_, _>`. There the honest answer to a string with an
+/// interior NUL is "this was not done": truncating would act on a different key, path or name than the
+/// caller named and still report success, which is a worse failure than a panic only by a hair. Cutting
+/// is right solely where no channel exists, which is why both helpers are public to the crate and every
+/// call site picks one deliberately.
+///
+/// A nul-free input goes through unchanged, empty string included.
+pub(crate) fn try_c_string(value: &str) -> Option<CString> {
+    CString::new(value).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{c_char, fixed_string};
@@ -104,5 +118,36 @@ mod outgoing_tests {
     fn nul_free_input_keeps_every_byte() {
         let long = "x".repeat(4096);
         assert_eq!(c_string_prefix(&long).to_string_lossy().len(), 4096);
+    }
+}
+
+#[cfg(test)]
+mod try_string_tests {
+    //! The refusal half of the write direction: which inputs come back as `None`.
+    use super::try_c_string;
+
+    #[test]
+    fn nul_free_text_converts_including_the_empty_string() {
+        assert_eq!(
+            try_c_string("player")
+                .map(|c| c.to_string_lossy().into_owned())
+                .as_deref(),
+            Some("player")
+        );
+        assert_eq!(
+            try_c_string("")
+                .map(|c| c.to_string_lossy().into_owned())
+                .as_deref(),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn an_interior_nul_is_refused_rather_than_acted_on() {
+        assert_eq!(try_c_string("a\0b"), None);
+        assert_eq!(try_c_string("\0lead"), None);
+        // A trailing nul is the one the C string already carries; `CString::new` still rejects it,
+        // and the caller learns rather than silently setting a different key.
+        assert_eq!(try_c_string("trail\0"), None);
     }
 }

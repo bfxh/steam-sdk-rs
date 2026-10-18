@@ -3,6 +3,7 @@
 //! the one call that makes Steam post device events at all.
 
 use super::*;
+use crate::utils::try_c_string;
 
 impl Input {
     /// Init must be called when starting use of this interface.
@@ -33,8 +34,13 @@ impl Input {
     }
 
     /// Allows to load a specific Action Manifest File localy
+    /// A path containing a nul byte is refused with `false` rather than cut short: the manifest that
+    /// would load is not the one the caller named.
     pub fn set_input_action_manifest_file_path(&self, path: &str) -> bool {
-        let path = CString::new(path).unwrap();
+        let path = match try_c_string(path) {
+            Some(path) => path,
+            None => return false,
+        };
         unsafe {
             sys::SteamAPI_ISteamInput_SetInputActionManifestFilePath(self.input, path.as_ptr())
         }

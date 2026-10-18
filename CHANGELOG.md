@@ -1467,6 +1467,28 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Nine setters with a failure channel now refuse instead of quietly acting on different text**
+  (`src/friends/rich_presence.rs`, `src/input/core.rs`, `src/matchmaking/mod.rs`, `src/ugc/mod.rs`,
+  `src/utils/text_input.rs`, new helper in `src/utils/strings.rs`). These are the sites where the
+  previous two payments' answer would have been wrong: `set_rich_presence`, `set_lobby_data`,
+  `delete_lobby_data`, `set_input_action_manifest_file_path`, `init_for_game_server` and
+  `show_gamepad_text_input` all return `bool`, so a string containing a nul can be *refused* -- and
+  truncating one would set the key `a` when the caller named `a\0b`, load a different manifest, or open
+  a different workshop folder, then report success. `try_c_string` is the refusing sibling of
+  `c_string_prefix`, and both docs state the split: no channel -> cut at the nul; a channel -> say no.
+  `set_rich_presence`'s `/// # Panics` section became a sentence about returning `false`.
+  `show_gamepad_text_input` checks its strings **before** `register_callback`, because a refusal after
+  registering would leave a handler the caller never asked for.
+  Mutation replay: making the rule never fail (`Some(..)`) turned
+  `an_interior_nul_is_refused_rather_than_acted_on` red by assertion message. A second probe swapped one
+  call site's refusal for the truncating helper -- semantically the wrong choice, exactly as described
+  above -- and the suite stayed green (rc=0), because reaching any of these needs a running client. So
+  the rule is locked and the per-site *choice* of rule is not; recorded rather than papered over. Two
+  tests cover the helper; lib suite 200 passed, 15 ignored.
+  Ledger: `cstring_unwraps` 31 -> **22 across 13 files** (44 -> 31 -> 22 in three payments the same
+  day), `module_sizes` 29139 -> 29225, `type_surface` 857 unchanged, `header_citations` unchanged at 179
+  spans with all three debt columns 0.
+
 - **Thirteen more fire-and-forget setters stopped panicking on a caller's nul byte**
   (`src/friends/friend.rs`, `src/friends/overlay.rs`, `src/matchmaking/mod.rs`, `src/timeline.rs`,
   `src/user_stats/leaderboard.rs`, `scripts/ci/api_coverage.py`). `invite_user_to_game`, the four

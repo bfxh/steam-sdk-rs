@@ -10,6 +10,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 
 use super::*;
 use crate::utils::c_string_prefix;
+use crate::utils::try_c_string;
 #[cfg(test)]
 use serial_test::serial;
 
@@ -208,9 +209,17 @@ impl Matchmaking {
     }
 
     /// Sets the lobby metadata associated with the specified key in the specified lobby.
+    /// A key or value containing a nul byte is refused with `false`; nothing is sent to Steam, because
+    /// the metadata that would result is not the pair the caller named.
     pub fn set_lobby_data(&self, lobby: LobbyId, key: &str, value: &str) -> bool {
-        let key = CString::new(key).unwrap();
-        let value = CString::new(value).unwrap();
+        let key = match try_c_string(key) {
+            Some(key) => key,
+            None => return false,
+        };
+        let value = match try_c_string(value) {
+            Some(value) => value,
+            None => return false,
+        };
         unsafe {
             sys::SteamAPI_ISteamMatchmaking_SetLobbyData(
                 self.mm,
@@ -223,7 +232,10 @@ impl Matchmaking {
 
     /// Deletes the lobby metadata associated with the specified key in the specified lobby.
     pub fn delete_lobby_data(&self, lobby: LobbyId, key: &str) -> bool {
-        let key = CString::new(key).unwrap();
+        let key = match try_c_string(key) {
+            Some(key) => key,
+            None => return false,
+        };
         unsafe { sys::SteamAPI_ISteamMatchmaking_DeleteLobbyData(self.mm, lobby.0, key.as_ptr()) }
     }
 
