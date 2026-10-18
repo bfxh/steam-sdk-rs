@@ -51,17 +51,19 @@ impl NetConnectionInfo {
         self.inner.m_eState.try_into()
     }
 
+    /// Why the connection ended, or `None` when Steam recorded no reason at all -- the value
+    /// `k_ESteamNetConnectionEnd_Invalid` carries. Any other number arrives as a variant, including
+    /// codes this crate has no name for, which the classification table keeps as
+    /// `NetConnectionEnd::Other` (`src/networking_types/end.rs`): the conversion is `From`, not
+    /// `TryFrom`, so nothing here can fail. It used to end in
+    /// `.expect("Unknown end reason could not be converted")`, which read like a real failure mode and
+    /// could not have been reached.
     pub fn end_reason(&self) -> Option<NetConnectionEnd> {
         if self.inner.m_eEndReason == ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_Invalid as _
         {
             None
         } else {
-            Some(
-                self.inner
-                    .m_eEndReason
-                    .try_into()
-                    .expect("Unknown end reason could not be converted"),
-            )
+            Some(self.inner.m_eEndReason.into())
         }
     }
 }

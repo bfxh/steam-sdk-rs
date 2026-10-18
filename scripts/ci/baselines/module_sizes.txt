@@ -16,6 +16,7 @@ src/networking_sockets/fake_ip.rs 506
 src/networking_messages.rs 502
 src/matchmaking/mod.rs 495
 src/parties.rs 486
+src/networking_types/end.rs 480
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 459
@@ -24,7 +25,6 @@ src/friends/friend.rs 405
 src/ugc/update.rs 404
 src/user/duration.rs 396
 src/html_surface/browser.rs 387
-src/networking_types/end.rs 384
 src/networking_sockets/mod.rs 383
 src/user/mod.rs 382
 src/lib_tests.rs 354
@@ -39,7 +39,7 @@ src/matchmaking/filters.rs 314
 src/server_stats.rs 309
 src/matchmaking/chat.rs 281
 src/user_stats/global_stats.rs 280
-src/networking_types/connection_info.rs 271
+src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking.rs 257
 src/html_surface/callbacks.rs 247
@@ -47,9 +47,9 @@ src/remote_storage/mod.rs 247
 src/networking_types/addresses.rs 246
 src/user/auth.rs 244
 src/remote_storage/api.rs 227
+src/networking_types/events.rs 217
 src/friends/chat.rs 216
 src/html_surface/mod.rs 215
-src/networking_types/events.rs 212
 src/user/buffers.rs 210
 src/matchmaking/queries.rs 206
 src/inventory/items.rs 204

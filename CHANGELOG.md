@@ -1467,6 +1467,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **The end-reason table got its first tests, and the two `expect(..)` calls that pretended it could
+  fail are gone** (`src/networking_types/end.rs`, `src/networking_types/connection_info.rs`,
+  `src/networking_types/events.rs`). `NetConnectionEnd` is built from Steam's plain `int` by
+  `impl From<i32>`, and that table -- sentinel, the two application ranges, every named system code,
+  `end => Self::Other(end)` for anything else -- had never been judged by anything in this repository.
+  Two of its readers claimed otherwise: `NetConnectionInfo::end_reason` finished with
+  `.expect("Unknown end reason could not be converted")` on a conversion whose error type is
+  `Infallible` (a dead arm that read like a failure mode), and `into_listen_socket_event` finished a
+  disconnect with `.expect("disconnect event received, but no valid end reason was given")` -- reachable,
+  because `end_reason` returns `None` for exactly one input, the code Steam itself spells
+  `k_ESteamNetConnectionEnd_Invalid`. The first is now `.into()` and its doc says the conversion cannot
+  fail; the second delivers the event carrying `NetConnectionEnd::Invalid`, since the disconnection is the
+  fact the listener needs and aborting the callback that was asked to route it hides that fact too.
+  Six tests cover the table: the sentinel, both application ranges keeping their own number at all four
+  boundaries, a named system code, `Other` for an undefined and a negative and a maximum code, a
+  round-trip through `i32` for a member of every family, and an anti-vacuity read that builds the value
+  with `4242.into()` so a mutant that made the conversion partial could not hide. Six mutants: the
+  sentinel decoding as `Other(0)`, the app range stopping before the exception family, `Other` losing its
+  number on the way back, a system code mapping to the wrong variant, and an unknown code aborting -- each
+  died on an `assert_eq!` except the last, which died by aborting (the behaviour under test) and was
+  caught by three tests including the anti-vacuity one. One mutant of mine was not a measurement at all:
+  the first attempt replaced the sentinel arm with `None =>`, which does not compile in that match, so it
+  reported a compile error rather than a killed mutant and was re-run as the `Other(0)` variant above.
+  Neither call site itself is CI-judged -- `into_listen_socket_event` needs an `Arc<InnerSocket>`, i.e. a
+  live client -- so that half is registered as uncovered rather than tested with a fixture.
+  Production panic-capable expressions: **34** (was 36). `NetConnectionEnd` is public; nothing here
+  changed its shape or any signature.
+
+
+
 - **`get_achievement_names` panicked on the two ordinary states of an achievement list**
   (`src/user_stats/achievements.rs`). `get_num_achievements` answers `Err(())` whenever Steam's count is
   zero -- a mapping this file documents itself ("Returns 0 if the current App ID has no achievements",

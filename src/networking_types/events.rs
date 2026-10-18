@@ -111,10 +111,15 @@ impl NetConnectionStatusChanged {
                     Ok(ListenSocketEvent::Disconnected(DisconnectedEvent {
                         remote,
                         user_data: self.connection_info.user_data(),
+                        // `NetConnectionInfo::end_reason` is `None` for one input only: the code Steam
+                        // itself spells `k_ESteamNetConnectionEnd_Invalid`, which is how it says no reason
+                        // was recorded. The disconnection is the fact the listener needs, so the event is
+                        // delivered carrying that sentinel instead of aborting the callback that was
+                        // asked to route it.
                         end_reason: self
                             .connection_info
                             .end_reason()
-                            .expect("disconnect event received, but no valid end reason was given"),
+                            .unwrap_or(NetConnectionEnd::Invalid),
                     }))
                 } else {
                     return Err(NetConnectionError::InvalidRemote);
