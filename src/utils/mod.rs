@@ -9,6 +9,7 @@ use std::sync::RwLock;
 mod battery;
 mod callbacks;
 mod client_state;
+mod counts;
 mod filtering;
 mod identity;
 mod ipv6;
@@ -20,6 +21,7 @@ mod warning;
 
 pub use battery::*;
 pub use callbacks::*;
+pub(crate) use counts::*;
 pub use filtering::*;
 pub use ipv6::*;
 pub(crate) use param_strings::*;

@@ -129,6 +129,7 @@ steamworks/src/user_stats/stats_io.rs
 steamworks/src/utils/battery.rs
 steamworks/src/utils/callbacks.rs
 steamworks/src/utils/client_state.rs
+steamworks/src/utils/counts.rs
 steamworks/src/utils/filtering.rs
 steamworks/src/utils/identity.rs
 steamworks/src/utils/ipv6.rs

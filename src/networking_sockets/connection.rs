@@ -197,11 +197,10 @@ impl NetConnection {
         debug_string: Option<&str>,
         enable_linger: bool,
     ) -> bool {
-        let debug_string = debug_string.map(|x| CString::new(x).unwrap());
-        let debug_string_ptr = match debug_string {
-            None => std::ptr::null(),
-            Some(s) => s.as_ptr(),
-        };
+        let held = debug_string_prefix(debug_string);
+        let debug_string_ptr = held
+            .as_ref()
+            .map_or(std::ptr::null(), |string| string.as_ptr());
         self.handle_connection();
         unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CloseConnection(
@@ -539,5 +538,63 @@ impl Drop for NetConnection {
                     .expect("internal connection was removed before being dropped");
             }
         }
+    }
+}
+
+/// The debug string handed to Steam: the bytes up to the first nul, which is where a C string ends.
+///
+/// `CString::new(value).unwrap()` used to sit at the top of `close()`, and `value` is a
+/// caller-supplied `Option<&str>`, so pasting a log line with a nul inside crashed the crate from
+/// safe code. Truncating is not a rule invented on this side: Steam's parameter is
+/// "const char *pszDebug" (`isteamnetworkingsockets.h:191`), so the nul already ended the string as
+/// far as Steam was concerned and everything after it was never going to be read.
+///
+/// `None` for `None`, and an empty string keeps its own terminator: the caller asked for an empty
+/// debug string, not for no debug string.
+fn debug_string_prefix(value: Option<&str>) -> Option<CString> {
+    let head = value?.split('\0').next()?;
+    CString::new(head).ok()
+}
+
+#[cfg(test)]
+mod connection_tests {
+    //! Pure half of `close()`: which bytes Steam is handed. The FFI call itself needs a live
+    //! connection, so only this decision can be judged here; the wiring is stated, not tested.
+    use super::debug_string_prefix;
+    use std::ffi::CString;
+
+    #[test]
+    fn no_debug_string_stays_no_debug_string() {
+        assert!(debug_string_prefix(None).is_none());
+    }
+
+    #[test]
+    fn a_plain_string_is_handed_over_unchanged() {
+        assert_eq!(
+            debug_string_prefix(Some("peer said bye")).as_deref(),
+            Some(CString::new("peer said bye").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("")).as_deref(),
+            Some(CString::new("").unwrap().as_c_str())
+        );
+    }
+
+    /// The panic this replaces: `CString::new("a\0b").unwrap()` aborts the caller's frame on a value
+    /// the caller chose. Steam reads a `const char *`, so "a" is the whole string to it anyway.
+    #[test]
+    fn an_interior_nul_truncates_instead_of_panicking() {
+        assert_eq!(
+            debug_string_prefix(Some("a\0b")).as_deref(),
+            Some(CString::new("a").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("\0first")).as_deref(),
+            Some(CString::new("").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("clean\0")).as_deref(),
+            Some(CString::new("clean").unwrap().as_c_str())
+        );
     }
 }

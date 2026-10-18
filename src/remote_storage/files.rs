@@ -3,6 +3,7 @@
 //! record Steam fills in.
 
 use super::*;
+use crate::utils::written_bytes;
 
 /// Ends the Steam write batch on drop.
 pub struct FileWriteBatch {
@@ -158,9 +159,16 @@ pub struct SteamFileReader {
 }
 
 impl std::io::Read for SteamFileReader {
+    /// Reads the next bytes of the file into `buf`.
+    ///
+    /// Steam reports how many bytes it wrote, and that number is also the size of the copy
+    /// `FileReadAsyncComplete` is about to make into the caller's buffer -- the parameter list is
+    /// "void *pvBuffer, uint32 cubToRead" (`isteamremotestorage.h:206`) -- so the count goes through
+    /// `written_bytes` before either the copy or the offset uses it. The bound is the number of bytes
+    /// this side asked for, which is all the buffer can hold.
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         use std::cmp::min;
-        if buf.is_empty() || self.size - self.offset == 0 {
+        if buf.is_empty() || self.offset >= self.size {
             return Ok(0);
         }
         let len = min(buf.len(), self.size - self.offset);
@@ -196,42 +204,51 @@ impl std::io::Read for SteamFileReader {
             if to_steam_result(callback.m_eResult).is_err() {
                 return Err(std::io::ErrorKind::Other.into());
             }
-            let size = callback.m_cubRead as usize;
+            let kept = written_bytes(callback.m_cubRead, len);
             sys::SteamAPI_ISteamRemoteStorage_FileReadAsyncComplete(
                 self.file.rs,
                 callback.m_hFileReadAsync,
                 buf.as_mut_ptr().cast(),
-                callback.m_cubRead,
+                kept as _,
             );
 
-            self.offset += size;
-            Ok(size)
+            self.offset += kept;
+            Ok(kept)
         }
     }
 }
 
+/// Where a seek lands, in the one reading `std::io::Seek` gives it.
+///
+/// `End(o)` is `size + o`, `Current(o)` is `offset + o`, `Start(o)` is `o`, and the position stays
+/// addressable: not before the start, not past the end. `None` means `InvalidInput`.
+///
+/// The arithmetic used to be `(size - 1 - o)` for `End` -- the sign of `o` inverted and one subtracted
+/// -- so `End(0)` landed a byte short of EOF and `End(-4)` landed *past* the end (`size + 3`), and a
+/// negative result cast to `usize` became an enormous offset. The reader's own guard then computes
+/// `size - offset`, which underflows on that value: a panic in a debug build, and in a release build a
+/// length of ~1.8e19 handed to `FileReadAsync`. `Current(o)` with `o` negative enough walked the same
+/// wrap. This version cannot: every branch is checked arithmetic against the same two bounds, and the
+/// end itself is a legal position because reading there returns zero bytes, which is what EOF means.
+fn seek_target(pos: std::io::SeekFrom, offset: usize, size: usize) -> Option<usize> {
+    use std::io::SeekFrom;
+    let target: i64 = match pos {
+        SeekFrom::Start(o) => i64::try_from(o).ok()?,
+        SeekFrom::Current(o) => i64::try_from(offset).ok()?.checked_add(o)?,
+        SeekFrom::End(o) => i64::try_from(size).ok()?.checked_add(o)?,
+    };
+    if target < 0 {
+        return None;
+    }
+    let target = usize::try_from(target).ok()?;
+    (target <= size).then_some(target)
+}
+
 impl std::io::Seek for SteamFileReader {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        match pos {
-            std::io::SeekFrom::Current(o) => {
-                if self.offset as isize + o as isize >= self.size as isize {
-                    return Err(std::io::ErrorKind::InvalidInput.into());
-                }
-                self.offset = (self.offset as isize + o as isize) as usize;
-            }
-            std::io::SeekFrom::End(o) => {
-                if o as isize >= self.size as isize {
-                    return Err(std::io::ErrorKind::InvalidInput.into());
-                }
-                self.offset = (self.size as isize - 1 - o as isize) as usize;
-            }
-            std::io::SeekFrom::Start(o) => {
-                if o as usize >= self.size {
-                    return Err(std::io::ErrorKind::InvalidInput.into());
-                }
-                self.offset = o as usize;
-            }
-        }
+        let target = seek_target(pos, self.offset, self.size)
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        self.offset = target;
         Ok(self.offset as u64)
     }
 }
@@ -244,4 +261,68 @@ pub struct SteamFileInfo {
     pub name: String,
     /// The size of the file in bytes
     pub size: u64,
+}
+
+#[cfg(test)]
+mod files_tests {
+    //! Pure half of `Seek`: where a seek lands. The reader itself needs a Steam file, but the
+    //! arithmetic does not, so it is judged here instead of registered as uncovered.
+    use super::seek_target;
+    use std::io::SeekFrom;
+
+    const SIZE: usize = 100;
+
+    /// `End(o)` is `size + o`. The old arithmetic answered `size - 1 - o`, which inverted the sign of
+    /// `o` and subtracted one: `End(0)` landed a byte short of EOF and `End(-4)` landed past the end.
+    #[test]
+    fn end_is_relative_to_the_end_not_mirrored_around_it() {
+        assert_eq!(seek_target(SeekFrom::End(0), 0, SIZE), Some(100));
+        assert_eq!(seek_target(SeekFrom::End(-4), 0, SIZE), Some(96));
+        assert_eq!(seek_target(SeekFrom::End(-100), 0, SIZE), Some(0));
+        assert_eq!(seek_target(SeekFrom::End(4), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::End(-101), 0, SIZE), None);
+    }
+
+    #[test]
+    fn start_and_current_land_where_the_trait_says() {
+        assert_eq!(seek_target(SeekFrom::Start(30), 0, SIZE), Some(30));
+        // The end itself is addressable: reading there returns zero bytes, which is EOF.
+        assert_eq!(seek_target(SeekFrom::Start(100), 0, SIZE), Some(100));
+        assert_eq!(seek_target(SeekFrom::Start(101), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::Current(10), 60, SIZE), Some(70));
+        assert_eq!(seek_target(SeekFrom::Current(-60), 60, SIZE), Some(0));
+        assert_eq!(seek_target(SeekFrom::Current(-61), 60, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::Current(50), 60, SIZE), None);
+    }
+
+    /// Before this, `Current(o)` and `End(o)` were cast through `isize`/`usize` and a negative result
+    /// wrapped to ~1.8e19 rather than failing -- and the reader then computed `size - offset` on that
+    /// value.
+    #[test]
+    fn extremes_do_not_wrap_or_panic() {
+        assert_eq!(seek_target(SeekFrom::Start(u64::MAX), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::End(i64::MAX), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::End(i64::MIN), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::Current(i64::MAX), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::Current(i64::MIN), 0, SIZE), None);
+        assert_eq!(seek_target(SeekFrom::Start(0), 0, 0), Some(0));
+        assert_eq!(seek_target(SeekFrom::Current(1), 0, 0), None);
+    }
+
+    #[test]
+    fn every_accepted_position_is_addressable() {
+        for delta in -140i64..140 {
+            for (kind, at) in [
+                (SeekFrom::End(delta), 0usize),
+                (SeekFrom::Current(delta), 40usize),
+            ] {
+                if let Some(target) = seek_target(kind, at, SIZE) {
+                    assert!(
+                        target <= SIZE,
+                        "{kind:?} at {at} accepted {target}, past the end"
+                    );
+                }
+            }
+        }
+    }
 }

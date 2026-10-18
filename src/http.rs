@@ -38,6 +38,26 @@ fn cstr(value: &str) -> Result<CString, SteamError> {
     CString::new(value).map_err(|_| SteamError::InvalidParameter)
 }
 
+/// The header value Steam wrote into the buffer, cut where the value actually ends.
+///
+/// `GetHTTPResponseHeaderSize` says only that it "returns the size of the header value if present"
+/// (`isteamhttp.h:75`) and says nothing about a terminator, and `GetHTTPResponseHeaderValue` (`:82`)
+/// is the same. So the buffer may hold exactly the value, or the value plus a nul, and nothing on this
+/// side observes which. This is the one rule true under both readings: stop at the first nul, keep
+/// every byte when there is none. A header value cannot legally contain a nul, so cutting at one loses
+/// nothing that was meant to be read.
+///
+/// The code this replaces dropped the last byte unconditionally, which silently truncates the value in
+/// the reading where the size is exact -- and the asymmetry is visible in this same file: `body()`
+/// asks for the reported size and returns all of it, with no byte removed.
+fn header_value_bytes(buffer: &[u8]) -> &[u8] {
+    let end = buffer
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(buffer.len());
+    &buffer[..end]
+}
+
 /// A cookie container shared by several requests.
 ///
 /// Dropping it releases the underlying Steam handle.
@@ -189,8 +209,7 @@ impl HttpResponse {
             ) {
                 return Err(SteamError::IOFailure);
             }
-            buf.truncate(buf.len().saturating_sub(1));
-            let value = String::from_utf8_lossy(&buf).into_owned();
+            let value = String::from_utf8_lossy(header_value_bytes(&buf)).into_owned();
             if value.is_empty() {
                 Ok(None)
             } else {
@@ -519,6 +538,30 @@ mod tests {
             cstr("https://example.com/\0exploit"),
             Err(SteamError::InvalidParameter)
         ));
+    }
+
+    #[test]
+    fn header_value_keeps_every_byte_when_steam_wrote_no_terminator() {
+        // The reading Steam's own words allow: the reported size is the size of the *value*.
+        // Dropping the last byte here deleted a real character of every header.
+        assert_eq!(
+            header_value_bytes(b"application/json"),
+            &b"application/json"[..]
+        );
+        assert_eq!(header_value_bytes(b"a"), b"a");
+    }
+
+    #[test]
+    fn header_value_stops_at_a_terminator_when_there_is_one() {
+        assert_eq!(header_value_bytes(b"gzip\0"), b"gzip");
+        assert_eq!(header_value_bytes(&[b'x', 0, b'y', 0]), b"x");
+    }
+
+    #[test]
+    fn an_all_nul_buffer_reads_as_no_value() {
+        // A size Steam reported but never filled must not become four junk characters.
+        assert_eq!(header_value_bytes(&[0, 0, 0, 0]), b"");
+        assert_eq!(header_value_bytes(&[]), b"");
     }
 
     #[test]

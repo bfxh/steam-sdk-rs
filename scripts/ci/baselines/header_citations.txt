@@ -27,12 +27,30 @@
 # poll_group.rs into that one block, and two new files started citing (mod.rs, and
 # networking_messages.rs for isteamnetworkingmessages.h:86 -- the channel receive had no clamp at
 # all). poll_group.rs now cites nothing, which is why its three rows left the ledger.
+# Re-recorded again the same day for the two FFI-edge byte decisions (http.rs header value,
+# networking_sockets/connection.rs debug string): 28 files (was 27), 171 spans (was 168), 0/0/0.
+# The three new spans are isteamhttp.h:75 and :82 for what the reported size does and does not
+# promise, and isteamnetworkingsockets.h:191 for the `const char *pszDebug` parameter that decides
+# where a debug string ends.
+# Re-recorded a third time the same day for the SteamFileReader unit: 29 files (was 28), 172 spans
+# (was 171), 0/0/0. One span, isteamremotestorage.h:206, is the `FileReadAsyncComplete` parameter
+# list that makes the reported byte count also the size of the copy Steam is about to make -- which
+# is why the count is clamped before it is used. src/remote_storage/files.rs joins the ledger.
+# Re-recorded again for the browser placeholder guard: 30 files (was 29), 173 spans (was 172),
+# 0/0/0. The one new span is isteamhtmlsurface.h:47, whose parameter list is what makes 0 a
+# sentinel of ours rather than a handle Steam issued.
+src/http.rs 0
+src/http.rs~unjudged 0
+src/http.rs~undeclared 0
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
 src/networking_messages.rs~undeclared 0
 src/networking_utils.rs 0
 src/networking_utils.rs~unjudged 0
 src/networking_utils.rs~undeclared 0
+src/html_surface/browser.rs 0
+src/html_surface/browser.rs~unjudged 0
+src/html_surface/browser.rs~undeclared 0
 src/input/core.rs 0
 src/input/core.rs~unjudged 0
 src/input/core.rs~undeclared 0
@@ -78,6 +96,9 @@ src/networking_types/message.rs~undeclared 0
 src/remote_storage/api.rs 0
 src/remote_storage/api.rs~unjudged 0
 src/remote_storage/api.rs~undeclared 0
+src/remote_storage/files.rs 0
+src/remote_storage/files.rs~unjudged 0
+src/remote_storage/files.rs~undeclared 0
 src/ugc/answers.rs 0
 src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0

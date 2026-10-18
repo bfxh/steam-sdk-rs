@@ -66,8 +66,10 @@ impl HtmlSurface {
     {
         let user_agent = cstr(user_agent)?;
         let user_css = cstr(user_css)?;
-        // Handle 0 stands in until Steam reports the real one; it is forgotten on
-        // the failure path so Drop never asks Steam to remove a browser 0.
+        // Handle 0 stands in until Steam reports the real one. Two things stop it from reaching
+        // Steam as a removal: this path forgets the placeholder, and `removes_on_drop` refuses
+        // handle 0 -- which is the one that still holds when the answer never arrives at all and the
+        // callback map is dropped with the placeholder inside it.
         let placeholder = Browser {
             html: self.html,
             handle: 0,

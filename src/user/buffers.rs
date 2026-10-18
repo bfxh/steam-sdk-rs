@@ -135,7 +135,7 @@ impl User {
         }
         // The count is believed only as far as the buffer really is, exactly as in the voice
         // cluster: a larger number would hand back bytes nobody wrote.
-        let kept = crate::user::voice::written_bytes(written, buffer.len());
+        let kept = crate::utils::written_bytes(written, buffer.len());
         buffer.truncate(kept);
         Ok(buffer)
     }

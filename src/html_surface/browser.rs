@@ -343,10 +343,42 @@ impl Browser {
     }
 }
 
+/// Whether dropping this wrapper should ask Steam to remove anything.
+///
+/// Zero is this crate's own not-yet-assigned handle: `create_browser` plants a `Browser` with
+/// `handle: 0` before Steam answers, and if the answer never arrives the placeholder is dropped when
+/// the callback map is. Steam's `RemoveBrowser` takes "HHTMLBrowser unBrowserHandle"
+/// (`isteamhtmlsurface.h:47`) and documents no value that means "none", so 0 is not a handle Steam
+/// ever handed out, and asking it to remove one is a call about nothing.
+fn removes_on_drop(handle: sys::HHTMLBrowser) -> bool {
+    handle != 0
+}
+
 impl Drop for Browser {
     fn drop(&mut self) {
+        if !removes_on_drop(self.handle) {
+            return;
+        }
         unsafe {
             sys::SteamAPI_ISteamHTMLSurface_RemoveBrowser(self.html, self.handle);
         }
+    }
+}
+
+#[cfg(test)]
+mod browser_tests {
+    //! Pure half of `Drop`: whether a handle is one Steam gave us. Reaching the FFI needs a live
+    //! browser, so the decision is judged here and the wiring is stated, not tested.
+    use super::removes_on_drop;
+
+    #[test]
+    fn the_placeholder_handle_asks_steam_for_nothing() {
+        assert!(!removes_on_drop(0));
+    }
+
+    #[test]
+    fn any_real_handle_is_removed_when_the_wrapper_dies() {
+        assert!(removes_on_drop(1));
+        assert!(removes_on_drop(u32::MAX));
     }
 }

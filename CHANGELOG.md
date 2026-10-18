@@ -1435,7 +1435,94 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Dropping a browser placeholder asked Steam to remove handle 0** (`src/html_surface/browser.rs`,
+  `src/html_surface/mod.rs`). `create_browser` plants a `Browser { handle: 0 }` before Steam answers
+  and forgets it on the failure path, so the one path that was never covered is the answer that does
+  not arrive: the callback closure -- holding the placeholder -- is dropped with the callback map, and
+  `Drop` called `RemoveBrowser` on a handle Steam never handed out. `RemoveBrowser` takes
+  "HHTMLBrowser unBrowserHandle" (`isteamhtmlsurface.h:47`) and documents no value meaning "none", so
+  0 is this crate's own sentinel and the sentinel now refuses to make the call: `removes_on_drop` is
+  one pure predicate with two tests, and both flips of it (always remove, never remove) went red by
+  assertion message. The `mem::forget` stays, and not for the reason its comment used to give:
+  removing it changed *how* the closure captures -- `..placeholder` moves the fields, so the closure
+  captured a bare `*mut ISteamHTMLSurface` and stopped being `Send`, which
+  `register_call_result` requires. That is why the comment now says which of the two guards covers
+  which path.
+
+- **Six audit claims checked: three were real and are fixed above, two were not defects, and one is
+  a gap that is measured but not yet closed.** The two retracted: (a) *`matchmaking_servers.rs` frees
+  a vtable Steam may still call back into* -- it does not, because `release()` asks
+  `IsRefreshing` first and returns `Err(ReleaseError::Refreshing)` while a query is live, so
+  `free_serverlist` only ever runs when Steam says nothing is in flight; what survives the check is
+  that forgetting to call `release()` leaks the three `Box` allocations (no `Drop`, and one is not
+  possible: dropping the callback object is exactly what Steam forbids while a request is live) and
+  that `unsafe impl Send for ServerListRequest` asserts across `Rc` refcounts, which is a threading
+  contract to change on purpose rather than a bug to patch quietly. (b) *`html_surface` double
+  release* -- no path in the crate removes the same handle twice; `browser_from_handle` and
+  `remove_browser` are documented alternatives for one handle, and the reachable half of the worry was
+  the handle-0 case, which is the entry above. The gap that is real and not yet fixed: seven public
+  wrappers hold a raw `*mut sys::ISteam*` and no `Arc<Inner>` -- `Browser`, `CookieContainer`,
+  `HttpResponse`, `InventoryResult`, `InventoryUpdateHandle`, `ServerListRequest`, `FileWriteBatch` --
+  so `Inner`'s `Manager` can reach its `Drop` (which calls `SteamAPI_Shutdown`) while one of them is
+  still alive and about to call through the pointer. Measured with a structural scan of every
+  `pub struct` shape in `src/` (169 scanned, 44 hold a raw interface pointer, 7 of those carry no
+  `Arc<Inner>`), not by eye. Closing it means giving each type the
+  `Arc<Inner>` the poll group and the Fake UDP port already carry and then a ruler that keeps the
+  count at zero, which is a unit of its own rather than a line in this one.
+
+- **`SteamFileReader` sought to the wrong place, and Steam's own byte count could push it past the
+  end** (`src/remote_storage/files.rs`, new `src/utils/counts.rs`, `src/user/voice.rs`,
+  `src/user/buffers.rs`). `SeekFrom::End(o)` was computed as `size - 1 - o`: the sign of `o` inverted
+  and one subtracted, so `End(0)` landed a byte short of EOF and `End(-4)` landed *past* the end at
+  `size + 3`, while `Current(o)` far enough negative produced a negative number that cast to a
+  `usize` of ~1.8e19. The reader's next `read` then evaluated `size - offset` on that -- a panic in a
+  debug build, and in a release build a length of ~1.8e19 handed to `FileReadAsync`. Seek now answers
+  through one pure `seek_target(pos, offset, size)` using checked arithmetic against the same two
+  bounds, and the end itself is addressable (reading there returns zero bytes, which is what EOF
+  means). The count path had the same shape of hole: `m_cubRead` was trusted as a `usize` and then
+  passed to `FileReadAsyncComplete`, whose parameter list is "void *pvBuffer, uint32 cubToRead"
+  (`isteamremotestorage.h:206`) -- the reported number is also the size of the copy Steam is about to
+  make into the caller's buffer. It goes through `written_bytes`, which had been the voice capture's
+  private rule for exactly that shape and is now shared from `src/utils/counts.rs` (4 call sites: 3
+  in `voice.rs`, 1 in `buffers.rs`, this one). Four tests cover the arithmetic, and mutation replay
+  on `seek_target` turned three separate rules red by assertion message -- upper bound removed
+  (4 tests), `End`'s sign flipped back (1), negatives clamped to zero instead of refused (3). A
+  fourth probe replaced the *clamp call* in `read()` with the old `m_cubRead as usize` and every test
+  stayed green (rc=0): that path needs a real cloud file, so the rule is locked and the wiring is
+  stated, not tested.
+  Ledger effects: `module_sizes` total 28842 -> 28933 (`files.rs` +81, `utils/counts.rs` +17 new,
+  `utils/mod.rs` +2, `voice.rs` -9 for the moved function), `package_inventory` 215 -> 216 (the new
+  file ships), `header_citations` 168 -> 172 spans and 27 -> 29 files, all three debt columns 0.
+
+- **`close()` panicked on a caller's nul byte, and its debug string was freed before Steam read
+  it** (`src/networking_sockets/connection.rs`). The first half is `CString::new(x).unwrap()` on an
+  argument the caller chooses: paste a log line with a nul in it and safe code crashes the frame
+  closing the connection. The second half is quieter -- `match debug_string { Some(s) => s.as_ptr() }`
+  moves the `CString` into the arm, drops it when the arm's value is produced, and hands the now
+  dangling pointer to `CloseConnection`, whose parameter is "const char *pszDebug"
+  (`isteamnetworkingsockets.h:191`). The owner now lives in a local that outlives the call, and the
+  byte decision is one pure `debug_string_prefix`: cut at the first nul, which is where a C string
+  ends anyway, so nothing Steam could have read is lost. Three tests cover it; the two mutations of
+  the rule (no truncation, take the last piece instead of the first) both went red by assertion
+  message, while a third probe that restores the old `CString::new(..).unwrap()` plus the dangling
+  `match` left every test green (rc=0) -- reaching `close()` needs a live connection, so the dangling
+  pointer is proven by reading the temporary's lifetime, not by a test this crate can run.
+
+- **Every HTTP header value lost its last byte** (`src/http.rs`). `header()` sizes its buffer from
+  `GetHTTPResponseHeaderSize`, which says only that it "returns the size of the header value if
+  present" (`isteamhttp.h:75`) and says nothing about a terminator; `GetHTTPResponseHeaderValue`
+  (`:82`) is the same. The wrapper assumed the reported size counts a nul and cut
+  `buf.len() - 1` unconditionally, so under the other reading -- the size is the value -- every
+  header came back one character short, and the same file's `body()` returns all of the bytes it was
+  told, which is how the inconsistency shows. The rule that is true either way is now one pure
+  function, `header_value_bytes`: stop at the first nul, keep everything when there is none. A header
+  value cannot legally contain a nul, so nothing meant to be read is lost by cutting at one. Three
+  tests; both mutations went red by assertion message (never cutting -> the terminator and all-nul
+  cases, cutting a last byte when there is no nul -> the exact-size case, which also panics on an
+  empty buffer in a debug build).
+
 - **Four batched receives believed Steam's count in two different ways, and two of them not at
+
   all** (`src/networking_sockets/mod.rs`, `poll_group.rs`, `fake_udp.rs`, `connection.rs`,
   `src/networking_messages.rs`). `ReceiveMessagesOnConnection`, `ReceiveMessagesOnPollGroup`, the
   Fake UDP port's `ReceiveMessages` and `ReceiveMessagesOnChannel` all answer with a signed `int`,

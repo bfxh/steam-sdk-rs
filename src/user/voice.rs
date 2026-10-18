@@ -17,6 +17,7 @@
 //!     and say why.
 
 use super::*;
+use crate::utils::written_bytes;
 
 /// The largest buffer this crate will **allocate on a caller's behalf**.
 ///
@@ -137,16 +138,6 @@ fn check(raw: sys::EVoiceResult) -> Result<(), VoiceError> {
 /// -- Steam is told no more than the buffer really has.
 fn voice_len(requested: usize) -> u32 {
     requested.min(u32::MAX as usize) as u32
-}
-
-/// How many bytes Steam reported writing, believed only as far as the buffer allows.
-///
-/// The buffer's own length is the only bound worth applying here, and it is the tight one: what
-/// Steam was told (`voice_len`, always `<= buffer.len()`) can never exceed it, so a count above
-/// `capacity` would mean Steam ignored a size argument we already know it was handed. Trusting the
-/// number further would hand the caller bytes nobody wrote.
-pub(crate) fn written_bytes(written: u32, capacity: usize) -> usize {
-    (written as usize).min(capacity)
 }
 
 /// The next capture buffer size when Steam says the current one was short.
