@@ -1422,6 +1422,48 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Four defects a sandbox audit executed rather than inferred** (`src/networking_types/message.rs`,
+  `identity.rs`, `config.rs` and the six call sites that pass options to Steam). Each was reproduced in
+  a clone of the tree at `36fc248` before being fixed, and each fix was then replayed backwards -- the
+  old expression put back, the specific test run, the file restored from a `cp` backup and compared
+  byte-for-byte. **6 of 6 mutations judged red.**
+  - `NetworkingMessage::data()` built a slice straight out of `m_pData`/`m_cbSize`. rustc's own
+    precondition check aborts on it -- `slice::from_raw_parts requires the pointer to be aligned and
+    non-null` -- and the state that triggers it is documented as normal:
+    "If cbAllocateBuffer=0, then no buffer is allocated.  m_pData will be NULL, m_cbSize will be zero"
+    (`isteamnetworkingutils.h:38-40`). This is a *safe* method, and the crate calls it on its own
+    `allocate_message(0)` results. It now reads as empty for a null payload or a non-positive size.
+  - `copy_data_into_buffer` asked `((*self.message).m_cbSize as usize) < data.len()`. `m_cbSize` is a
+    signed `c_int`, so a negative value casts to ~1.8e19 and the capacity guard *inverts*: an 8-byte
+    write into a 4-byte buffer returned `Ok(())` and wrote past the allocation (the sandbox run died
+    with `STATUS_ACCESS_VIOLATION`). The capacity is now `usize::try_from`, so a negative record
+    refuses the write, and a test pins both halves -- the refusal and the fact that a correct capacity
+    still writes.
+  - `send_flags()` was `from_bits(..).expect(..)` on a bitmask Steam fills. Measured panic:
+    `send flags could not be converted to rust representation`. It is now `from_bits_truncate`, with a
+    test that also requires the *named* bits to survive, because truncation that silently dropped known
+    flags would be a worse bug than the panic it replaces. Same class as the `to_steam_result` fix
+    above: the value is not the caller's.
+  - `NetworkingIdentity`'s `GenericString`, `GenericBytes` and `UnknownType` arms in `debug_string` were
+    `unimplemented!()`, and `impl Debug` calls it -- so formatting an identity that arrived from a peer
+    panicked in the local process. Executed: `not implemented` at `identity.rs:127` and `:130`. All
+    three now render (bounded scan of the inline array, `m_cbSize` clamped rather than cast, lossy
+    UTF-8), and the header's own reason for `UnknownType` is forward compatibility
+    (`steamnetworkingtypes.h:252-256`), so a crash there was the opposite of the intent.
+  - `NetworkingConfigEntry::new_string` freed its `CString` on return while the struct kept the pointer
+    -- `steamnetworkingtypes.h:1787`: "WARNING - Just saves your pointer.  Does NOT make a copy of the
+    string", `:1756`: `const char *m_string; // Points to your '\0'-terminated buffer`. The entry now
+    owns an `Arc<CString>` beside the struct, the six option-passing call sites borrow-and-copy
+    (`as_raw`) so the owner is alive across the FFI call, and the public `From` conversion -- which
+    cannot give the buffer back, since the C struct has no destructor -- takes one extra strong count:
+    a deliberate bounded leak replacing a use-after-free. **Registered honestly: this last fix has no
+    CI-runnable test**, because its constructor is a call into `libsteam_api64`; the repo's convention
+    for that is `#[ignore = "requires a running Steam client"]`, so CI cannot judge it and I did not
+    write a test that pretends otherwise.
+  The gate chain caught one of *my own* new citations on the first replay
+  (`steamnetworkingtypes.h:1785` for a sentence that sits at 1787) and put 17 new spans into the
+  ledger, all judged: 130 -> **147 spans, 0 wrong, 0 unjudged, 0 undeclared**.
+
 - **`shell_hatches.py` was counting vocabulary, not holes: 4 of its 9 registered hatches were
   comment prose** (`scripts/ci/shell_hatches.py`). It searched each workflow file's whole text for
   `|| true`, `2>/dev/null`, `--no-verify` &c. -- and this repository's workflows *write those

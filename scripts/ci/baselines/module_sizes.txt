@@ -1,5 +1,5 @@
 src/lib.rs 829
-src/networking_types/config.rs 629
+src/networking_types/config.rs 675
 src/error.rs 603
 src/ugc/answers.rs 600
 src/ugc/mod.rs 598
@@ -11,7 +11,7 @@ src/ugc/types.rs 559
 src/app.rs 550
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 514
-src/networking_sockets/fake_ip.rs 502
+src/networking_sockets/fake_ip.rs 506
 src/parties.rs 499
 src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
@@ -27,7 +27,9 @@ src/user_stats/leaderboard.rs 384
 src/user/mod.rs 381
 src/lib_tests.rs 354
 src/html_surface/browser.rs 352
+src/networking_types/message.rs 341
 src/inventory/result.rs 338
+src/networking_types/identity.rs 337
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
 src/matchmaking/filters.rs 314
@@ -48,12 +50,10 @@ src/friends/chat.rs 216
 src/networking_types/events.rs 212
 src/user/buffers.rs 210
 src/html_surface/mod.rs 206
-src/networking_types/message.rs 206
 src/matchmaking/queries.rs 205
 src/inventory/items.rs 204
 src/identity.rs 198
 src/parental.rs 191
-src/networking_types/identity.rs 182
 src/remote_storage/api.rs 182
 src/networking_types/state.rs 180
 src/remote_play.rs 180
@@ -69,13 +69,13 @@ src/user_stats/stat_callback.rs 151
 src/ugc/read.rs 142
 src/utils/mod.rs 142
 src/inventory/prices.rs 132
+src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
 src/server/callbacks.rs 129
 src/user_stats/stats_io.rs 127
 src/networking_sockets/listen_socket.rs 122
 src/video.rs 122
 src/inventory/actions.rs 121
-src/networking_sockets/listen.rs 120
 src/networking_sockets_callback.rs 117
 src/matchmaking/callbacks.rs 111
 src/server/auth.rs 107
@@ -84,9 +84,9 @@ src/input/actions.rs 104
 src/utils/filtering.rs 103
 src/networking_sockets/poll_group.rs 102
 src/inventory/definitions.rs 101
+src/networking_sockets/connect.rs 100
 src/networking_sockets/status.rs 98
 src/input/layers.rs 96
-src/networking_sockets/connect.rs 92
 src/friends/followers.rs 91
 src/user_stats/achievements.rs 90
 src/friends/overlay.rs 88

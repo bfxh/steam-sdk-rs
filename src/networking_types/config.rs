@@ -553,9 +553,26 @@ impl From<NetworkingConfigValue> for sys::ESteamNetworkingConfigValue {
 #[derive(Clone)]
 pub struct NetworkingConfigEntry {
     inner: sys::SteamNetworkingConfigValue_t,
+    /// The bytes that `inner.m_val.m_string` points at, held so they outlive the entry.
+    ///
+    /// `SetString` copies nothing: "WARNING - Just saves your pointer.  Does NOT make a copy of the
+    /// string" (`steamnetworkingtypes.h:1787`), and the field is documented as
+    /// `const char *m_string; // Points to your '\0'-terminated buffer` (`:1756`). Before this field
+    /// existed, `new_string` built a `CString` inside the statement and let it free on return, so
+    /// every string entry was a dangling pointer before any caller could use it -- and the option
+    /// arrays below hand that pointer to Steam.
+    string: Option<std::sync::Arc<CString>>,
 }
 
 impl NetworkingConfigEntry {
+    /// A copy of the C struct, valid while `self` is.
+    ///
+    /// Prefer this over `From`, which consumes the entry: the call sites that pass options to Steam
+    /// keep the entries alive across the FFI call, so nothing needs to outlive them.
+    pub(crate) fn as_raw(&self) -> sys::SteamNetworkingConfigValue_t {
+        self.inner
+    }
+
     fn new_uninitialized_config_value() -> sys::SteamNetworkingConfigValue_t {
         sys::SteamNetworkingConfigValue_t {
             m_eValue: sys::ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_Invalid,
@@ -574,7 +591,10 @@ impl NetworkingConfigEntry {
                 value_type.into(),
                 value,
             );
-            NetworkingConfigEntry { inner: config }
+            NetworkingConfigEntry {
+                inner: config,
+                string: None,
+            }
         }
     }
 
@@ -588,7 +608,10 @@ impl NetworkingConfigEntry {
                 value_type.into(),
                 value,
             );
-            NetworkingConfigEntry { inner: config }
+            NetworkingConfigEntry {
+                inner: config,
+                string: None,
+            }
         }
     }
 
@@ -602,7 +625,10 @@ impl NetworkingConfigEntry {
                 value_type.into(),
                 value,
             );
-            NetworkingConfigEntry { inner: config }
+            NetworkingConfigEntry {
+                inner: config,
+                string: None,
+            }
         }
     }
 
@@ -610,20 +636,40 @@ impl NetworkingConfigEntry {
         debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::String);
 
         let mut config = Self::new_uninitialized_config_value();
+        // An embedded NUL is the caller's own data, and `expect` here aborts in their frame; it is
+        // kept because returning `Result` would change this constructor's shape. `unwrap`-free
+        // degradation for the *other* CString sites is tracked in docs/SuperSteam-Design.md.
+        let owned =
+            std::sync::Arc::new(CString::new(value).expect("Rust string could not be converted"));
         unsafe {
-            let c_str = CString::new(value).expect("Rust string could not be converted");
             sys::SteamAPI_SteamNetworkingConfigValue_t_SetString(
                 &mut config,
                 value_type.into(),
-                c_str.as_ptr(),
+                owned.as_ptr(),
             );
-            NetworkingConfigEntry { inner: config }
+        }
+        NetworkingConfigEntry {
+            inner: config,
+            string: Some(owned),
         }
     }
 }
 
 impl From<NetworkingConfigEntry> for sys::SteamNetworkingConfigValue_t {
     fn from(entry: NetworkingConfigEntry) -> sys::SteamNetworkingConfigValue_t {
+        // Consuming the entry must not free what the struct points at, and there is no way to hand
+        // the buffer back: `SteamNetworkingConfigValue_t` has no destructor and Steam keeps the
+        // pointer. So a string entry takes one extra strong count here -- a deliberate, bounded leak
+        // (one per converted string entry) that is strictly better than the use-after-free it
+        // replaces. `as_raw` avoids it entirely and is what this crate's own call sites use.
+        if let Some(owned) = entry.string.as_ref() {
+            // SAFETY: `Arc::as_ptr` on a live `Arc` yields a pointer to its allocation, which is what
+            // `increment_strong_count` requires; the matching decrement never happens because the
+            // struct this pointer lives in has no way to give the buffer back to Rust.
+            unsafe {
+                std::sync::Arc::increment_strong_count(std::sync::Arc::as_ptr(owned));
+            }
+        }
         entry.inner
     }
 }

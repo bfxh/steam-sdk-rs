@@ -7,6 +7,12 @@
 # 130 spans, 0 judged wrong, 0 unjudged phrases, 0 spans with nothing to check. Both debt columns are
 # empty, so every citation in src/ is now checked against the header it names: the remaining work is
 # keeping them true as files are edited, which the red column is for.
+# Re-recorded 2026-10-18: 22 files cite the SDK, 147 spans, still 0/0/0. The +17 spans are the memory
+# and panic guards added with the sandbox audit (each one cites the header line that documents the
+# state it refuses to act on), and the +5 files are the modules those guards landed in. The growth in
+# coverage is deliberate; the three debt columns did not move, and the ruler judged one of my new
+# citations wrong on the first try (`steamnetworkingtypes.h:1785` for a sentence that is at 1787),
+# which is the only reason to trust a number like 147.
 # History of this ledger on its first day: 124/44/39 at the run that shipped the gate, then 125/21/25
 # after a joiner fix (header `//` markers had been left in the joined text, hiding 25 verbatim quotes),
 # 129/13/0 after the anchoring batches, 130/0/0 after the last paraphrases were either replaced by the
@@ -34,12 +40,27 @@ src/input/session.rs~undeclared 0
 src/matchmaking/chat.rs 0
 src/matchmaking/chat.rs~unjudged 0
 src/matchmaking/chat.rs~undeclared 0
+src/networking_sockets/connect.rs 0
+src/networking_sockets/connect.rs~unjudged 0
+src/networking_sockets/connect.rs~undeclared 0
 src/networking_sockets/fake_ip.rs 0
 src/networking_sockets/fake_ip.rs~unjudged 0
 src/networking_sockets/fake_ip.rs~undeclared 0
 src/networking_sockets/fake_udp.rs 0
 src/networking_sockets/fake_udp.rs~unjudged 0
 src/networking_sockets/fake_udp.rs~undeclared 0
+src/networking_sockets/listen.rs 0
+src/networking_sockets/listen.rs~unjudged 0
+src/networking_sockets/listen.rs~undeclared 0
+src/networking_types/config.rs 0
+src/networking_types/config.rs~unjudged 0
+src/networking_types/config.rs~undeclared 0
+src/networking_types/identity.rs 0
+src/networking_types/identity.rs~unjudged 0
+src/networking_types/identity.rs~undeclared 0
+src/networking_types/message.rs 0
+src/networking_types/message.rs~unjudged 0
+src/networking_types/message.rs~undeclared 0
 src/ugc/answers.rs 0
 src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0

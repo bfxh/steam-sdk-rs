@@ -33,7 +33,11 @@ impl NetworkingSockets {
     ) -> Result<NetConnection, InvalidHandle> {
         let handle = unsafe {
             let address = SteamIpAddr::from(address);
-            let options: Vec<_> = options.into_iter().map(|x| x.into()).collect();
+            // The entries stay alive across this call, because a string option's bytes belong to
+            // the entry it came from: Steam "Just saves your pointer.  Does NOT make a copy of the
+            // string" (`steamnetworkingtypes.h:1787`) and dereferences it while consuming this array.
+            let held: Vec<_> = options.into_iter().collect();
+            let options: Vec<_> = held.iter().map(NetworkingConfigEntry::as_raw).collect();
             sys::SteamAPI_ISteamNetworkingSockets_ConnectByIPAddress(
                 self.sockets,
                 address.as_ptr(),
@@ -70,7 +74,11 @@ impl NetworkingSockets {
         options: impl IntoIterator<Item = NetworkingConfigEntry>,
     ) -> Result<NetConnection, InvalidHandle> {
         let handle = unsafe {
-            let options: Vec<_> = options.into_iter().map(|x| x.into()).collect();
+            // The entries stay alive across this call, because a string option's bytes belong to
+            // the entry it came from: Steam "Just saves your pointer.  Does NOT make a copy of the
+            // string" (`steamnetworkingtypes.h:1787`) and dereferences it while consuming this array.
+            let held: Vec<_> = options.into_iter().collect();
+            let options: Vec<_> = held.iter().map(NetworkingConfigEntry::as_raw).collect();
             sys::SteamAPI_ISteamNetworkingSockets_ConnectP2P(
                 self.sockets,
                 identity_remote.as_ptr(),

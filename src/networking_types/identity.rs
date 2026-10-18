@@ -121,13 +121,41 @@ impl NetworkingIdentity {
                     format!("ip:{}", ip)
                 }
                 sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_GenericString => {
-                    unimplemented!()
+                    // `steamnetworkingtypes.h:320` sizes this inline array as "Max length of the
+                    // string for generic string identities.  Including terminating '\0'" (`:335`).
+                    // The scan is bounded by the array and stops at the first NUL, so a peer that
+                    // sends an unterminated buffer cannot walk past the struct, and non-UTF-8 bytes
+                    // are lossy-decoded rather than fatal. This arm used to be `unimplemented!()`,
+                    // which made `{:?}` on any peer identity panic.
+                    let raw = self.inner.__bindgen_anon_1.m_szGenericString;
+                    let bytes: Vec<u8> = raw
+                        .iter()
+                        .map(|byte| *byte as u8)
+                        .take_while(|byte| *byte != 0)
+                        .collect();
+                    format!("generic:{}", String::from_utf8_lossy(&bytes))
                 }
                 sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_GenericBytes => {
-                    unimplemented!()
+                    // `m_cbSize` carries the byte count (`steamnetworkingtypes.h:1930-1931`:
+                    // "m_cbSize = int(cbLen); memcpy( m_genericBytes, data, m_cbSize )"), and it is a
+                    // signed `c_int`, so it is clamped to the array rather than cast: a negative or
+                    // oversized value used to reach `unimplemented!()` and panic.
+                    let raw = self.inner.__bindgen_anon_1.m_genericBytes;
+                    let len = usize::try_from(self.inner.m_cbSize)
+                        .unwrap_or(0)
+                        .min(raw.len());
+                    format!(
+                        "bytes:{}",
+                        raw[..len]
+                            .iter()
+                            .map(|byte| format!("{byte:02x}"))
+                            .collect::<String>()
+                    )
                 }
                 sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_UnknownType => {
-                    unimplemented!()
+                    // Steam's own reason for this value is to "facilitate forward compatibility"
+                    // (`steamnetworkingtypes.h:252-256`), so naming it is the whole job here.
+                    format!("unknown_type:{}", self.inner.m_eType as u32)
                 }
                 ty => format!("bad_type:{}", ty as u32),
             }
@@ -178,5 +206,132 @@ impl From<SteamId> for NetworkingIdentity {
 impl Default for NetworkingIdentity {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Formatting an identity that arrived from a peer. Nothing here needs Steam: the struct is built
+    //! in Rust memory, which is also the point -- `debug_string` reads `m_eType`, `m_cbSize` and the
+    //! inline arrays exactly as a remote's data would set them, and all three of those arms used to be
+    //! `unimplemented!()`, so `{:?}` panicked inside whatever code was logging the connection.
+    use super::*;
+    use std::ffi::c_char;
+
+    fn identity(
+        kind: sys::ESteamNetworkingIdentityType,
+        size: i32,
+        body: sys::SteamNetworkingIdentity__bindgen_ty_2,
+    ) -> NetworkingIdentity {
+        let mut raw = unsafe { std::mem::zeroed::<sys::SteamNetworkingIdentity>() };
+        raw.m_eType = kind;
+        raw.m_cbSize = size;
+        raw.__bindgen_anon_1 = body;
+        NetworkingIdentity::from(raw)
+    }
+
+    fn string_body(text: &str) -> sys::SteamNetworkingIdentity__bindgen_ty_2 {
+        let mut buffer = [0 as c_char; 32];
+        for (slot, byte) in buffer.iter_mut().zip(text.as_bytes()) {
+            *slot = *byte as c_char;
+        }
+        sys::SteamNetworkingIdentity__bindgen_ty_2 {
+            m_szGenericString: buffer,
+        }
+    }
+
+    const GENERIC_STRING: sys::ESteamNetworkingIdentityType =
+        sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_GenericString;
+    const GENERIC_BYTES: sys::ESteamNetworkingIdentityType =
+        sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_GenericBytes;
+    const UNKNOWN: sys::ESteamNetworkingIdentityType =
+        sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_UnknownType;
+
+    #[test]
+    fn a_generic_string_identity_formats_instead_of_panicking() {
+        let id = identity(GENERIC_STRING, 6, string_body("hello"));
+        assert_eq!(format!("{id:?}"), r"generic:hello");
+    }
+
+    /// A remote that never writes the terminator cannot walk past the 32-byte array: the scan is
+    /// bounded by the array itself, which is what `k_cchMaxGenericString` ("Including terminating
+    /// '\0'", `steamnetworkingtypes.h:320`) buys.
+    #[test]
+    fn an_unterminated_generic_string_stops_at_the_array() {
+        let id = identity(GENERIC_STRING, 0, string_body(&"A".repeat(32)));
+        let text = format!("{id:?}");
+        assert_eq!(text.matches('A').count(), 32, "{text}");
+    }
+
+    /// Non-UTF-8 in a peer-chosen field is decoded lossily, not fatal.
+    #[test]
+    fn a_non_utf8_generic_string_is_lossy_not_fatal() {
+        let mut buffer = [0 as c_char; 32];
+        buffer[0] = 0xffu8 as c_char;
+        buffer[1] = b'x' as c_char;
+        let body = sys::SteamNetworkingIdentity__bindgen_ty_2 {
+            m_szGenericString: buffer,
+        };
+        let id = identity(GENERIC_STRING, 2, body);
+        assert!(format!("{id:?}").starts_with("generic:"));
+    }
+
+    #[test]
+    fn generic_bytes_are_printed_for_the_length_the_identity_claims() {
+        let body = sys::SteamNetworkingIdentity__bindgen_ty_2 {
+            m_genericBytes: [
+                0xde, 0xad, 0xbe, 0xef, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+        };
+        assert_eq!(
+            format!("{:?}", identity(GENERIC_BYTES, 2, body)),
+            r"bytes:dead"
+        );
+    }
+
+    /// `m_cbSize` is a signed `c_int` in a peer-filled struct: negative means "no bytes", not
+    /// "2^64 bytes", and an over-long claim is clamped to the array rather than read out of it.
+    #[test]
+    fn a_negative_or_oversized_byte_count_is_clamped_instead_of_reading_out_of_bounds() {
+        let body = sys::SteamNetworkingIdentity__bindgen_ty_2 {
+            m_genericBytes: [7; 32],
+        };
+        assert_eq!(
+            format!("{:?}", identity(GENERIC_BYTES, -5, body)),
+            r"bytes:"
+        );
+        let clamped = format!("{:?}", identity(GENERIC_BYTES, 999, body));
+        let payload = clamped
+            .strip_prefix("bytes:")
+            .expect("the bytes arm keeps its prefix");
+        assert_eq!(payload.len(), 64, "{clamped}");
+        assert!(
+            payload.bytes().all(|byte| byte == b'0' || byte == b'7'),
+            "{clamped}"
+        );
+    }
+
+    /// A value whose documented purpose is to "facilitate forward compatibility"
+    /// (`steamnetworkingtypes.h:252-256`) must not be a crash either.
+    #[test]
+    fn an_unknown_identity_type_is_named() {
+        let id = identity(UNKNOWN, 0, string_body(""));
+        assert_eq!(format!("{id:?}"), r"unknown_type:4");
+    }
+
+    /// The three arms that already worked are pinned too, so widening them cannot be paid for with a
+    /// silent change to the ones callers actually parse.
+    #[test]
+    fn the_previously_working_arms_still_read_the_same() {
+        let mut raw = unsafe { std::mem::zeroed::<sys::SteamNetworkingIdentity>() };
+        raw.m_eType = sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_Invalid;
+        assert_eq!(format!("{:?}", NetworkingIdentity::from(raw)), r"invalid");
+        raw.m_eType = sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_SteamID;
+        raw.__bindgen_anon_1 = sys::SteamNetworkingIdentity__bindgen_ty_2 { m_steamID64: 99 };
+        assert_eq!(
+            format!("{:?}", NetworkingIdentity::from(raw)),
+            r"steamid:99"
+        );
     }
 }

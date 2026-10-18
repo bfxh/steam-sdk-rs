@@ -24,7 +24,11 @@ impl NetworkingSockets {
         options: impl IntoIterator<Item = NetworkingConfigEntry>,
     ) -> Result<ListenSocket, InvalidHandle> {
         let local_address = SteamIpAddr::from(local_address);
-        let options: Vec<_> = options.into_iter().map(|x| x.into()).collect();
+        // The entries stay alive across this call, because a string option's bytes belong to
+        // the entry it came from: Steam "Just saves your pointer.  Does NOT make a copy of the
+        // string" (`steamnetworkingtypes.h:1787`) and dereferences it while consuming this array.
+        let held: Vec<_> = options.into_iter().collect();
+        let options: Vec<_> = held.iter().map(NetworkingConfigEntry::as_raw).collect();
         let handle = unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CreateListenSocketIP(
                 self.sockets,
@@ -68,7 +72,11 @@ impl NetworkingSockets {
         local_virtual_port: i32,
         options: impl IntoIterator<Item = NetworkingConfigEntry>,
     ) -> Result<ListenSocket, InvalidHandle> {
-        let options: Vec<_> = options.into_iter().map(|x| x.into()).collect();
+        // The entries stay alive across this call, because a string option's bytes belong to
+        // the entry it came from: Steam "Just saves your pointer.  Does NOT make a copy of the
+        // string" (`steamnetworkingtypes.h:1787`) and dereferences it while consuming this array.
+        let held: Vec<_> = options.into_iter().collect();
+        let options: Vec<_> = held.iter().map(NetworkingConfigEntry::as_raw).collect();
         let handle = unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CreateListenSocketP2P(
                 self.sockets,
@@ -102,7 +110,11 @@ impl NetworkingSockets {
         local_virtual_port: u32,
         options: impl IntoIterator<Item = NetworkingConfigEntry>,
     ) -> Result<ListenSocket, InvalidHandle> {
-        let options: Vec<_> = options.into_iter().map(|x| x.into()).collect();
+        // The entries stay alive across this call, because a string option's bytes belong to
+        // the entry it came from: Steam "Just saves your pointer.  Does NOT make a copy of the
+        // string" (`steamnetworkingtypes.h:1787`) and dereferences it while consuming this array.
+        let held: Vec<_> = options.into_iter().collect();
+        let options: Vec<_> = held.iter().map(NetworkingConfigEntry::as_raw).collect();
         let handle = unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CreateHostedDedicatedServerListenSocket(
                 self.sockets,
