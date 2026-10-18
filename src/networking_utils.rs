@@ -1,4 +1,5 @@
 use crate::networking_types::{NetworkingAvailabilityResult, NetworkingMessage};
+use crate::utils::fixed_string;
 use crate::{register_callback, Callback, Inner};
 use std::convert::TryInto;
 use std::ffi::{c_void, CStr};
@@ -165,17 +166,12 @@ impl RelayNetworkStatus {
 
 impl From<sys::SteamRelayNetworkStatus_t> for RelayNetworkStatus {
     fn from(status: steamworks_sys::SteamRelayNetworkStatus_t) -> Self {
-        unsafe {
-            Self {
-                availability: status.m_eAvail.try_into(),
-                is_ping_measurement_in_progress: status.m_bPingMeasurementInProgress != 0,
-                network_config: status.m_eAvailNetworkConfig.try_into(),
-                any_relay: status.m_eAvailAnyRelay.try_into(),
-                debugging_message: CStr::from_ptr(status.m_debugMsg.as_ptr())
-                    .to_str()
-                    .expect("invalid debug string")
-                    .to_owned(),
-            }
+        Self {
+            availability: status.m_eAvail.try_into(),
+            is_ping_measurement_in_progress: status.m_bPingMeasurementInProgress != 0,
+            network_config: status.m_eAvailNetworkConfig.try_into(),
+            any_relay: status.m_eAvailAnyRelay.try_into(),
+            debugging_message: fixed_string(&status.m_debugMsg),
         }
     }
 }

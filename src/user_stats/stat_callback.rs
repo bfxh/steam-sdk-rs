@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::fixed_string;
 
 /// Callback type after calling
 /// [`request_current_stats()`](struct.UserStats.html#method.request_current_stats).
@@ -79,10 +80,10 @@ pub struct UserAchievementStored {
 }
 
 impl_callback!(cb: UserAchievementStored_t => UserAchievementStored {
-    let name = CStr::from_ptr(cb.m_rgchAchievementName.as_ptr()).to_owned();
+    let name = fixed_string(&cb.m_rgchAchievementName);
     Self {
         game_id: GameId(cb.m_nGameID),
-        achievement_name: name.into_string().unwrap(),
+        achievement_name: name,
         current_progress: cb.m_nCurProgress,
         max_progress: cb.m_nMaxProgress,
     }
@@ -107,10 +108,10 @@ pub struct UserAchievementIconFetched {
 }
 
 impl_callback!(cb: UserAchievementIconFetched_t => UserAchievementIconFetched {
-    let name = CStr::from_ptr(cb.m_rgchAchievementName.as_ptr()).to_owned();
+    let name = fixed_string(&cb.m_rgchAchievementName);
     Self {
         game_id: GameId(cb.m_nGameID.__bindgen_anon_1.m_ulGameID),
-        achievement_name: name.into_string().unwrap(),
+        achievement_name: name,
         achieved: cb.m_bAchieved,
         icon_handle: cb.m_nIconHandle,
     }

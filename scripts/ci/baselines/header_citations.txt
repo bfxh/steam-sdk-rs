@@ -94,3 +94,6 @@ src/user_stats/leaderboard.rs~undeclared 0
 src/user_stats/stats.rs 0
 src/user_stats/stats.rs~unjudged 0
 src/user_stats/stats.rs~undeclared 0
+src/utils/strings.rs 0
+src/utils/strings.rs~unjudged 0
+src/utils/strings.rs~undeclared 0

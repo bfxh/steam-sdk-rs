@@ -135,6 +135,7 @@ steamworks/src/utils/ipv6.rs
 steamworks/src/utils/mod.rs
 steamworks/src/utils/overlay.rs
 steamworks/src/utils/param_strings.rs
+steamworks/src/utils/strings.rs
 steamworks/src/utils/text_input.rs
 steamworks/src/utils/warning.rs
 steamworks/src/video.rs

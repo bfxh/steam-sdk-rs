@@ -14,6 +14,7 @@ mod identity;
 mod ipv6;
 mod overlay;
 mod param_strings;
+mod strings;
 mod text_input;
 mod warning;
 
@@ -22,6 +23,7 @@ pub use callbacks::*;
 pub use filtering::*;
 pub use ipv6::*;
 pub(crate) use param_strings::*;
+pub(crate) use strings::*;
 pub use text_input::*;
 
 /// Access to the steam utils interface

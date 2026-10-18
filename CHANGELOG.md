@@ -1435,6 +1435,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Three reads of Steam's fixed-size text fields could over-read the array or abort the callback**
+  (`src/user_stats/stat_callback.rs`, `src/networking_utils.rs`, new helper in
+  `src/utils/strings.rs`). `UserAchievementStored` and `UserAchievementIconFetched` each did
+  `CStr::from_ptr(cb.m_rgchAchievementName.as_ptr()).to_owned()` and then `into_string().unwrap()`, and
+  `RelayNetworkStatus`'s conversion did `CStr::from_ptr(status.m_debugMsg.as_ptr()).to_str().expect(..)`.
+  Those fields are arrays inside a struct Steam fills, not strings Steam promised to terminate or to
+  encode: `char m_rgchAchievementName[k_cchStatNameMax];` is "name of the achievement"
+  (`isteamuserstats.h:358`, `enum { k_cchStatNameMax = 128 };` at `:17`) and the debug line is
+  `char m_debugMsg[ 256 ];` under "Non-localized English language status.  For diagnostic/debugging
+  purposes only." (`isteamnetworkingutils.h:417-419`). Neither carries the out-string length annotation
+  that `isteammatchmaking.h` uses for its own fields, so `from_ptr` walks to a terminator nobody
+  promised -- off the end of the array and into the following fields -- while `unwrap`/`expect` turns
+  "this game's achievement name is not UTF-8" into a panic *inside callback dispatch*, which the host
+  application cannot catch. All three now go through one `fixed_string`: bounded by the array,
+  lossy rather than fatal. Counting the shape before and after, the fatal conversions of this form in
+  `src/` went 3 -> 0 (the two remaining grep hits are a commented-out line and this file's own
+  documentation of the choice).
+  The helper already existed as a private function in `src/parties.rs`; rather than a fourth copy, it
+  moved to `src/utils/strings.rs` as `pub(crate)` and `parties.rs` re-exports it -- which is why
+  `package_inventory` grew by one file, `steamworks/src/utils/strings.rs`: the published crate now
+  ships it, and the ledger was re-recorded against that reason rather than regenerated blindly.
+  Three tests travel with the helper: it stops at the first terminator, an entirely full array yields
+  exactly the array (the case `from_ptr` gets wrong), and invalid UTF-8 comes back as replacement
+  characters instead of a panic. Three mutations replayed -- terminator ignored, UTF-8 demanded, and a
+  build-always-empty variant -- and each turned its own test red **by assertion message**, not by a
+  crash. Gates after the move: 24/24 green, `module_sizes` 28584, and the citation ruler at **26 files /
+  162 spans with all three debt columns 0** -- it caught one of my own new citations on the first pass
+  (`isteamnetworkingutils.h:419,417`, which parses as one span and left the quoted comment outside it;
+  now `:417-419`).
+
 - **Rejecting a session request closed it twice** (`src/networking_messages.rs`). `SessionRequest` kept
   a flag named `accepted`, which only `accept()` set, so `reject()` -- which calls
   `CloseSessionWithUser` -- left the request looking unanswered and `Drop` closed the same session a
