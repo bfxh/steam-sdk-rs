@@ -1435,6 +1435,37 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Breaking: `connection_name()` was a panic with a signature, and it now returns the name**
+  (`src/networking_sockets/connection.rs`). Its whole body was `unimplemented!()`, so the one name a
+  caller could set with `set_connection_name` could never be read back -- and calling it from safe
+  code aborted the caller's frame. It is `Result<String, InvalidHandle>` now, the shape its sibling
+  `connection_user_data` already uses. `GetConnectionName` takes the buffer *and* its size from the
+  caller ("char *pszName, int nMaxLen", `isteamnetworkingsockets.h:229`) and the vendored headers give
+  no limit for the name itself -- the two comparable ceilings are for other strings,
+  "k_cchSteamNetworkingMaxConnectionAppName = 32" (`steamnetworkingtypes.h:663`) and
+  "k_cbMaxGameServerName = 64" (`matchmakingtypes.h:21`) -- so `CONNECTION_NAME_BYTES = 256` is stated
+  as this crate's choice rather than dressed up as Steam's rule, and a longer name comes back cut with
+  no signal that anything was lost. The decision half is one pure `name_answer(ok, buffer)`, which
+  reads the buffer through the shared `fixed_string` rather than a fourth copy of the cut-at-nul rule.
+  Mutation replay: refusing to report the invalid handle turned
+  `a_refused_fetch_is_an_invalid_handle` red by assertion message, and emptying the buffer turned two
+  tests red; a third probe that replaced the *call* inside `connection_name` with a constant string
+  stayed green (rc=0) because reaching the FFI needs a live connection -- registered, not counted as
+  coverage.
+  Widening the gate is the second half of this unit: `no_panic_on_unknown_enum.py` judged
+  `unreachable!()` alone, so the stub this file carried was invisible to it. Its pattern is now
+  `unreachable! | unimplemented! | todo!` and the corpus is 0 across 127 scanned sources. That is only
+  worth saying because the new canary `canary_panic_stub` puts a stubbed method and a `todo!()` into a
+  fixture tree, shows both reach the comparator as records, and shows that a *comment* about an
+  `unimplemented!()` which used to be there does not (52 -> 57 canary assertions). As a direct check,
+  putting the old stub back made the ruler emit `src/networking_sockets/connection.rs 1` for it.
+  Ledger effects: `api_coverage` `ISteamNetworkingSockets.called` 29 -> 30 (declared 913 unchanged,
+  total 1556 -> 1557), `module_sizes` `connection.rs` 600 -> 680 and total 28933 -> 29047,
+  `header_citations` 172 -> 179 spans with all three debt columns 0 -- and the ruler judged two of the
+  new citations wrong on the first try (a quote that sits at line 228 while the span said 229, and
+  four cited spans in a block carrying no phrase at all), paid back by quoting rather than by
+  re-recording the debt. Three new tests; lib test count 192 -> 195.
+
 - **Dropping a browser placeholder asked Steam to remove handle 0** (`src/html_surface/browser.rs`,
   `src/html_surface/mod.rs`). `create_browser` plants a `Browser { handle: 0 }` before Steam answers
   and forgets it on the failure path, so the one path that was never covered is the answer that does

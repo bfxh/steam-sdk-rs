@@ -138,6 +138,36 @@ def canary_panic_ledger():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def canary_panic_stub():
+    print("no_panic_on_unknown_enum.py -- unimplemented!/todo! count, prose does not")
+    ruler = ROOT / CI / "no_panic_on_unknown_enum.py"
+    tmp, dst = fixture(ruler)
+    try:
+        write(tmp / "src" / "stub.rs", "pub fn a() -> u8 {\n    unimplemented!()\n}\n")
+        write(tmp / "src" / "later.rs", "pub fn b() -> u8 {\n    todo!()\n}\n")
+        # Prose about a panic that used to be there is not a panic site: this is the line the
+        # changelog and the identity.rs history both write, and a ruler that counted it would
+        # refuse its own documentation.
+        write(tmp / "src" / "notes.rs", "// the fallback used to be `unimplemented!()`\n")
+        for i in range(20):  # the ruler's own floor is 20 scanned sources
+            write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        expect("a stubbed method is emitted as a record",
+               0 if "src/stub.rs 1" in out.stdout else 1, 0)
+        expect("a todo!() is emitted as a record",
+               0 if "src/later.rs 1" in out.stdout else 1, 0)
+        expect("a comment about the old panic is not a record",
+               0 if "notes.rs" not in out.stdout else 1, 0)
+        expect("the scan marker is emitted",
+               0 if re.search(r"^#scanned \d+$", out.stdout, re.M) else 1, 0)
+        measure = write(tmp / "cur.txt", out.stdout)
+        expect("the comparator turns the stub records red",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), measure]).returncode, 1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def replace_block(text, start, new):
     """Swap a whole `NAME = { ... }` literal for a fixture one.
 
@@ -487,7 +517,8 @@ def canary_shell_hatches():
     shutil.rmtree(root, ignore_errors=True)
 
 
-CANARIES = (canary_comparator, canary_panic_ledger, canary_doc_pointers, canary_baseline_files,
+CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_doc_pointers,
+            canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
             canary_shell_hatches)
 

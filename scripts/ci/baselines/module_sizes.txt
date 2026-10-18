@@ -1,8 +1,8 @@
 src/lib.rs 836
+src/networking_sockets/connection.rs 680
 src/networking_types/config.rs 675
 src/http.rs 609
 src/error.rs 603
-src/networking_sockets/connection.rs 600
 src/ugc/answers.rs 600
 src/ugc/mod.rs 598
 src/matchmaking_servers.rs 580

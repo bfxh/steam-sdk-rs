@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Zero tolerance for `unreachable!()` in the hand-written sources.
+"""Zero tolerance for `unreachable!()`, `unimplemented!()` and `todo!()` in the hand-written sources.
 
-Every one of these sat in the fallback arm of a `match` over a `#[non_exhaustive]` Steam enum
--- `EBeginAuthSessionResult`, `EUserHasLicenseForAppResult`, `EWorkshopFileType`, the content
-descriptors, `EItemUpdateStatus`, `ERemoteStoragePublishedFileVisibility`,
-`ESteamAPIInitResult`, `EChatMemberStateChange`, `EAuthSessionResponse`. A Steam runtime newer
-than the vendored headers can answer with a value the binding does not name, and then the
-wrapper panics inside the caller's process. The crate already has a name for that answer --
-`FriendState::Unknown`, `ChatEntryType::Invalid`, `PreviewKind::Unknown` -- and the fallback
-arm is where it belongs.
+Every `unreachable!()` this gate was built for sat in the fallback arm of a `match` over a
+`#[non_exhaustive]` Steam enum -- `EBeginAuthSessionResult`, `EUserHasLicenseForAppResult`,
+`EWorkshopFileType`, the content descriptors, `EItemUpdateStatus`,
+`ERemoteStoragePublishedFileVisibility`, `ESteamAPIInitResult`, `EChatMemberStateChange`,
+`EAuthSessionResponse`. A Steam runtime newer than the vendored headers can answer with a value the
+binding does not name, and then the wrapper panics inside the caller's process. The crate already has
+a name for that answer -- `FriendState::Unknown`, `ChatEntryType::Invalid`, `PreviewKind::Unknown` --
+and the fallback arm is where it belongs.
+
+`unimplemented!()` and `todo!()` joined the corpus on the same reasoning: they panic in the caller's
+frame too, and the last one (`connection_name`, which could set a name but never read it back) was a
+method users could call. A stub is not a smaller failure than a fallback arm -- it is the same failure
+with a written-in-the-code promise attached, and nothing here checks the promise.
 
 The count is not a baseline to slide: it is zero. A comment mentioning the word does not
 count, because a doc comment that describes the old panic is not a new panic -- and skipping
@@ -18,7 +23,7 @@ import re
 import sys
 from pathlib import Path
 
-PATTERN = re.compile(r"\bunreachable!\s*\(")
+PATTERN = re.compile(r"\b(?:unreachable!|unimplemented!|todo!)\s*\(")
 
 
 def violations(root):

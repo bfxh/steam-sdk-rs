@@ -39,6 +39,13 @@
 # Re-recorded again for the browser placeholder guard: 30 files (was 29), 173 spans (was 172),
 # 0/0/0. The one new span is isteamhtmlsurface.h:47, whose parameter list is what makes 0 a
 # sentinel of ours rather than a handle Steam issued.
+# Re-recorded once more for connection_name: 179 spans (was 172) across the same 30 files, still
+# 0/0/0. The seven new spans are isteamnetworkingsockets.h:191 and 225-229 (the debug-string and
+# name signatures, quoted as the ruler requires), steamnetworkingtypes.h:663 and
+# matchmakingtypes.h:21 (the two ceilings the crate's own 256 is measured against), and the
+# isteamremotestorage.h:206 joiner fix. The ruler judged two of my new citations wrong on the
+# first try -- a quote that sits at line 228 while the span said 229, and four cited spans in a
+# block carrying no phrase at all -- which is the only reason the 179 is worth anything.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0

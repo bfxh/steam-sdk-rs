@@ -312,9 +312,26 @@ impl NetConnection {
         }
     }
 
-    /// Fetch connection name.  Returns false if handle is invalid
-    pub fn connection_name(&self) -> Result<(), InvalidHandle> {
-        unimplemented!()
+    /// The connection's debug name, as Steam last heard [`Self::set_connection_name`].
+    ///
+    /// This used to be `unimplemented!()`, so every call panicked -- the name a wrapper can set, no
+    /// wrapper could read. Steam's side is "Set a name for the connection, used mostly for debugging"
+    /// and "Fetch connection name.  Returns false if handle is invalid"
+    /// (`isteamnetworkingsockets.h:225-229`); the fetch takes the buffer *and its size* from the
+    /// caller, and the headers give no maximum for the name itself -- `k_cchSteamNetworkingMaxConnectionAppName`
+    /// is the app name, not this one. So `CONNECTION_NAME_BYTES` is this crate's ceiling, not Steam's:
+    /// a name set longer than 256 bytes comes back cut at 256, and nothing in the answer says so.
+    pub fn connection_name(&self) -> Result<String, InvalidHandle> {
+        let mut buffer = [0 as std::os::raw::c_char; CONNECTION_NAME_BYTES];
+        let ok = unsafe {
+            sys::SteamAPI_ISteamNetworkingSockets_GetConnectionName(
+                self.sockets,
+                self.handle,
+                buffer.as_mut_ptr(),
+                CONNECTION_NAME_BYTES as ::std::os::raw::c_int,
+            )
+        };
+        name_answer(ok, &buffer)
     }
 
     /// Flush any messages waiting on the Nagle timer and send them
@@ -556,12 +573,75 @@ fn debug_string_prefix(value: Option<&str>) -> Option<CString> {
     CString::new(head).ok()
 }
 
+/// How much room this crate hands `GetConnectionName` for the connection's debug name.
+///
+/// Steam sets the name with "void SetConnectionName( HSteamNetConnection hPeer, const char *pszName )"
+/// (`isteamnetworkingsockets.h:226`) and reads it back with "char *pszName, int nMaxLen"
+/// (`:229`) -- the buffer and its size come from the caller, and the vendored headers state no limit
+/// for the name itself. The only comparable ceilings are for other strings:
+/// "k_cchSteamNetworkingMaxConnectionAppName = 32" (`steamnetworkingtypes.h:663`) and
+/// "k_cbMaxGameServerName = 64" (`matchmakingtypes.h:21`). So this number is ours, set well above
+/// both, and a name longer than it comes back truncated with no signal that anything was cut.
+const CONNECTION_NAME_BYTES: usize = 256;
+
+/// Steam's answer to a name fetch, turned into a Rust one.
+///
+/// The header gives one bit -- "Fetch connection name.  Returns false if handle is invalid"
+/// (`isteamnetworkingsockets.h:228`). Everything else is read out of the buffer by `fixed_string`,
+/// which stops at the first nul and lossy-decodes -- the same rule every other fixed-size Steam text
+/// field uses here. A buffer with no nul anywhere is the truncated case: Steam filled all of it, and
+/// what it held is all this side gets.
+fn name_answer(ok: bool, buffer: &[std::os::raw::c_char]) -> Result<String, InvalidHandle> {
+    if !ok {
+        return Err(InvalidHandle);
+    }
+    Ok(crate::utils::fixed_string(buffer))
+}
+
 #[cfg(test)]
 mod connection_tests {
     //! Pure half of `close()`: which bytes Steam is handed. The FFI call itself needs a live
     //! connection, so only this decision can be judged here; the wiring is stated, not tested.
     use super::debug_string_prefix;
+    use super::name_answer;
     use std::ffi::CString;
+    use std::os::raw::c_char;
+
+    fn name_buffer(text: &str, bytes: usize) -> Vec<c_char> {
+        let mut buffer = vec![0 as c_char; bytes];
+        for (slot, byte) in buffer.iter_mut().zip(text.as_bytes()) {
+            *slot = *byte as c_char;
+        }
+        buffer
+    }
+
+    #[test]
+    fn a_refused_fetch_is_an_invalid_handle() {
+        assert!(matches!(
+            name_answer(false, &name_buffer("lobby-7", 16)),
+            Err(InvalidHandle)
+        ));
+    }
+
+    #[test]
+    fn the_name_ends_where_steam_put_a_terminator() {
+        assert_eq!(
+            name_answer(true, &name_buffer("lobby-7\0rest", 16)).unwrap(),
+            "lobby-7"
+        );
+        // A buffer Steam left zeroed is a connection with no name set, not a name made of nuls.
+        assert_eq!(name_answer(true, &vec![0 as c_char; 8]).unwrap(), "");
+    }
+
+    /// The truncated case, and the reason the ceiling is documented: Steam filled the whole buffer and
+    /// the name went on past it. Nothing in the answer says so, so the caller gets the prefix.
+    #[test]
+    fn a_name_that_filled_the_buffer_comes_back_as_what_fit() {
+        assert_eq!(
+            name_answer(true, &name_buffer("abcdefghijklmnop", 16)).unwrap(),
+            "abcdefghijklmnop"
+        );
+    }
 
     #[test]
     fn no_debug_string_stays_no_debug_string() {
