@@ -1467,6 +1467,24 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Retracted: the rustc-warnings gate did not only bite hand-written code, and MSRV said so**
+  (`.github/workflows/ci.yml`). The step as written in `ee60ab9` denied warnings for the whole workspace
+  and its comment asserted that cargo's `--cap-lints allow` would keep generated and third-party code out
+  of its reach. That is true of registry dependencies and wrong about `steamworks-sys`, which is a
+  *workspace member*: the three `1.80.0` jobs went red on two `dead_code` errors raised inside the bindgen
+  output ("struct `ISteamContentServer` is never constructed", "struct `obstack` is never constructed")
+  while all three stable jobs were green -- unobservable on the dev box, which has no 1.80 toolchain
+  installed and whose newer rustc does not emit those lints. The step now runs
+  `cargo check -p steamworks --all-targets` with `-D warnings`, which keeps the assertion actually being
+  made ("our sources compile without warnings") and stops pretending about generated code that a bindgen
+  rerun would bring back -- the same judgement every other ruler here encodes by skipping `*bindings.rs`.
+  The plain workspace-wide `check (all targets)` step stays unchanged, so nothing is silently ungated:
+  what moved is only which crate's warnings are verdicts.
+  Cost, stated plainly: one red CI run on a SHA I pushed, on exactly the axis I had written down as
+  untestable locally. The change that would prevent the class rather than this instance is installing the
+  pinned MSRV toolchain so MSRV-only behaviour is visible before a push; that touches this machine, so it
+  is offered rather than done.
+
 - **The last thirteen caller-triggerable `CString` panics are gone, and the ledger is now zero-tolerance**
   (`src/app.rs`, `src/input/actions.rs`, `src/matchmaking/queries.rs`, `src/networking_types/config.rs`,
   `src/remote_storage/api.rs`, `src/server/lifecycle.rs`, `src/user/mod.rs`,

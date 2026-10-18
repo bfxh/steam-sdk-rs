@@ -70,15 +70,21 @@ jobs:
       - name: clippy (no -D warnings)
         run: cargo clippy --locked --all-targets $EXAMPLES $FEATURES --message-format short
 
-      # rustc 的 warning 在这里是判定，不是提示：实测本仓 `--all-targets` 下 rustc 只有 2 条，
+      - name: check (all targets)
+        run: cargo check --locked --all-targets $EXAMPLES $FEATURES
+
+      # rustc 的 warning 在这里是判定，不是提示：实测本仓手写代码 `--all-targets` 下 rustc 只有 2 条，
       # 而它们恰好是一条**空断言**——测试里 `matches!(x, Err(InvalidHandle))` 因为该类型没 import，
-      # 被当成"绑定一个变量"，于是那条测试对错误类型什么都没断言，只有 rustc 知道。clippy 的
-      # style 组仍按原样不 -D（见上面那条 step 的理由）；依赖 crate 由 cargo 自带 --cap-lints allow，
-      # 所以这条只会咬本仓代码，不会被某个上游 crate 在新工具链上冒出的 lint 莫名弄红。
-      - name: check (all targets, rustc warnings denied)
+      # 被当成"绑定一个变量"，于是那条测试对错误类型什么都没断言，只有 rustc 知道。clippy 的 style 组
+      # 仍按原样不 -D（理由见上面那条 step）。
+      # 范围刻意是 `-p steamworks`：第一版写的是整工作区，结果三个 1.80.0 作业全红而 stable 全绿——
+      # 红在 `steamworks-sys` 的 bindgen 产物上（`struct ISteamContentServer is never constructed`、
+      # `struct obstack is never constructed`，新 rustc 不报）。那是生成物，重跑 bindgen 就回来，
+      # 和本仓其它尺子一律跳过 `*bindings.rs` 是同一个判断。
+      - name: check (hand-written crate, rustc warnings denied)
         env:
           RUSTFLAGS: -D warnings
-        run: cargo check --locked --all-targets $EXAMPLES $FEATURES
+        run: cargo check --locked -p steamworks --all-targets $FEATURES
 
       - name: doc
         # 文档链接必须是干净的：本机实测 `RUSTDOCFLAGS=-D warnings cargo doc`
