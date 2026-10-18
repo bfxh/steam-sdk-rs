@@ -13,6 +13,9 @@ pub struct Browser {
     // handle that came from outside -- so the split put the constructor one level up.
     pub(super) html: *mut sys::ISteamHTMLSurface,
     pub(super) handle: sys::HHTMLBrowser,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    pub(super) _inner: Arc<Inner>,
 }
 
 // Steam serialises these calls internally, and the crate already asserts this

@@ -168,6 +168,55 @@ def canary_panic_stub():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def canary_handle_owners():
+    print("handle_owners.py -- a raw interface pointer without Arc<Inner> is the only thing that counts")
+    ruler = ROOT / CI / "handle_owners.py"
+    tmp, dst = fixture(ruler)
+    try:
+        write(tmp / "src" / "bare.rs",
+              "pub struct Bare {\n    iface: *mut sys::ISteamHTTP,\n    handle: u32,\n}\n")
+        write(tmp / "src" / "held.rs",
+              "pub struct Held {\n    iface: *mut sys::ISteamNetworkingSockets,\n"
+              "    _inner: Arc<Inner>,\n}\n")
+        # The trap this ruler has to avoid: a comment that talks about `Arc<Inner>` does not make the
+        # wrapper own one. This is the shape that actually bit -- the owner field's own comment sits
+        # inside the body, so deleting the field leaves the prose behind, and a stripper that only
+        # removes the `//` marker would report the wrapper as safe.
+        write(tmp / "src" / "prose.rs",
+              "pub struct Prose {\n"
+              "    /// carries no Arc<Inner>, which is the whole problem\n"
+              "    // an Arc<Inner> would be held here\n"
+              "    iface: *mut sys::ISteamUtils,\n}\n")
+        # And a private struct is not a public wrapper's contract, but the hazard is the same, so the
+        # rule judges `pub struct` only -- a non-pub one must not pad the count.
+        write(tmp / "src" / "internal.rs",
+              "struct Internal {\n    iface: *mut sys::ISteamInventory,\n}\n")
+        for i in range(20):  # the ruler's own floor is 20 scanned sources
+            write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        expect("the bare wrapper is an offender",
+               0 if "src/bare.rs 1" in out.stdout else 1, 0)
+        expect("the comment about Arc<Inner> is stripped, so prose.rs is still an offender",
+               0 if "src/prose.rs 1" in out.stdout else 1, 0)
+        expect("a wrapper that owns the client is not an offender",
+               0 if "held.rs" not in out.stdout else 1, 0)
+        expect("the scan marker is emitted",
+               0 if re.search(r"^#scanned \d+$", out.stdout, re.M) else 1, 0)
+        expect("the coverage half of the claim is stated (44-shape style count)",
+               0 if "out of 3 that hold a raw interface pointer" in out.stderr else 1, 0)
+        measure = write(tmp / "cur.txt", out.stdout)
+        expect("the comparator turns the offenders red against an empty ledger",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), measure]).returncode, 1)
+        # a ruler that scanned nothing must not report "zero offenders" as a pass
+        probe = floor_probe(dst, "floor_probe.py", "if files < 20 or shapes == 0:",
+                            "if files < 5000 or shapes == 0:")
+        expect("too little scanned is refused rather than passed",
+               run_script(probe, ["src"], cwd=tmp).returncode, 2)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def replace_block(text, start, new):
     """Swap a whole `NAME = { ... }` literal for a fixture one.
 
@@ -517,7 +566,8 @@ def canary_shell_hatches():
     shutil.rmtree(root, ignore_errors=True)
 
 
-CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_doc_pointers,
+CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
+            canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
             canary_shell_hatches)

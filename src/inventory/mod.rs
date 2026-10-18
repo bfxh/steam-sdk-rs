@@ -77,6 +77,7 @@ impl Inventory {
             InventoryUpdateHandle {
                 inv: self.inv,
                 handle: sys::SteamAPI_ISteamInventory_StartUpdateProperties(self.inv),
+                _inner: self._inner.clone(),
             }
         }
     }

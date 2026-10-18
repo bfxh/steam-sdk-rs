@@ -932,9 +932,9 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 - `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
   of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
-  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:447-458`），
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:454-465`），
   入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
-  （`src/matchmaking_servers.rs:213`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
+  （`src/matchmaking_servers.rs:214`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
   即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
   就是这个形状。这个 Steam 调用返回 `void`，所以封它也不产生一条能被观测的成功/失败；要不同词序的
   人可以直取 `sys::SteamAPI_ISteamUser_AdvertiseGame`，**故意的错比凭猜的 wrapper 好**。
@@ -1386,8 +1386,13 @@ struct Callbacks {
 ```
 
 上面这段是 2026-10-11 的规划稿，`deny`/`miri` 至今没进链（记在这里是为了别把它当成已存在）。
-**实际在跑的是 `quality` 作业的 19 个 step（其中 16 个具名，`python E:/tmp/count_steps.py` 按 YAML 数）**，
-外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 24 项判定。
+**实际在跑的是 `quality` 作业的 20 个 step（其中 17 个具名，2026-10-18 按 YAML 复数：`- name:` 17 条、
+`- ` 步 20 条）**，
+外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 25 项判定。
+2026-10-18 新增的是「句柄包装必须同时持住 client」这一步（`scripts/ci/handle_owners.py` +
+`baselines/handle_owners.txt`，目标 0）：实测 169 个 `pub struct` 里 44 个持裸
+`*mut sys::ISteam*`，其中 7 个过去不带 `Arc<Inner>`，于是 `Client` 一掉、`SteamAPI_Shutdown` 就在它们
+还活着的时候发生，而其中四个类型的 `Drop` 自己还要调 Steam。
 2026-10-16 新增的是其中一步：
 
 - `SDK-header citations in code docs land on the text they quote`（`scripts/ci/header_citations.py`

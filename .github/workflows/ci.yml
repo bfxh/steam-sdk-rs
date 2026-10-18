@@ -127,6 +127,16 @@ jobs:
           python3 scripts/ci/no_panic_on_unknown_enum.py src > "$RUNNER_TEMP/panic_sites.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/no_panic_sites.txt "$RUNNER_TEMP/panic_sites.txt"
 
+      # 公开包装持着裸 Steam 接口指针、却不持 `Arc<Inner>` ⇒ `Client` 一掉就 `SteamAPI_Shutdown`，
+      # 而这些包装自己的方法（含四个 `Drop` 里的 FFI）还拿着那个指针。实测 169 个 `pub struct` 里
+      # 44 个持裸指针，其中 7 个没有 owner（Browser/CookieContainer/HttpResponse/InventoryResult/
+      # InventoryUpdateHandle/ServerListRequest/FileWriteBatch）；这 7 个现在都补了 owner，台账目标 0。
+      # 空台账靠尺子自带的 `#scanned <N>` 自证读过了源码，否则"没扫到"和"扫到但都合规"同形。
+      - name: interface handles keep the client alive
+        run: |
+          python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/handle_owners.txt "$RUNNER_TEMP/handle_owners.txt"
+
       # 本仓的文档是**证据文件**：论断靠 `src/某.rs:行号` 支撑，读者据此复核。三次目录化拆分
       # （`src/friends.rs`、`src/ugc.rs` 变目录，`src/lib.rs` 瘦身）把这些指针冲掉了而没有任何
       # 一步变红——指针烂掉的文档读起来就像编的，这条门把它钉成判定。

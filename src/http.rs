@@ -64,6 +64,9 @@ fn header_value_bytes(buffer: &[u8]) -> &[u8] {
 pub struct CookieContainer {
     http: *mut sys::ISteamHTTP,
     handle: sys::HTTPCookieContainerHandle,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    _inner: Arc<Inner>,
 }
 
 impl CookieContainer {
@@ -112,6 +115,9 @@ pub struct HttpResponse {
     http: *mut sys::ISteamHTTP,
     handle: sys::HTTPRequestHandle,
     status: u16,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    _inner: Arc<Inner>,
 }
 
 unsafe impl Send for HttpResponse {}
@@ -417,10 +423,11 @@ impl HttpRequest {
         // Ownership of the Steam handle transfers to HttpResponse, which
         // releases it; forgetting here avoids a double release.
         std::mem::forget(self);
-        let response = HttpResponse {
+        let mut response = HttpResponse {
             http,
             handle,
             status: 0,
+            _inner: inner.clone(),
         };
         unsafe {
             let mut call: sys::SteamAPICall_t = 0;
@@ -437,17 +444,16 @@ impl HttpRequest {
                 &inner,
                 call,
                 move |v, io_error| {
+                    // The response is the answer, not a placeholder for it: `self` was forgotten
+                    // above so the handle ownership moved here, and filling in the status keeps the
+                    // closure's capture a whole `HttpResponse` -- which is `Send` by assertion, while
+                    // capturing `http`/`handle` separately would not be.
                     let result = if io_error || !v.m_bRequestSuccessful {
-                        // Release the request even on failure, since `self` was
-                        // forgotten and no caller-visible handle survives. Dropping
-                        // the Send-asserted response keeps this closure `Send`.
-                        std::mem::drop(response);
+                        // Release the request even on failure, since no caller-visible handle survives.
                         Err(SteamError::IOFailure)
                     } else {
-                        Ok(HttpResponse {
-                            status: v.m_eStatusCode as u16,
-                            ..response
-                        })
+                        response.status = v.m_eStatusCode as u16;
+                        Ok(response)
                     };
                     callback(result);
                 },
@@ -480,6 +486,7 @@ impl Http {
         Ok(CookieContainer {
             http: self.http,
             handle,
+            _inner: self._inner.clone(),
         })
     }
 

@@ -38,6 +38,7 @@ BASELINES = ROOT / "scripts" / "ci" / "baselines"
 READERS = {
     "api_coverage.txt": ".github/workflows/ci.yml",
     "doc_pointers_historical.txt": "scripts/ci/doc_pointers.py",
+    "handle_owners.txt": ".github/workflows/ci.yml",
     "header_citations.txt": ".github/workflows/ci.yml",
     "module_sizes.txt": ".github/workflows/ci.yml",
     "no_panic_sites.txt": ".github/workflows/ci.yml",
@@ -54,12 +55,14 @@ EXCUSED_EMPTY = {
     # measurement side is protected separately: compare_baseline.py refuses a zero-record
     # measurement that carries no `#scanned <N>` marker, so an empty ledger cannot be confused
     # with a ruler that read nothing.
+    "handle_owners.txt": "target is zero (every raw-interface wrapper now holds the client); the "
+                         "measurement side must prove it scanned (compare_baseline marker rule)",
     "no_panic_sites.txt": "target is zero; the measurement side must prove it scanned (compare_baseline marker rule)",
 }
 
 # Measured on 2026-10-16: 11 files (the twelfth candidate, `header_citations.txt`, arrived with the
 # SDK-citation gate that day). Below this the scan is not looking at the real inventory.
-MIN_BASELINES = 11
+MIN_BASELINES = 12
 
 
 def tracked():

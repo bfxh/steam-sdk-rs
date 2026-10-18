@@ -189,7 +189,10 @@ impl RemoteStorage {
     /// batch for a fast one.
     pub fn begin_write_batch(&self) -> Result<FileWriteBatch, SteamError> {
         if unsafe { sys::SteamAPI_ISteamRemoteStorage_BeginFileWriteBatch(self.rs) } {
-            Ok(FileWriteBatch { rs: self.rs })
+            Ok(FileWriteBatch {
+                rs: self.rs,
+                _inner: self.inner.clone(),
+            })
         } else {
             Err(SteamError::IOFailure)
         }

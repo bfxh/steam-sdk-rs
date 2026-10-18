@@ -9,6 +9,9 @@ use crate::utils::written_bytes;
 pub struct FileWriteBatch {
     // `pub(super)`: `begin_write_batch` in `api.rs` is the only thing that ever builds the guard.
     pub(super) rs: *mut sys::ISteamRemoteStorage,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    pub(super) _inner: Arc<Inner>,
 }
 
 impl Drop for FileWriteBatch {

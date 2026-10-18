@@ -1435,6 +1435,47 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Seven public wrappers could outlive `SteamAPI_Shutdown`, because none of them held the client**
+  (`src/html_surface/browser.rs`, `src/html_surface/mod.rs`, `src/http.rs`,
+  `src/inventory/{mod,definitions,result}.rs`, `src/matchmaking_servers.rs`,
+  `src/remote_storage/{api,files}.rs`, new `scripts/ci/handle_owners.py`). `Inner` owns the `Manager`
+  and `Manager::drop` is what calls `SteamAPI_Shutdown()`, so a wrapper that carries a
+  `*mut sys::ISteam*` and no `Arc<Inner>` is safe code holding a pointer to an interface whose client
+  may already be gone -- and four of these seven release their Steam handle in `Drop`, so the very
+  cleanup is one of the calls that can land after shutdown. Measured before the change: 169 `pub
+  struct` shapes in `src/`, 44 of them holding a raw interface pointer, **7** without an owner
+  (`Browser`, `CookieContainer`, `HttpResponse`, `InventoryResult`, `InventoryUpdateHandle`,
+  `ServerListRequest`, `FileWriteBatch`). Each now owns an `Arc<Inner>` declared *last*, so it is
+  released last and the wrapper's own `Drop` body still runs against a live client. No public signature
+  changed; `ServerListRequest` holds `Option<Arc<Inner>>` because its callback object -- and with it the
+  request -- is built by the caller before any interface is in hand, and the issuing method fills it in
+  where it already fills in `mms`, `real` and `h_req`.
+  Two consequences worth naming, both found by the compiler rather than by reading. `HttpResponse` is
+  built inside the `register_call_result` closure, and the closure must stay `Send`: `..response` used
+  to make that a whole-`HttpResponse` capture, and once the struct owns an `Arc` the functional update
+  becomes a partial move *and* a separate capture of the raw `*mut sys::ISteamHTTP`, which is not
+  `Send`. The closure now fills in `status` and moves the whole response out. And the `Browser`
+  placeholder can no longer be `mem::forget`-ed, because forgetting it would strand the `Arc<Inner>` it
+  now carries -- which only works because `removes_on_drop` refuses handle 0, the guard added in the
+  entry below.
+  The gate is the second half. `handle_owners.py` counts `pub struct` bodies that hold a raw interface
+  pointer without `Arc<Inner>`, one per wrapper, keyed by file, and its ledger target is 0 --
+  `baselines/handle_owners.txt` is empty and excused as such, with the measurement proving it scanned
+  (`#scanned 127`). It is wired into the `quality` job (19 -> 20 steps, 17 named) and the local replay
+  (24 -> 25 verdicts), and registered in `baseline_files.py` (11 -> 12 ledgers). Its canary adds 7
+  assertions (57 -> 64): a bare wrapper is an offender, one that owns the client is not, a non-`pub`
+  struct does not pad the count, the comparator turns a record red, and a scan that looked at too
+  little is refused with exit 2. The canary exists because the first version of the ruler was wrong in
+  a way only a mutation can show: its comment stripper removed the `//` marker but kept the prose, so
+  the owner field's own comment -- which says `Arc<Inner>` -- read as an owner, and **deleting the
+  field from `Browser` on the real tree still reported 0 offenders**. Blanking whole comment lines fixes
+  it, the same probe then reports `src/html_surface/browser.rs 1`, and the fixture carries that comment
+  shape inside the body so the bug cannot come back. Ledger: `module_sizes` total 29047 -> 29087.
+  And the pointer gate earned its keep again: adding seven lines to `src/matchmaking_servers.rs` pushed
+  two spans `docs/SuperSteam-Design.md` cites for the `Ipv4Addr` reading off `m_unIP` out of place -- one
+  landed on a blank line, which is how the gate reads a stale line number -- and both were re-measured
+  to `:454-465` and `:214`.
+
 - **Breaking: `connection_name()` was a panic with a signature, and it now returns the name**
   (`src/networking_sockets/connection.rs`). Its whole body was `unimplemented!()`, so the one name a
   caller could set with `set_connection_name` could never be read back -- and calling it from safe

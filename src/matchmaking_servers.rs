@@ -161,6 +161,7 @@ macro_rules! gen_server_list_fn {
                 request.mms = self.mms;
                 request.real = callbacks;
                 request.h_req = handle;
+                request.inner = Some(self._inner.clone());
 
                 drop(request);
 
@@ -278,6 +279,7 @@ matchmaking_servers_callback!(
                 released: false,
                 mms: ptr::null_mut(),
                 real: ptr::null_mut(),
+                inner: None,
             }))
         }
     );
@@ -319,6 +321,11 @@ pub struct ServerListRequest {
     pub(self) released: bool,
     pub(self) mms: *mut sys::ISteamMatchmakingServers,
     pub(self) real: *mut ServerListCallbacksReal,
+    // Filled by the request method that issues the query, because the callback object -- and with it
+    // this request -- is built by the caller before any Steam interface is in hand. `Option` is that
+    // ordering, not a maybe: once a request exists it is `Some`, and it is what keeps the client
+    // alive while `release()` and the callbacks still call through `mms`.
+    pub(self) inner: Option<Arc<Inner>>,
 }
 
 unsafe impl Send for ServerListRequest {}

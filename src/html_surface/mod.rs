@@ -73,6 +73,7 @@ impl HtmlSurface {
         let placeholder = Browser {
             html: self.html,
             handle: 0,
+            _inner: self._inner.clone(),
         };
         unsafe {
             let api_call = sys::SteamAPI_ISteamHTMLSurface_CreateBrowser(
@@ -84,13 +85,18 @@ impl HtmlSurface {
                 &self._inner,
                 api_call,
                 move |v, io_error| {
+                    // The placeholder owns no Steam resource (its handle is the 0 sentinel
+                    // `removes_on_drop` refuses), so it is read from and then dropped normally;
+                    // forgetting it here would strand the `Arc<Inner>` it carries.
+                    let html = placeholder.html;
+                    let _inner = placeholder._inner.clone();
                     callback(if io_error {
-                        std::mem::forget(placeholder);
                         Err(SteamError::IOFailure)
                     } else {
                         Ok(Browser {
+                            html,
                             handle: v.unBrowserHandle,
-                            ..placeholder
+                            _inner,
                         })
                     });
                 },
@@ -109,6 +115,7 @@ impl HtmlSurface {
         Browser {
             html: self.html,
             handle,
+            _inner: self._inner.clone(),
         }
     }
 

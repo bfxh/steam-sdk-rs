@@ -14,6 +14,9 @@ pub struct InventoryResult {
     // properties) and `definitions.rs` (deserialising a result from bytes).
     pub(super) inv: *mut sys::ISteamInventory,
     pub(super) handle: sys::SteamInventoryResult_t,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    pub(super) _inner: Arc<Inner>,
 }
 
 impl InventoryResult {
@@ -183,6 +186,9 @@ pub struct InventoryUpdateHandle {
     // properties) and `definitions.rs` (deserialising a result from bytes).
     pub(super) inv: *mut sys::ISteamInventory,
     pub(super) handle: sys::SteamInventoryUpdateHandle_t,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    pub(super) _inner: Arc<Inner>,
 }
 
 impl InventoryUpdateHandle {
@@ -310,6 +316,7 @@ impl InventoryUpdateHandle {
             Ok(InventoryResult {
                 inv,
                 handle: result,
+                _inner: self._inner.clone(),
             })
         }
     }
@@ -333,6 +340,7 @@ impl Inventory {
         Ok(InventoryResult {
             inv: self.inv,
             handle,
+            _inner: self._inner.clone(),
         })
     }
 }

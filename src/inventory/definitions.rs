@@ -27,6 +27,7 @@ impl Inventory {
         Ok(InventoryResult {
             inv: self.inv,
             handle,
+            _inner: self._inner.clone(),
         })
     }
 
