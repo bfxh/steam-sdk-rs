@@ -3,6 +3,7 @@
 //! percentage-of-players table.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 impl UserStats {
     /// Asynchronously fetch the data for the percentage of players who have received each achievement
@@ -43,7 +44,7 @@ impl UserStats {
     #[must_use]
     pub fn achievement(&self, name: &str) -> stats::AchievementHelper<'_> {
         stats::AchievementHelper {
-            name: CString::new(name).unwrap(),
+            name: c_string_prefix(name),
             parent: self,
         }
     }

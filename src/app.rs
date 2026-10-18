@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::c_string_prefix;
 use std::time::Duration;
 
 /// An id for a steam app/game
@@ -165,7 +166,7 @@ impl Apps {
     ///
     /// See [Steam API](https://partner.steamgames.com/doc/api/ISteamApps#GetLaunchQueryParam)
     pub fn launch_query_param(&self, key: &str) -> String {
-        let key = CString::new(key).unwrap();
+        let key = c_string_prefix(key);
         unsafe {
             let value = sys::SteamAPI_ISteamApps_GetLaunchQueryParam(self.apps, key.as_ptr());
             let value = CStr::from_ptr(value);

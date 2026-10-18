@@ -2,11 +2,12 @@
 //! origins behind an action, and the motion read.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 impl Input {
     /// Returns the associated ControllerActionSet handle for the specified controller,
     pub fn get_action_set_handle(&self, action_set_name: &str) -> sys::InputActionSetHandle_t {
-        let name = CString::new(action_set_name).unwrap();
+        let name = c_string_prefix(action_set_name);
         unsafe { sys::SteamAPI_ISteamInput_GetActionSetHandle(self.input, name.as_ptr()) }
     }
 
@@ -24,13 +25,13 @@ impl Input {
 
     /// Get the handle of the specified Digital action.
     pub fn get_digital_action_handle(&self, action_name: &str) -> sys::InputDigitalActionHandle_t {
-        let name = CString::new(action_name).unwrap();
+        let name = c_string_prefix(action_name);
         unsafe { sys::SteamAPI_ISteamInput_GetDigitalActionHandle(self.input, name.as_ptr()) }
     }
 
     /// Get the handle of the specified Analog action.
     pub fn get_analog_action_handle(&self, action_name: &str) -> sys::InputAnalogActionHandle_t {
-        let name = CString::new(action_name).unwrap();
+        let name = c_string_prefix(action_name);
         unsafe { sys::SteamAPI_ISteamInput_GetAnalogActionHandle(self.input, name.as_ptr()) }
     }
 

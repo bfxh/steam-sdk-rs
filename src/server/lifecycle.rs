@@ -3,6 +3,7 @@
 //! server's own Steam id.
 
 use super::*;
+use crate::utils::try_c_string;
 
 impl Server {
     fn steam_game_server_init_ex(
@@ -70,7 +71,17 @@ impl Server {
         version: &str,
     ) -> Result<(Server, Client), SteamAPIInitError> {
         unsafe {
-            let version = CString::new(version).unwrap();
+            let version = match try_c_string(version) {
+                Some(version) => version,
+                // The version is part of what registers a server, and a value that is not a C string
+                // cannot be registered at all -- so this answers through the error the function already
+                // returns instead of starting a server under a shortened version.
+                None => {
+                    return Err(SteamAPIInitError::Generic(
+                        "the version string contains an interior nul".to_owned(),
+                    ))
+                }
+            };
 
             // let internal_check_interface_versions =
 

@@ -27,8 +27,15 @@ The argument is found by paren matching rather than one-line regex, so a call wr
 still counts, and `text[i:i+60]` for the method keeps `.unwrap()` attached to *this* conversion rather
 than to something later on the line.
 
-Measured 2026-10-18: 66 panicking conversions, 10 of them provably-safe literals, **56 debt across 23
-files**. This ledger is that 56, and it may only shrink.
+Ledger: `baselines/cstring_unwraps.txt`, **empty by design** -- the target is zero, like the
+panic-site ledger, and an empty measurement only counts because the `#scanned <N>` marker proves the
+ruler looked. Measured the day the gate was written (2026-10-18): 66 fallible conversions, 10 of them
+infallible literals, leaving **56 debt sites across 23 files**. Five payments that day took it to 0
+(56 -> 44 -> 31 -> 22 -> 13 -> 0): fire-and-forget setters cut at the first nul with
+`crate::utils::c_string_prefix`, setters with a failure channel answer `false`/`None`/`Err` through
+`crate::utils::try_c_string`, and `Server::init` reports through the `SteamAPIInitError` it already
+returns. One fallible conversion remains and is not debt: `CString::new("Handle was dropped")` in
+`NetConnection::drop`, which has no nul to fail on.
 """
 import re
 import sys

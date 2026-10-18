@@ -3,6 +3,7 @@
 //! half is the one that crosses into Steam.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 impl Matchmaking {
     /// Adds a string comparison filter to the lobby list request.
@@ -19,8 +20,8 @@ impl Matchmaking {
         &self,
         StringFilter(LobbyKey(key), value, kind): StringFilter,
     ) -> &Self {
-        let key = CString::new(key).unwrap();
-        let value = CString::new(value).unwrap();
+        let key = c_string_prefix(key);
+        let value = c_string_prefix(value);
         unsafe {
             sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListStringFilter(
                 self.mm,
@@ -46,7 +47,7 @@ impl Matchmaking {
         &self,
         NumberFilter(LobbyKey(key), value, comparison): NumberFilter,
     ) -> &Self {
-        let key = CString::new(key).unwrap();
+        let key = c_string_prefix(key);
         unsafe {
             sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListNumericalFilter(
                 self.mm,
@@ -72,7 +73,7 @@ impl Matchmaking {
         &self,
         NearFilter(LobbyKey(key), value): NearFilter,
     ) -> &Self {
-        let key = CString::new(key).unwrap();
+        let key = c_string_prefix(key);
         unsafe {
             sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListNearValueFilter(
                 self.mm,

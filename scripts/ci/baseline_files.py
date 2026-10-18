@@ -56,6 +56,9 @@ EXCUSED_EMPTY = {
     # measurement side is protected separately: compare_baseline.py refuses a zero-record
     # measurement that carries no `#scanned <N>` marker, so an empty ledger cannot be confused
     # with a ruler that read nothing.
+    "cstring_unwraps.txt": "target is zero since 2026-10-19 (56 caller-triggerable sites paid out in "
+                           "five batches the same day); the measurement side must prove it scanned "
+                           "(compare_baseline marker rule)",
     "handle_owners.txt": "target is zero (every raw-interface wrapper now holds the client); the "
                          "measurement side must prove it scanned (compare_baseline marker rule)",
     "no_panic_sites.txt": "target is zero; the measurement side must prove it scanned (compare_baseline marker rule)",

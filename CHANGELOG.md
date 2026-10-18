@@ -1467,6 +1467,32 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **The last thirteen caller-triggerable `CString` panics are gone, and the ledger is now zero-tolerance**
+  (`src/app.rs`, `src/input/actions.rs`, `src/matchmaking/queries.rs`, `src/networking_types/config.rs`,
+  `src/remote_storage/api.rs`, `src/server/lifecycle.rs`, `src/user/mod.rs`,
+  `src/user_stats/achievements.rs`). These were the sites with no failure channel, so the rule was
+  already set: cut at the first nul, because Steam's parameter is a `const char *` and nothing past the
+  nul could have reached it. Three exceptions are worth naming. `Server::init` *does* have a channel --
+  it returns `Result<_, SteamAPIInitError>` -- so a version string that is not a C string is now
+  reported with the existing `Generic` variant rather than registering a server under a shortened
+  version, which adds no variant and breaks no match. `NetworkingConfigValue::new_string` carried the
+  last `.expect(..)` in the crate, with a comment saying it was kept because changing the shape was worse
+  than the panic; the shape still does not change, but the panic goes, because the cut is exactly what
+  `SetString` would have read. And the three `ISteamInput` handle lookups were left as truncation rather
+  than answering with a zero handle, because the vendored header never says what `GetActionSetHandle`
+  returns for an unknown name -- inventing a not-found sentinel here would be a claim about Steam, not
+  about this crate.
+  What "empty ledger" means here is machine-checked, and three probes say so on the real tree: restoring
+  one `unwrap` yields 1 record and `compare_baseline.py` exits 1; after the restore it is 0 records and
+  rc=0; and a measurement whose `#scanned` marker is removed exits 2 -- refused, not passed -- which is
+  the difference between "clean" and "did not look". `baseline_files.py` enforces the other half: it
+  refuses a ledger listed as excused-empty the moment it holds bytes again (4094 in my first attempt,
+  which is why the payment history lives in the ruler's docstring instead), so 13 ledgers now, 3 of them
+  legitimately empty.
+  Ledger: `cstring_unwraps` 13 -> **0**, the day's five payments read 56 -> 44 -> 31 -> 22 -> 13 -> 0;
+  `module_sizes` and the rest re-recorded from the final tree; lib suite 200 passed / 15 ignored; rustc
+  warnings still 0 under the new `-D warnings` check step.
+
 - **A test that asserted nothing about its error type, and the gate that now catches its kind**
   (`src/networking_sockets/connection.rs`, `.github/workflows/ci.yml`). `a_refused_fetch_is_an_invalid_handle`
   was `matches!(name_answer(..), Err(InvalidHandle))` -- and because the test module never imported

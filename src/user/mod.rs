@@ -1,5 +1,6 @@
 use super::*;
 use crate::networking_types::NetworkingIdentity;
+use crate::utils::c_string_prefix;
 
 mod answers;
 mod auth;
@@ -188,7 +189,7 @@ impl User {
     /// Use the `authentication_session_ticket` API instead
     pub fn authentication_session_ticket_for_webapi(&self, identity: &str) -> AuthTicket {
         unsafe {
-            let c_str = CString::new(identity).unwrap();
+            let c_str = c_string_prefix(identity);
             let auth_ticket =
                 sys::SteamAPI_ISteamUser_GetAuthTicketForWebApi(self.user, c_str.as_ptr());
 

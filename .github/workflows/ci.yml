@@ -140,8 +140,10 @@ jobs:
       # InventoryUpdateHandle/ServerListRequest/FileWriteBatch）；这 7 个现在都补了 owner，台账目标 0。
       # 空台账靠尺子自带的 `#scanned <N>` 自证读过了源码，否则"没扫到"和"扫到但都合规"同形。
       # `CString::new(x).unwrap()` 在 x 含内嵌 NUL 时失败 —— x 是调用方给的话，这就是安全代码能从仓外
-      # 触发的 panic。2026-10-18 实测：66 处可失败转换里 10 处的参数是不含空字节转义的字面量（不可能失败，故不算债），
-      # 余 **56 处 / 23 个文件** 记成只许变短的债台账。字面量与 `.expect` 形态的分类理由写在尺子 docstring。
+      # 触发的 panic。2026-10-18 建门时实测 66 处可失败转换、10 处是无空字节转义的字面量（不可能失败故不算债），
+      # 余 **56 处 / 23 个文件**；同日五批付款还清（56→44→31→22→13→0），所以这条门现在与 panic 尺同性质：
+      # **空台账就是达标**，而"达标"与"没扫"的区分靠尺子自己打的 `#scanned <N>` 标记（没有它比较器退出 2）。
+      # 字面量、`.expect` 同罪、`unwrap_or_default` 不算 panic 这些分类理由都写在尺子 docstring。
       - name: fallible CString conversions stay counted as debt
         run: |
           python3 scripts/ci/cstring_unwraps.py src > "$RUNNER_TEMP/cstring_unwraps.txt"

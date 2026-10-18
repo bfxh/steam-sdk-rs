@@ -3,6 +3,7 @@
 //! calls. Everything that returns a handle or a stream lives in `files`.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 /// How many cloud files the enumeration may reserve for.
 ///
@@ -74,7 +75,7 @@ impl RemoteStorage {
             rs: self.rs,
             util: self.util,
             _inner: self.inner.clone(),
-            name: CString::new(name).unwrap(),
+            name: c_string_prefix(name),
         }
     }
 

@@ -7,6 +7,7 @@
 //! types into the same file with it.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -636,11 +637,11 @@ impl NetworkingConfigEntry {
         debug_assert_eq!(value_type.data_type(), NetworkingConfigDataType::String);
 
         let mut config = Self::new_uninitialized_config_value();
-        // An embedded NUL is the caller's own data, and `expect` here aborts in their frame; it is
-        // kept because returning `Result` would change this constructor's shape. `unwrap`-free
-        // degradation for the *other* CString sites is tracked in docs/SuperSteam-Design.md.
-        let owned =
-            std::sync::Arc::new(CString::new(value).expect("Rust string could not be converted"));
+        // This constructor returns `Self`, so there is no way to answer a string that is not a C
+        // string except by what Steam itself would see: `SetString` takes a `const char *`, so the
+        // value past an interior nul could never have arrived. Cutting is therefore the honest
+        // degradation, where `expect` was a crash in the caller's frame over their own data.
+        let owned = std::sync::Arc::new(c_string_prefix(value));
         unsafe {
             sys::SteamAPI_SteamNetworkingConfigValue_t_SetString(
                 &mut config,
