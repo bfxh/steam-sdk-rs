@@ -256,6 +256,7 @@ mod tests {
             networking_sockets_data: Mutex::new(NetworkingSocketsData {
                 sockets: Default::default(),
                 independent_connections: Default::default(),
+                fake_udp_ports: Default::default(),
                 connection_callback: Weak::new(),
             }),
         });

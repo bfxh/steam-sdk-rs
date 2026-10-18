@@ -52,21 +52,50 @@ fn received_count(raw: ::std::os::raw::c_int, asked: usize) -> usize {
     }
 }
 
+/// Claims the right to hold the one Rust wrapper around a FakeIP datagram port.
+///
+/// The rule being enforced is Steam's, quoted because it is the whole reason the type needs a claim:
+/// "If you call this function multiple times and pass the same (nonnegative) fake port index, the same
+/// object will be returned, and this object is not reference counted"
+/// (`isteamnetworkingsockets.h:906-908`). Two live wrappers of one uncounted object means `destroy()`
+/// through one leaves the other pointing at freed memory, in safe code, on a type that is `Send + Sync`
+/// -- so the second call to wrap a server index must fail rather than alias. Ephemeral ports are the
+/// opposite case and must not be deduplicated at all: "a distinct object will be returned for each
+/// call" (`:910-911`), so any negative index is allowed every time and is never recorded.
+fn claim_port(claimed: &mut std::collections::HashSet<i32>, idx: i32) -> bool {
+    if idx < 0 {
+        return true;
+    }
+    claimed.insert(idx)
+}
+
+/// Gives up a claim so the index can be wrapped again. An ephemeral port has nothing to release.
+fn release_port(claimed: &mut std::collections::HashSet<i32>, claim: Option<i32>) {
+    if let Some(idx) = claim {
+        claimed.remove(&idx);
+    }
+}
+
 /// A datagram port addressed with FakeIP, "acts like a UDP port, sending and receiving datagrams
 /// addressed using FakeIP addresses" (`steamnetworkingfakeip.h:24-25`).
 ///
-/// This type deliberately has **no `Drop`**. Steam's own docs for the factory say the object is
+/// This type has a `Drop` that gives up its claim on the index and nothing more. Steam's own docs for
+/// the factory say the object is
 /// shared and uncounted: "If you call this function multiple times and pass the same (nonnegative)
 /// fake port index, the same object will be returned, and this object is not reference counted"
 /// (`isteamnetworkingsockets.h:906-908`). An automatic destroy would then kill the other handle's
-/// object too, silently -- so disposal is explicit ([`FakeUDPPort::destroy`]) and the hazard is
-/// stated where it can be read.
+/// object too, silently -- so disposal stays explicit ([`FakeUDPPort::destroy`]). What `Drop` does
+/// instead is give up the *claim* (see below): releasing the claim without destroying the object is
+/// always safe, and holding onto it would leave an index un-wrappable forever after a wrapper was
+/// dropped without calling `destroy`.
 pub struct FakeUDPPort {
     port: *mut sys::ISteamNetworkingFakeUDPPort,
     inner: Arc<Inner>,
     /// Reused so a polling loop does not allocate per call, exactly as `NetPollGroup` does
     /// (`src/networking_sockets/mod.rs:577-582`).
     message_buffer: Vec<*mut sys::SteamNetworkingMessage_t>,
+    /// `Some(index)` while this value holds the claim on a server port; `None` for an ephemeral one.
+    claim: Option<i32>,
 }
 
 // Steam states one rule and then relaxes it: "this function call is not threadsafe with respect to
@@ -93,7 +122,23 @@ impl NetworkingSockets {
     /// obtaining a global FakeIP still reaches for `sys::` for that step; see
     /// `docs/SuperSteam-Design.md` §6.1c, which now records that boundary instead of pretending the
     /// port appeared out of nowhere.
+    ///
+    /// A second call for the same nonnegative index returns `None` while a wrapper is alive: Steam
+    /// would hand back the same uncounted object, and two owners of it is the use-after-free this
+    /// type exists to prevent. Ask for the claim first, so two threads racing on one index cannot both
+    /// get past it, and hand it back if Steam produced nothing.
     pub fn create_fake_udp_port(&self, idx_fake_server_port: i32) -> Option<FakeUDPPort> {
+        let claimed = self
+            .inner
+            .networking_sockets_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut claimed = claimed;
+        if !claim_port(&mut claimed.fake_udp_ports, idx_fake_server_port) {
+            return None;
+        }
+        drop(claimed);
+
         let port = unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CreateFakeUDPPort(
                 self.sockets,
@@ -101,13 +146,26 @@ impl NetworkingSockets {
             )
         };
         if port.is_null() {
+            self.release_claim(idx_fake_server_port);
             return None;
         }
         Some(FakeUDPPort {
             port,
             inner: self.inner.clone(),
             message_buffer: Vec::new(),
+            claim: (idx_fake_server_port >= 0).then_some(idx_fake_server_port),
         })
+    }
+
+    /// Gives up this socket's claim on one port index, tolerating a poisoned lock because the only
+    /// state touched is a set of integers.
+    fn release_claim(&self, idx: i32) {
+        let mut data = self
+            .inner
+            .networking_sockets_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        release_port(&mut data.fake_udp_ports, (idx >= 0).then_some(idx));
     }
 }
 
@@ -199,22 +257,112 @@ impl FakeUDPPort {
 
     /// Destroys this port and its internal connections.
     ///
-    /// Consuming the wrapper is what keeps Rust from handing out a second destroy, and it is the
-    /// reason there is no `Drop`: `isteamnetworkingsockets.h:906-908` says that for a server port
-    /// (index `>= 0`) "If you call this function multiple times and pass the same (nonnegative) fake
-    /// port index, the same object will be returned, and this object is not reference counted", so
-    /// two live wrappers for one index are already a
-    /// caller-side alias -- dropping one behind the other's back would be the bug, not the fix.
+    /// Consuming the wrapper is what keeps Rust from handing out a second destroy. `Drop` exists but
+    /// only releases the claim on the index, never destroys the object, because
+    /// `isteamnetworkingsockets.h:906-908` says that for a server port (index `>= 0`) "If you call
+    /// this function multiple times and pass the same (nonnegative) fake port index, the same object
+    /// will be returned, and this object is not reference counted" -- an automatic destroy would then
+    /// kill the object another owner is still using.
     /// After this call any other wrapper for the same index refers to a destroyed object; treat it
     /// as a single-owner handle.
-    pub fn destroy(self) {
-        unsafe { sys::SteamAPI_ISteamNetworkingFakeUDPPort_DestroyFakeUDPPort(self.port) }
+    pub fn destroy(mut self) {
+        // The claim is given up before the object is destroyed, and `take()` means the `Drop` that
+        // runs at the end of this method has nothing left to release. Doing it in this order closes
+        // the window where a fresh wrapper could claim an index whose object had already been
+        // destroyed -- and the header says "this object is not reference counted"
+        // (`isteamnetworkingsockets.h:906-908`), so such a wrapper would point at freed memory.
+        let claim = self.claim.take();
+        if let Some(idx) = claim {
+            let mut data = self
+                .inner
+                .networking_sockets_data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            release_port(&mut data.fake_udp_ports, Some(idx));
+            drop(data);
+        }
+        unsafe { sys::SteamAPI_ISteamNetworkingFakeUDPPort_DestroyFakeUDPPort(self.port) };
+    }
+}
+
+impl Drop for FakeUDPPort {
+    /// Releases the claim on the index, and nothing else.
+    ///
+    /// This deliberately does *not* destroy the port: the headers say the object is shared and
+    /// uncounted, so an automatic destroy would silently kill another owner's port. Releasing the
+    /// claim is safe on its own -- the worst case is that the caller wraps the same index again and
+    /// gets the same object back, which is exactly what Steam documents. Without this, a wrapper
+    /// dropped without calling `destroy` would leave the index claimed forever.
+    fn drop(&mut self) {
+        let Some(idx) = self.claim.take() else {
+            return;
+        };
+        let mut data = self
+            .inner
+            .networking_sockets_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        release_port(&mut data.fake_udp_ports, Some(idx));
     }
 }
 
 #[cfg(test)]
 mod fake_udp_tests {
     use super::*;
+
+    /// Steam's rule is "If you call this function multiple times and pass the same (nonnegative)
+    /// fake port index, the same object will be returned, and this object is not reference counted"
+    /// (`isteamnetworkingsockets.h:906-908`), so a second wrapper for that index must not exist: this
+    /// is the one line of the claim that keeps `destroy()` from leaving a dangling sibling.
+    #[test]
+    fn one_server_index_supports_one_live_wrapper() {
+        let mut claimed = std::collections::HashSet::new();
+        assert!(
+            claim_port(&mut claimed, 2000),
+            "the first wrapper claims the index"
+        );
+        assert!(
+            !claim_port(&mut claimed, 2000),
+            "a second wrapper for the same index must be refused"
+        );
+        assert!(
+            claim_port(&mut claimed, 2001),
+            "a different index is unaffected"
+        );
+    }
+
+    /// Ephemeral ports are the documented opposite case -- "a distinct object will be returned for
+    /// each call" (`:910-911`) -- so deduplicating them would refuse handles Steam says are unique.
+    #[test]
+    fn ephemeral_ports_are_never_claimed_or_deduplicated() {
+        let mut claimed = std::collections::HashSet::new();
+        assert!(claim_port(&mut claimed, -1));
+        assert!(claim_port(&mut claimed, -1));
+        assert!(claim_port(&mut claimed, i32::MIN));
+        assert!(
+            claimed.is_empty(),
+            "nothing about an ephemeral port is recorded"
+        );
+    }
+
+    /// Giving a claim back is what lets an index be wrapped again -- and only for a claimed index.
+    #[test]
+    fn releasing_a_claim_makes_the_index_wrappable_again() {
+        let mut claimed = std::collections::HashSet::new();
+        assert!(claim_port(&mut claimed, 2000));
+        release_port(&mut claimed, Some(2000));
+        assert!(
+            claim_port(&mut claimed, 2000),
+            "the index is free once released"
+        );
+        release_port(&mut claimed, Some(2000));
+        release_port(&mut claimed, Some(4242));
+        release_port(&mut claimed, None);
+        assert!(
+            claim_port(&mut claimed, -1),
+            "and an ephemeral port stays claimable"
+        );
+    }
 
     /// The vendored header is the source of both numbers; a copy of a copy proves nothing.
     ///

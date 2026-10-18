@@ -14,7 +14,7 @@ use sys::{EServerMode, ESteamAPIInitResult, SteamErrMsg};
 
 use core::ffi::c_void;
 use std::cell::Cell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Debug, Formatter};
 use std::sync::mpsc::Sender;
@@ -371,6 +371,12 @@ struct NetworkingSocketsData {
     /// Connections to a remote listening port
     independent_connections:
         HashMap<sys::HSteamNetConnection, Sender<networking_types::NetConnectionEvent>>,
+    /// FakeIP server-port indexes this crate has already wrapped.
+    ///
+    /// Steam returns the same, unreference-counted object for a repeated nonnegative index, so two
+    /// live wrappers would mean one of them can destroy the other's object; the claim is what keeps
+    /// that from happening. Ephemeral (`-1`) ports get a distinct object per call and are never listed.
+    fake_udp_ports: HashSet<i32>,
     connection_callback: Weak<CallbackHandle>,
 }
 
@@ -435,6 +441,7 @@ impl Client {
                 networking_sockets_data: Mutex::new(NetworkingSocketsData {
                     sockets: Default::default(),
                     independent_connections: Default::default(),
+                    fake_udp_ports: Default::default(),
                     connection_callback: Default::default(),
                 }),
             });

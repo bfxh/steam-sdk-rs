@@ -1,10 +1,11 @@
-src/lib.rs 829
+src/lib.rs 836
 src/networking_types/config.rs 675
 src/error.rs 603
 src/ugc/answers.rs 600
 src/ugc/mod.rs 598
 src/matchmaking_servers.rs 580
 src/timeline.rs 578
+src/networking_sockets/fake_udp.rs 576
 src/http.rs 566
 src/callback.rs 560
 src/ugc/types.rs 559
@@ -12,14 +13,13 @@ src/app.rs 550
 src/networking_sockets/connection.rs 536
 src/networking_utils.rs 510
 src/networking_sockets/fake_ip.rs 506
-src/networking_messages.rs 495
+src/networking_messages.rs 496
 src/parties.rs 486
 src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 458
 src/user/voice.rs 445
-src/networking_sockets/fake_udp.rs 428
 src/ugc/update.rs 404
 src/friends/friend.rs 401
 src/user/duration.rs 396
@@ -27,7 +27,7 @@ src/networking_types/end.rs 384
 src/user/mod.rs 381
 src/lib_tests.rs 354
 src/html_surface/browser.rs 352
-src/networking_types/message.rs 341
+src/networking_types/message.rs 342
 src/inventory/result.rs 338
 src/networking_types/identity.rs 337
 src/ugc/ugc_tests.rs 331
@@ -61,7 +61,7 @@ src/input/origins.rs 178
 src/utils/text_input.rs 178
 src/friends/clans.rs 174
 src/server/config.rs 172
-src/server/lifecycle.rs 170
+src/server/lifecycle.rs 171
 src/music.rs 163
 src/friends/clan_chat.rs 157
 src/friends/callbacks.rs 155

@@ -1435,6 +1435,35 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **`create_fake_udp_port` could hand out two owners of one object, so `destroy` was a
+  use-after-free** (`src/networking_sockets/fake_udp.rs`, `src/lib.rs`). Steam's own words: "If you
+  call this function multiple times and pass the same (nonnegative) fake port index, the same object
+  will be returned, and this object is not reference counted" (`isteamnetworkingsockets.h:906-908`).
+  The wrapper consumed itself for `destroy` and said in prose that two live wrappers would be a
+  caller-side alias, but nothing stopped the second call from succeeding -- and `FakeUDPPort` is
+  `Send + Sync`, so `create(2000)` twice, `destroy()` on one, and sending on the other is a free
+  read of freed memory in safe code, possibly on another thread. Server indexes now have to be claimed:
+  `claim_port` records a nonnegative index and refuses a second claim while a wrapper is alive, while
+  ephemeral ports (`-1`) are never recorded because "a distinct object will be returned for each call"
+  (`:910-911`) -- deduplicating those would withhold handles Steam documents as unique. The claim
+  travels with the value and is released by `destroy` (before the object is destroyed, so no fresh
+  wrapper can claim a dead index) and by `Drop` -- which still does not destroy anything, because an
+  automatic destroy is the bug this type was written to avoid; without it, dropping a wrapper without
+  `destroy` would leave the index un-wrappable forever. `create_fake_udp_port`'s signature and its
+  `Option` return are unchanged; a second concurrent wrapper is now `None` instead of an alias.
+  Three tests cover the claim (one wrapper per server index, ephemerals never deduplicated, release
+  re-opens the index) and three mutations were replayed against them: no-dedupe, dedupe-everything,
+  and a release that does nothing. **All three turned their own test red by assertion message, not by
+  a crash**, which is the distinction this unit has started recording: a mutation that only fails
+  because a fixture dereferences a null pointer proves nothing about the rule.
+  Two things the gate caught while the change was being made, both mine: the new comments cited
+  `isteamnetworkingsockets.h` twice without quoting it, which pushed the `~undeclared` column from 0
+  to 2 -- paid back by quoting Steam's sentence rather than re-recording the growth; and a live pointer
+  in `docs/SuperSteam-Design.md:1849` turned out to have been wrong all along, pointing at
+  `src/lib.rs:512-518` to illustrate the `timeline` accessor when those lines hold `utils`. The
+  7-line addition to `lib.rs` moved it onto a blank line, the gate flagged it, and re-measuring found
+  the accessor at `src/lib.rs:764-771` with the runtime null check it was citing at `:771`.
+
 - **Three reads of Steam's fixed-size text fields could over-read the array or abort the callback**
   (`src/user_stats/stat_callback.rs`, `src/networking_utils.rs`, new helper in
   `src/utils/strings.rs`). `UserAchievementStored` and `UserAchievementIconFetched` each did
