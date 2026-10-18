@@ -932,9 +932,9 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 - `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
   of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
-  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:454-465`），
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:508-519`），
   入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
-  （`src/matchmaking_servers.rs:214`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
+  （`src/matchmaking_servers.rs:268`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
   即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
   就是这个形状。这个 Steam 调用返回 `void`，所以封它也不产生一条能被观测的成功/失败；要不同词序的
   人可以直取 `sys::SteamAPI_ISteamUser_AdvertiseGame`，**故意的错比凭猜的 wrapper 好**。

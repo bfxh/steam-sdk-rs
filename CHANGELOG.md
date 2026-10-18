@@ -1467,6 +1467,34 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **A server-list ping that is not a `u64` no longer aborts the list** (`src/matchmaking_servers.rs`).
+  `GameServerItem::from_ptr` built its `Duration` field with `raw.m_nPing.try_into().unwrap()` -- a
+  fallible conversion of an `int` Steam wrote, whose failure mode was a panic while decoding a query
+  answer, inside a callback frame. The header types the field and seeds it but never bounds its sign:
+  "current ping time in milliseconds" (`matchmakingtypes.h:177`) and the constructor line
+  "m_nPing = m_nAppID = m_nPlayers = m_nMaxPlayers = m_nBotPlayers = m_ulTimeLastPlayed = m_nServerVersion = 0"
+  (`matchmakingtypes.h:211`). `ping_duration` now reads a negative as no measured delay and says so in
+  the doc -- the crate's own choice about an undocumented sign, not a claim about Steam.
+  What it deliberately does *not* do is borrow the networking layer's sentinels: `PingEstimate` keeps
+  `-1` and `-2` as `Failed` and `Unknown` because `steamnetworkingtypes.h:1089-1090` declares those two
+  constants for *route estimates*, and treating one field's named values as another field's would be a
+  claim no header supports. The sharper public answer is a three-state `ping` (or `Option<Duration>`),
+  which changes a field type on a struct users read directly, so it is offered rather than taken.
+  Three tests, including the anti-vacuity one that asserts `u64::try_from(-1).is_err()` -- so the
+  fallback arm is proved live rather than decorated. Four mutants, all caught: `unwrap()` back in place
+  died by aborting (the behaviour under test), `unwrap_or(1)`, `from_secs`, and flooring positives at 1
+  each died on an `assert_eq!`, so those are locks. Ledger: `module_sizes` 587 -> 641 for this file
+  (40 of the 54 lines are the doc and the three tests; the helper is inline in the module that owns the
+  struct, the way `messages_received` and `name_answer` are), registered total 29319 -> 29373.
+  `header_citations` picked up the two new spans: 184 spans, 31 files citing, all three debt columns 0
+  (three zero rows registered for `src/matchmaking_servers.rs`, which cited no header before).
+  Inserting 54 lines also moved two pointers in `docs/SuperSteam-Design.md` off their targets: the
+  inbound `Ipv4Addr::from(m_unIP)` reading drifted 214 -> 268, and the outbound `ping_server` body
+  454-465 -> 508-519. `doc_pointers.py` went red on the first and *stayed green on the second* -- it
+  rejects a blank or missing line, not a line that moved to different code, which is why both spans
+  were re-anchored by reading the file rather than by trusting the ruler's verdict.
+  Panic-capable expressions in production sources: **41 -> 40** (`.unwrap()` 21 -> 20).
+
 - **Both `send_messages` sites stop panicking on an error code this crate has never seen**
   (`src/networking_sockets/mod.rs`, `src/networking_sockets/listen_socket.rs`). The out-array of
   `ISteamNetworkingSockets::SendMessages` is `int64` -- `pOutMessageNumberOrResult: *mut int64` in the

@@ -5,6 +5,60 @@ use std::time::Duration;
 
 use super::*;
 
+/// The query's round-trip time, read out of a field the SDK types as a plain `int`.
+///
+/// The header documents the value as "current ping time in milliseconds"
+/// (`matchmakingtypes.h:177`) and its constructor seeds it with
+/// "m_nPing = m_nAppID = m_nPlayers = m_nMaxPlayers = m_nBotPlayers = m_ulTimeLastPlayed = m_nServerVersion = 0"
+/// (`matchmakingtypes.h:211`); neither says anything about the sign. The field on
+/// `GameServerItem` is a `Duration`, which cannot hold a negative, and the caller here is walking a
+/// server list -- so a negative answer is read as no measured delay instead of aborting the caller's
+/// frame mid-list. That is this crate's own choice about an undocumented sign, not a claim about what
+/// Steam means by it. The networking layer *does* have named negative answers for its own ping field
+/// -- `PingEstimate` keeps `-1` and `-2` as `Failed` and `Unknown`, because `steamnetworkingtypes.h:1089-1090`
+/// declares them -- and nothing here borrows those constants: a master-server query answer and a route
+/// estimate are two different fields, and treating one's sentinels as the other's would be a claim about
+/// Steam that no header supports.
+fn ping_duration(raw: std::os::raw::c_int) -> Duration {
+    Duration::from_millis(u64::try_from(raw).unwrap_or(0))
+}
+
+#[cfg(test)]
+mod ping_tests {
+    //! The pure half of reading `gameserveritem_t`: the ping field. Filling the struct needs a query
+    //! against a running master server; deciding what one `int` means needs nothing, so the decision
+    //! lives in `ping_duration` and is judged here rather than registered as uncovered.
+    use super::ping_duration;
+    use std::time::Duration;
+
+    #[test]
+    fn a_plain_count_of_milliseconds_becomes_that_duration() {
+        assert_eq!(ping_duration(0), Duration::ZERO);
+        assert_eq!(ping_duration(1), Duration::from_millis(1));
+        assert_eq!(ping_duration(37_000), Duration::from_millis(37_000));
+        assert_eq!(
+            ping_duration(i32::MAX),
+            Duration::from_millis(i32::MAX as u64)
+        );
+    }
+
+    /// The case the old `raw.m_nPing.try_into().unwrap()` aborted on: an `i32` that is not a valid
+    /// `u64` has no `Duration` to become, and a server list must not die for it.
+    #[test]
+    fn a_negative_ping_reads_as_no_measured_delay() {
+        assert_eq!(ping_duration(-1), Duration::ZERO);
+        assert_eq!(ping_duration(i32::MIN), Duration::ZERO);
+    }
+
+    /// Anti-vacuity: the fallible conversion the function is built on really can fail, which is what
+    /// makes the arm above a live branch rather than defensive decoration.
+    #[test]
+    fn the_conversion_being_made_total_really_is_fallible() {
+        assert!(u64::try_from(-1).is_err());
+        assert!(u64::try_from(0).is_ok());
+    }
+}
+
 macro_rules! matchmaking_servers_callback {
     (
         $name:ident;
@@ -201,7 +255,7 @@ impl GameServerItem {
             appid: AppId(raw.m_nAppID),
             players: raw.m_nPlayers,
             bot_players: raw.m_nBotPlayers,
-            ping: Duration::from_millis(raw.m_nPing.try_into().unwrap()),
+            ping: ping_duration(raw.m_nPing),
             max_players: raw.m_nMaxPlayers,
             server_version: raw.m_nServerVersion,
             steamid: SteamId(raw.m_steamID.m_steamid.m_unAll64Bits),
