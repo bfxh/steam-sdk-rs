@@ -1435,6 +1435,30 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Four batched receives believed Steam's count in two different ways, and two of them not at
+  all** (`src/networking_sockets/mod.rs`, `poll_group.rs`, `fake_udp.rs`, `connection.rs`,
+  `src/networking_messages.rs`). `ReceiveMessagesOnConnection`, `ReceiveMessagesOnPollGroup`, the
+  Fake UDP port's `ReceiveMessages` and `ReceiveMessagesOnChannel` all answer with a signed `int`,
+  and the crate had four private answers to that: the poll group and the Fake port each carried their
+  own clamp of the same rule (two functions, two test sets, worded differently),
+  `receive_messages_internal` cut the negative to `InvalidHandle` but passed an over-large count
+  straight to `set_len`, and `receive_messages_on_channel` cast the number through with no check at
+  all -- so the documented `-1` became ~1.8e19 slots and `set_len` described a `Vec` longer than the
+  `batch_size` pointers that were allocated. All four now call one `messages_received(count,
+  offered)` whose doc block carries the two header sentences that license the cut ("If the connection
+  handle is invalid, -1 is returned." at `isteamnetworkingsockets.h:321`; the poll group inherits the
+  connection's guarantees at `:552-553`). Mutation replay on the shared rule: cutting the negative
+  branch turned `the_invalid_handle_minus_one_reads_as_no_messages` red by assertion message, and
+  cutting the upper bound turned `an_over_large_count_is_clamped_to_the_offered_slots` red the same
+  way. A third probe replaced the *wiring* at the poll group with the old `returned as usize` and
+  every test stayed green (rc=0), which is recorded rather than glossed: the four call sites need a
+  live client, so what CI judges here is the rule, not the claim that each caller reaches it.
+  Ledger effects are a relocation, not growth: `module_sizes` total is unchanged at 28742 (five rows
+  moved: +54 in `networking_sockets/mod.rs`, -41 in `poll_group.rs`, -26 in `fake_udp.rs`, +7 in
+  `connection.rs`, +6 in `networking_messages.rs`), `header_citations` went 166 -> 168 spans and 26
+  -> 27 files with all three debt columns still 0, and the lib test count went 181 -> 180 because one
+  duplicate assertion set was deleted when its function was.
+
 - **`create_fake_udp_port` could hand out two owners of one object, so `destroy` was a
   use-after-free** (`src/networking_sockets/fake_udp.rs`, `src/lib.rs`). Steam's own words: "If you
   call this function multiple times and pass the same (nonnegative) fake port index, the same object

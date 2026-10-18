@@ -48,6 +48,60 @@ unsafe impl Send for NetworkingSockets {}
 
 unsafe impl Sync for NetworkingSockets {}
 
+/// How many messages to believe Steam wrote, out of the slots the caller offered.
+///
+/// Four batched receives answer with a plain `int` -- `ReceiveMessagesOnConnection`,
+/// `ReceiveMessagesOnPollGroup`, the Fake UDP port's `ReceiveMessages`, and
+/// `ISteamNetworkingMessages::ReceiveMessagesOnChannel` -- and the crate must not turn a hostile or
+/// merely confused number into a slice length: cast through, the invalid-handle answer is ~1.8e19 and
+/// `set_len` would then describe a longer `Vec` than any allocation, which is UB the moment the
+/// messages are drained; a count above the slots offered claims memory nobody handed over. Both are
+/// cut here, in one place, because the callers used to keep their own copies of the same rule -- two
+/// of them clamped, two of them did not.
+///
+/// The negative case is documented rather than invented: "Returns the number of messages returned
+/// into your array, up to nMaxMessages." and "If the connection handle is invalid, -1 is returned."
+/// (`isteamnetworkingsockets.h:320-321`), and `ReceiveMessagesOnPollGroup` claims "the same
+/// guarantees are present as mentioned in ReceiveMessagesOnConnection."
+/// (`isteamnetworkingsockets.h:552-553`). Nor is it defensive-only: `create_poll_group` returns
+/// whatever Steam hands back without rejecting `k_HSteamNetPollGroup_Invalid`, so a failed create
+/// reaches those calls with an invalid handle -- exactly the case the header says answers -1.
+pub(crate) fn messages_received(raw: std::os::raw::c_int, offered: usize) -> usize {
+    usize::try_from(raw).unwrap_or(0).min(offered)
+}
+
+#[cfg(test)]
+mod receive_count_tests {
+    //! Pure half of the batched receive: the count clamp. The FFI call itself needs a running
+    //! client, but every decision made from its return value does not, so the decisions live in
+    //! `messages_received` and are judged here rather than registered as uncovered.
+    use super::messages_received;
+
+    #[test]
+    fn a_valid_count_becomes_that_length() {
+        assert_eq!(messages_received(3, 8), 3);
+        assert_eq!(messages_received(0, 8), 0);
+        assert_eq!(messages_received(8, 8), 8);
+    }
+
+    /// "If the connection handle is invalid, -1 is returned." (`isteamnetworkingsockets.h:321`).
+    /// Cast through, that used to become ~1.8e19 and `set_len` would describe a `Vec` longer than
+    /// any allocation.
+    #[test]
+    fn the_invalid_handle_minus_one_reads_as_no_messages() {
+        assert_eq!(messages_received(-1, 8), 0);
+        assert_eq!(messages_received(i32::MIN, 8), 0);
+    }
+
+    /// A count above the slots offered is truncated to them: Steam may not write more pointers than
+    /// the array holds, and if the number says otherwise the array is the authority.
+    #[test]
+    fn an_over_large_count_is_clamped_to_the_offered_slots() {
+        assert_eq!(messages_received(99, 8), 8);
+        assert_eq!(messages_received(i32::MAX, 0), 0);
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("operation was unsuccessful an invalid handle was returned")]
 pub struct InvalidHandle;

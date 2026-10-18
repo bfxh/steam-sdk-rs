@@ -23,6 +23,7 @@
 //! you may find the symmetric connection mode of ISteamNetworkingSockets useful.
 //! (See k_ESteamNetworkingConfig_SymmetricConnect.)
 // TODO: examples here
+use crate::networking_sockets::messages_received;
 use crate::networking_types::{
     NetConnectionInfo, NetConnectionRealTimeInfo, NetworkingConnectionState, NetworkingIdentity,
     NetworkingMessage, SendFlags,
@@ -108,7 +109,12 @@ impl NetworkingMessages {
 
     /// Reads the next message that has been sent from another user on the given channel.
     ///
-    /// `batch_size` is the maximum number of messages that can be received at once.
+    /// `batch_size` is the maximum number of messages that can be received at once, and it is also
+    /// the bound the answer is trusted to: "Returns number of messages returned into your list."
+    /// (`isteamnetworkingmessages.h:86`) is a count of what Steam wrote, not a length this side has
+    /// to believe, so the number goes through `messages_received` before `set_len` sees it. Without
+    /// that, the answer was cast straight through -- and a negative one becomes ~1.8e19, which is
+    /// `set_len` describing a `Vec` far longer than the `batch_size` slots that were allocated.
     ///
     /// # Example
     /// ```no_run
@@ -140,7 +146,7 @@ impl NetworkingMessages {
                 buffer.as_mut_ptr(),
                 batch_size as _,
             );
-            buffer.set_len(message_count as usize);
+            buffer.set_len(messages_received(message_count, batch_size));
         }
 
         buffer

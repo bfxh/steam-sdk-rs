@@ -37,21 +37,6 @@ fn fake_message_len(len: usize) -> Result<u32, SteamError> {
     u32::try_from(len).map_err(|_| SteamError::InvalidParameter)
 }
 
-/// How many received messages to believe, out of the batch Steam was asked to fill.
-///
-/// `ReceiveMessages` returns a plain `int` and the crate must not turn a hostile or merely
-/// confused number into a slice length: a negative answer would wrap to an enormous `usize` at
-/// `set_len`, and an answer above `asked` would claim slots the caller never offered. Both are cut
-/// here, which is the same discipline as `written_bytes` in `src/user/voice.rs` -- Steam's count is
-/// trusted only as far as the memory on this side allows.
-fn received_count(raw: ::std::os::raw::c_int, asked: usize) -> usize {
-    if raw < 0 {
-        0
-    } else {
-        (raw as usize).min(asked)
-    }
-}
-
 /// Claims the right to hold the one Rust wrapper around a FakeIP datagram port.
 ///
 /// The rule being enforced is Steam's, quoted because it is the whole reason the type needs a claim:
@@ -209,7 +194,7 @@ impl FakeUDPPort {
     /// returned message(s) will always contain a FakeIP.  See
     /// ISteamNetworkingUtils::GetRealIdentityForFakeIP."
     ///
-    /// Steam's return value is clamped by `received_count` before it is used as a length, so a
+    /// Steam's return value is clamped by `messages_received` before it is used as a length, so a
     /// negative or over-large answer cannot make this read slots that were never offered.
     pub fn receive_messages(&mut self, batch_size: usize) -> Vec<NetworkingMessage> {
         if batch_size == 0 {
@@ -229,7 +214,8 @@ impl FakeUDPPort {
             );
             // Only the slots Steam actually filled may become owned messages; a clamped count
             // keeps a bad answer from turning into a length this side never allocated.
-            self.message_buffer.set_len(received_count(raw, batch_size));
+            self.message_buffer
+                .set_len(messages_received(raw, batch_size));
         }
         self.message_buffer
             .drain(..)
@@ -454,18 +440,6 @@ mod fake_udp_tests {
             fake_message_len(usize::MAX),
             Err(SteamError::InvalidParameter)
         );
-    }
-
-    #[test]
-    fn a_receive_count_is_clamped_to_the_slots_that_were_offered() {
-        assert_eq!(received_count(-1, 8), 0);
-        assert_eq!(received_count(i32::MIN, 8), 0);
-        assert_eq!(received_count(0, 8), 0);
-        assert_eq!(received_count(3, 8), 3);
-        assert_eq!(received_count(8, 8), 8);
-        // Claiming more slots than were offered must not widen the slice.
-        assert_eq!(received_count(1000, 8), 8);
-        assert_eq!(received_count(i32::MAX, 0), 0);
     }
 
     /// Every `steamnetworkingfakeip.h` line citation this file's docs make, checked against the

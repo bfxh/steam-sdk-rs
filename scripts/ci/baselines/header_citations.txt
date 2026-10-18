@@ -19,6 +19,14 @@
 # header's own words or had their quotation marks taken off. Emphasis quotes shorter than MIN_PHRASE
 # ("nil value", "not yet") are counted as neither: 8 such phrases were dropped from the debt column
 # when that distinction was made.
+# Re-recorded 2026-10-18 for the batched-receive merge: 27 files cite the SDK (was 26) and 168
+# spans (was 166), still 0/0/0. The four ReceiveMessages* callers used to hold two clamps and two
+# un-clamped `set_len` calls of a signed count; they now share `messages_received` in
+# src/networking_sockets/mod.rs, so the two header sentences that license the cut (the -1 answer at
+# isteamnetworkingsockets.h:320-321 and the poll group inheriting it at :552-553) moved from
+# poll_group.rs into that one block, and two new files started citing (mod.rs, and
+# networking_messages.rs for isteamnetworkingmessages.h:86 -- the channel receive had no clamp at
+# all). poll_group.rs now cites nothing, which is why its three rows left the ledger.
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
 src/networking_messages.rs~undeclared 0
@@ -43,6 +51,9 @@ src/matchmaking/chat.rs~undeclared 0
 src/networking_sockets/connect.rs 0
 src/networking_sockets/connect.rs~unjudged 0
 src/networking_sockets/connect.rs~undeclared 0
+src/networking_sockets/connection.rs 0
+src/networking_sockets/connection.rs~unjudged 0
+src/networking_sockets/connection.rs~undeclared 0
 src/networking_sockets/fake_ip.rs 0
 src/networking_sockets/fake_ip.rs~unjudged 0
 src/networking_sockets/fake_ip.rs~undeclared 0
@@ -52,9 +63,9 @@ src/networking_sockets/fake_udp.rs~undeclared 0
 src/networking_sockets/listen.rs 0
 src/networking_sockets/listen.rs~unjudged 0
 src/networking_sockets/listen.rs~undeclared 0
-src/networking_sockets/poll_group.rs 0
-src/networking_sockets/poll_group.rs~unjudged 0
-src/networking_sockets/poll_group.rs~undeclared 0
+src/networking_sockets/mod.rs 0
+src/networking_sockets/mod.rs~unjudged 0
+src/networking_sockets/mod.rs~undeclared 0
 src/networking_types/config.rs 0
 src/networking_types/config.rs~unjudged 0
 src/networking_types/config.rs~undeclared 0

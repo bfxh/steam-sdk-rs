@@ -48,24 +48,15 @@ unsafe impl Send for NetPollGroup {}
 
 unsafe impl Sync for NetPollGroup {}
 
-/// Turns a `ReceiveMessages*` return value into a length `set_len` may trust.
-///
-/// The count arrives as a signed `c_int`, and Steam's contract for the connection version is
-/// "Returns the number of messages returned into your array, up to nMaxMessages.  If the connection
-/// handle is invalid, -1 is returned" (`isteamnetworkingsockets.h:320-321`);
-/// `ReceiveMessagesOnPollGroup` claims "the same guarantees are present as mentioned in
-/// ReceiveMessagesOnConnection" (`:552-553`). Cast through, `-1 as usize` is ~1.8e19: `set_len` would
-/// then describe a longer `Vec` than any allocation, which is UB the moment the messages are drained.
-/// An over-large count is clamped to the capacity too, since that is all the array could hold.
-///
-/// This is not a defensive-only path: `create_poll_group` returns whatever Steam hands back without
-/// rejecting `k_HSteamNetPollGroup_Invalid`, so a failed create reaches this call with an invalid
-/// handle -- exactly the case the header says answers -1.
-fn message_count(returned: std::os::raw::c_int, capacity: usize) -> usize {
-    usize::try_from(returned).unwrap_or(0).min(capacity)
-}
-
 impl NetPollGroup {
+    /// Drains up to `batch_size` messages from the group.
+    ///
+    /// The count clamp is `super::messages_received`, shared with the Fake UDP port's receive so that
+    /// one contract has one implementation. What is specific to this caller is that `batch_size` is
+    /// both the number handed to Steam as `nMaxMessages` and the bound the clamp uses -- the buffer
+    /// is reserved to at least that, so the array can always hold what is believed -- and that
+    /// `create_poll_group` hands back an unvalidated handle, so the invalid-handle answer of -1 is
+    /// reachable here rather than merely theoretical.
     pub fn receive_messages(&mut self, batch_size: usize) -> Vec<NetworkingMessage> {
         if self.message_buffer.capacity() < batch_size {
             // reserve(additional) ensures capacity >= len + additional.
@@ -82,7 +73,7 @@ impl NetPollGroup {
                 batch_size as _,
             )
         };
-        let count = message_count(returned, self.message_buffer.capacity());
+        let count = messages_received(returned, batch_size);
         unsafe { self.message_buffer.set_len(count) };
 
         self.message_buffer
@@ -100,38 +91,6 @@ impl Drop for NetPollGroup {
         let _was_successful = unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_DestroyPollGroup(self.sockets, self.handle)
         };
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Pure half of the receive path: the count clamp. The FFI call itself needs a running client,
-    //! but every decision made from its return value does not, so the decisions are split out and
-    //! judged here rather than registered as uncovered.
-    use super::message_count;
-
-    #[test]
-    fn a_valid_count_becomes_that_length() {
-        assert_eq!(message_count(3, 8), 3);
-        assert_eq!(message_count(0, 8), 0);
-        assert_eq!(message_count(8, 8), 8);
-    }
-
-    /// Steam's contract says "If the connection handle is invalid, -1 is returned"
-    /// (`isteamnetworkingsockets.h:321`). Cast through,
-    /// it used to become ~1.8e19 and `set_len` would then describe a `Vec` longer than any allocation.
-    #[test]
-    fn the_invalid_handle_minus_one_reads_as_no_messages() {
-        assert_eq!(message_count(-1, 8), 0);
-        assert_eq!(message_count(i32::MIN, 8), 0);
-    }
-
-    /// A count above the capacity is truncated to it: Steam may not write more pointers than the array
-    /// holds, and if the number says otherwise the array is the authority.
-    #[test]
-    fn an_over_large_count_is_clamped_to_the_capacity() {
-        assert_eq!(message_count(99, 8), 8);
-        assert_eq!(message_count(i32::MAX, 0), 0);
     }
 }
 

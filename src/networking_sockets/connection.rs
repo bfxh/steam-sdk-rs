@@ -342,6 +342,12 @@ impl NetConnection {
     }
 
     /// Internal function used by `receive_messages` and `receive_messages_noalloc`.
+    ///
+    /// Steam's documented answer for an invalid handle is -1 ("If the connection handle is invalid,
+    /// -1 is returned." -- `isteamnetworkingsockets.h:321`), which is why this one reports
+    /// `InvalidHandle` instead of reading zero messages; the upper bound comes from
+    /// `messages_received`, the same clamp the poll group and the Fake UDP port use, so a count above
+    /// the slots offered cannot widen the buffer past what the caller reserved.
     fn receive_messages_internal(&mut self, batch_size: usize) -> Result<usize, InvalidHandle> {
         debug_assert!(self.message_buffer.capacity() >= batch_size);
         self.message_buffer.clear();
@@ -356,10 +362,11 @@ impl NetConnection {
         if message_count < 0 {
             return Err(InvalidHandle);
         }
+        let count = messages_received(message_count, batch_size);
         unsafe {
-            self.message_buffer.set_len(message_count as usize);
+            self.message_buffer.set_len(count);
         }
-        Ok(message_count as usize)
+        Ok(count)
     }
 
     /// Fetch the next available message(s) from the connection, if any.
