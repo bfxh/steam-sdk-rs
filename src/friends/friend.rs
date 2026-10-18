@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::utils::c_string_prefix;
+use crate::utils::try_c_string;
 
 pub struct Friend {
     id: SteamId,
@@ -188,8 +189,10 @@ impl Friend {
     }
 
     /// Get a Rich Presence value from a specified friend.
+    /// A key containing a nul byte answers `None`: that key cannot be queried, and asking Steam for
+    /// its prefix would be a different question with the same shape of answer.
     pub fn rich_presence(&self, key: &str) -> Option<String> {
-        let key = CString::new(key).unwrap();
+        let key = try_c_string(key)?;
         let value = unsafe {
             sys::SteamAPI_ISteamFriends_GetFriendRichPresence(self.friends, self.id.0, key.as_ptr())
         };

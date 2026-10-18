@@ -1467,6 +1467,44 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **A test that asserted nothing about its error type, and the gate that now catches its kind**
+  (`src/networking_sockets/connection.rs`, `.github/workflows/ci.yml`). `a_refused_fetch_is_an_invalid_handle`
+  was `matches!(name_answer(..), Err(InvalidHandle))` -- and because the test module never imported
+  `InvalidHandle`, that pattern is not a type check but a *binding*: rustc read it as "bind whatever the
+  error is to a variable named InvalidHandle", warned it was unused, and the assertion passed for any `Err`
+  at all. The name had to be imported before `{ .. }` could even compile, which is how the vacuous form
+  became visible. The repo's clippy step deliberately runs without `-D warnings` (style lints are many and
+  low-value), and nothing else looked at rustc's diagnostics, so the only signal available was a warning
+  nobody was required to read.
+  The `check (all targets)` step now sets `RUSTFLAGS: -D warnings`, which costs no extra build (it *is*
+  the build) and is measured to be empty: rustc emits 2 warnings across all targets before this fix and 0
+  after. Dependency crates are safe from it -- cargo caps their lints -- so the flag only ever bites this
+  workspace's code. Proved on the real tree rather than asserted: injecting `let probe_warning_that_nothing_gated_before = 5;`
+  into a test made the step exit 101 with `error: unused variable`, and removing it returned rc=0. Clippy's
+  own style categories stay undeclared-by-design, unchanged: measured 130 clippy warnings, top items
+  `Result<_, ()>` style (23), needless `return` (9), bare `#[must_use]` (9).
+
+- **Nine readers with a failure channel answer "no such thing" instead of crashing on a nul byte**
+  (`src/friends/friend.rs`, `src/matchmaking/mod.rs`, `src/screenshots.rs`,
+  `src/user_stats/{stats,stats_io}.rs`). `rich_presence`, `lobby_data` and `get_lobby_member_data`
+  return `Option<String>`, the four stat get/set methods return `Result<_, ()>`,
+  `get_achievement_display_attribute` returns `Result<&str, ()>`, and `path_to_absolute_cstring` already
+  returned `Option<CString>` -- every one of them had a way to say no, and all of them used
+  `CString::new(x).unwrap()` (or `.expect("Failed to create c_str from key parameter")`) instead. They
+  go through `try_c_string` now, so a key or stat name containing a nul is refused rather than looked up
+  under its own prefix: `None`/`Err(())` is the answer those types already mean for "not found", which
+  makes this a narrower claim than inventing a new error. No signature moved. The asymmetry this leaves
+  is deliberate and documented in both helpers: the same input in a *setter with no channel* is cut at
+  the nul, because there the alternative to acting is panicking.
+  Measured honesty about coverage: the rule is tested
+  (`an_interior_nul_is_refused_rather_than_acted_on`, which a mutation making `try_c_string` infallible
+  turned red by assertion message), the per-site choice is not -- the probe that replaced one call
+  site's refusal with the truncating helper left the suite green (rc=0), since all nine need a running
+  client, and that verdict carries over to these nine by the same argument.
+  Ledger: `cstring_unwraps` 22 -> **13 across 8 files** -- the day's payments read 56 -> 44 -> 31 -> 22
+  -> 13 -- `module_sizes` 29225 -> 29239, lib suite 200 passed / 15 ignored, `type_surface` 857
+  unchanged. What remains is 13 sites in methods with no failure channel at all.
+
 - **Nine setters with a failure channel now refuse instead of quietly acting on different text**
   (`src/friends/rich_presence.rs`, `src/input/core.rs`, `src/matchmaking/mod.rs`, `src/ugc/mod.rs`,
   `src/utils/text_input.rs`, new helper in `src/utils/strings.rs`). These are the sites where the
@@ -1505,7 +1543,7 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   ruins a report: `cstring_unwraps.py` skips test modules by importing
   `api_coverage.strip_test_modules`, and that function **dropped** lines. Line numbers were then counted
   on text that was shorter than the file, so every `path:line` it printed was wrong in exactly the files
-  that have a `#[cfg(test)]` module -- it pointed me at `src/screenshots.rs:280` as a production setter
+  that have a `#[cfg(test)]` module -- it pointed me at line 280 of `screenshots.rs` as a production setter
   when the real site was a test, and that misdirection was the only reason I found it. It now blanks
   those lines instead of dropping them (`api_coverage`'s own numbers did not move: 66 entries, total
   1557, baseline holds), and the debt register re-measured to **31 sites across 17 files** from 44/20.

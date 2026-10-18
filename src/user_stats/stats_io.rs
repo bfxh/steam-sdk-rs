@@ -3,6 +3,7 @@
 //! or throw it away (`reset_all_stats`).
 
 use super::*;
+use crate::utils::try_c_string;
 
 impl UserStats {
     /// Triggers a [`UserStatsReceived`](./struct.UserStatsReceived.html) callback.
@@ -47,8 +48,10 @@ impl UserStats {
     ///
     /// Requires [`request_current_stats()`](#method.request_current_stats) to have been called
     /// and a successful [`UserStatsReceived`](./struct.UserStatsReceived.html) callback processed.
+    /// A stat name containing a nul byte answers `Err(())`: the stat that would be read is not the one
+    /// named, and `()` is the failure this type already means.
     pub fn get_stat_i32(&self, name: &str) -> Result<i32, ()> {
-        let name = CString::new(name).unwrap();
+        let name = try_c_string(name).ok_or(())?;
 
         let mut value: i32 = 0;
         let success = unsafe {
@@ -71,7 +74,7 @@ impl UserStats {
     /// Requires [`request_current_stats()`](#method.request_current_stats) to have been called
     /// and a successful [`UserStatsReceived`](./struct.UserStatsReceived.html) callback processed.
     pub fn set_stat_i32(&self, name: &str, stat: i32) -> Result<(), ()> {
-        let name = CString::new(name).unwrap();
+        let name = try_c_string(name).ok_or(())?;
 
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_SetStatInt32(self.user_stats, name.as_ptr(), stat)
@@ -90,7 +93,7 @@ impl UserStats {
     /// Requires [`request_current_stats()`](#method.request_current_stats) to have been called
     /// and a successful [`UserStatsReceived`](./struct.UserStatsReceived.html) callback processed.
     pub fn get_stat_f32(&self, name: &str) -> Result<f32, ()> {
-        let name = CString::new(name).unwrap();
+        let name = try_c_string(name).ok_or(())?;
 
         let mut value: f32 = 0.0;
         let success = unsafe {
@@ -113,7 +116,7 @@ impl UserStats {
     /// Requires [`request_current_stats()`](#method.request_current_stats) to have been called
     /// and a successful [`UserStatsReceived`](./struct.UserStatsReceived.html) callback processed.
     pub fn set_stat_f32(&self, name: &str, stat: f32) -> Result<(), ()> {
-        let name = CString::new(name).unwrap();
+        let name = try_c_string(name).ok_or(())?;
 
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_SetStatFloat(self.user_stats, name.as_ptr(), stat)

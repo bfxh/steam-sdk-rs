@@ -170,8 +170,9 @@ impl Matchmaking {
 
     /// Returns the lobby metadata associated with the specified key from the
     /// specified lobby.
+    /// A key containing a nul byte answers `None` rather than querying its prefix.
     pub fn lobby_data(&self, lobby: LobbyId, key: &str) -> Option<String> {
-        let key = CString::new(key).unwrap();
+        let key = try_c_string(key)?;
         unsafe {
             let data = sys::SteamAPI_ISteamMatchmaking_GetLobbyData(self.mm, lobby.0, key.as_ptr());
             CStr::from_ptr(data)
@@ -265,7 +266,10 @@ impl Matchmaking {
         user: SteamId,
         key: &str,
     ) -> Option<String> {
-        let key = CString::new(key).unwrap();
+        let key = match try_c_string(key) {
+            Some(key) => key,
+            None => return None,
+        };
         unsafe {
             let data = sys::SteamAPI_ISteamMatchmaking_GetLobbyMemberData(
                 self.mm,

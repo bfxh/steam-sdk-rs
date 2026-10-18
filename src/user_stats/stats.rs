@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::try_c_string;
 
 /// Achievement API.
 ///
@@ -192,7 +193,9 @@ impl AchievementHelper<'_> {
     /// ```
     pub fn get_achievement_display_attribute(&self, key: &str) -> Result<&str, ()> {
         unsafe {
-            let key_c_str = CString::new(key).expect("Failed to create c_str from key parameter");
+            // A nul in the caller's key is a failure to ask the question at all, which is what
+            // this function's `Err(())` already means.
+            let key_c_str = try_c_string(key).ok_or(())?;
 
             let str = sys::SteamAPI_ISteamUserStats_GetAchievementDisplayAttribute(
                 self.parent.user_stats,

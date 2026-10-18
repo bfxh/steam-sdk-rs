@@ -36,16 +36,18 @@
 # init_for_game_server, show_gamepad_text_input x2) -- those nine *have* a failure channel, so they
 # now refuse with `false` instead of cutting, which is why the register is 22 across 13 files and
 # not simply shorter.
+# Re-recorded a fourth time: 9 more gone (rich_presence, lobby_data, get_lobby_member_data,
+# path_to_absolute_cstring, the four stat get/set methods and get_achievement_display_attribute).
+# Those nine answer through a channel they already had -- `None` or `Err(())` -- so no signature
+# moved and none of them silently acted on a prefix of what the caller named. Register: 13 across
+# 8 files, all of them methods with no failure channel at all (builder setters returning &Self/Self,
+# the input handle getters, launch_query_param, authentication_session_ticket_for_webapi, file(),
+# achievement(), and Server::init's version argument).
 src/app.rs 1
-src/friends/friend.rs 1
 src/input/actions.rs 3
-src/matchmaking/mod.rs 2
 src/matchmaking/queries.rs 4
 src/networking_types/config.rs 1
 src/remote_storage/api.rs 1
-src/screenshots.rs 1
 src/server/lifecycle.rs 1
 src/user/mod.rs 1
 src/user_stats/achievements.rs 1
-src/user_stats/stats.rs 1
-src/user_stats/stats_io.rs 4

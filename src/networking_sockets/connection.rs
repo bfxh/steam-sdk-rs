@@ -604,6 +604,7 @@ mod connection_tests {
     //! connection, so only this decision can be judged here; the wiring is stated, not tested.
     use super::debug_string_prefix;
     use super::name_answer;
+    use super::InvalidHandle;
     use std::ffi::CString;
     use std::os::raw::c_char;
 
@@ -617,9 +618,11 @@ mod connection_tests {
 
     #[test]
     fn a_refused_fetch_is_an_invalid_handle() {
+        // `Err(InvalidHandle)` in pattern position binds a *variable* (rustc warns it is unused), so the
+        // braces are load-bearing: without them this asserted nothing about which error came back.
         assert!(matches!(
             name_answer(false, &name_buffer("lobby-7", 16)),
-            Err(InvalidHandle)
+            Err(InvalidHandle { .. })
         ));
     }
 
