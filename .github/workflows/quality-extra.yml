@@ -19,6 +19,16 @@ permissions:
 # 连续 4 个 SHA 一次都没落地过。这里 `cancel-in-progress: false`：后来的排队，不杀在跑的，
 # 判定一定跑完。代价说清楚：推送密集时会有多份 ~14 分钟的作业排队跑完而不是被取消省掉，
 # runner 分钟数在那种情况下会上升。
+#
+# 2026-10-18 实测把上面那句"判定一定跑完"收窄了：`cancel-in-progress: false` 只保护**正在跑**的那一份，
+# 同组里排队中的那一份会被更新的推送顶掉。读到的账：run 39158786643（SHA 3c59bee）19:26:36Z 创建、
+# 19:32:26Z 判 cancelled、`jobs` 是空的——一个作业都没起过；同时 772c811 那份还在跑、f7091b5 那份在排队。
+# 也就是说这个组实际是「1 份在跑 + 1 份排队」，密集连推时中间那些 SHA 拿不到 udeps/geiger/audit 的结论。
+# 没有改设计：这三件本来就是咨询性的。实测 master 没开分支保护（`GET
+# /repos/.../branches/master/protection` 返回 404 `Branch not protected`），所以两个 workflow 都不机械拦
+# 任何东西——`ci.yml` 那 13 项作业是**判定**（靠人/智能体读结论），不是闸门；为 extra 把每个 SHA 都排队跑
+# 一遍只会把 runner 分钟数乘上去。要做的是别把它当覆盖：某个 SHA 的结论确实需要时，用
+# `gh workflow run quality-extra.yml --ref <sha>` 单独补一次，而不是假定推送自动会给。
 concurrency:
   group: quality-extra-${{ github.ref }}
   cancel-in-progress: false

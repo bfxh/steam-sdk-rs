@@ -1467,6 +1467,26 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Retracted: "the verdict always completes" for `quality-extra` -- `cancel-in-progress: false` only
+  protects the run that is already running** (`.github/workflows/quality-extra.yml`). The comment written
+  when the advisory trio was split out of `ci.yml` explained, correctly, that three ~14-minute jobs had
+  been killed by *my own* pushes under the CI workflow's `cancel-in-progress: true` (measured: 5m14s,
+  7m46s, 10m17s, all far below the job's own `timeout-minutes: 30`), and set the new workflow's flag to
+  `false` so a later run queues instead of killing the one in flight -- "and the verdict always
+  completes". The first half holds; the second was read off a run that falsifies it: run 39158786643
+  (SHA `3c59bee`) was created 19:26:36Z, judged `cancelled` at 19:32:26Z, and carried **zero jobs** -- it
+  never started one. At that moment `772c811`'s run was still in progress and `f7091b5`'s was queued,
+  which is the shape of the limit: one run in flight plus one queued per group, and a third push replaces
+  the queued one. Under a burst, therefore, the middle SHAs get no `udeps` / `geiger` / `audit` answer at
+  all, and a recent history that looks covered can hide several SHAs with no advisory verdict.
+  The design is not changed, for a measured reason rather than an assumption: `master` has no branch
+  protection at all (`GET /repos/bfxh/steam-sdk-rs/branches/master/protection` answers 404 `Branch not
+  protected`), so neither workflow blocks anything mechanically -- the 13 jobs of `ci.yml` are verdicts
+  that are read, not gates that stop a push, and the trio here is advisory on top of that. Queueing every
+  SHA through another ~14 minutes would buy runner minutes, not safety. What changed is the claim. The comment now says the trio is not
+  coverage, and that when a specific SHA's answer is actually wanted it is fetched with
+  `gh workflow run quality-extra.yml --ref <sha>` rather than presumed from the push history.
+
 - **The rich-presence join callback stops aborting on the payload it was asked to decode**
   (`src/friends/callbacks.rs`). `GameRichPresenceJoinRequested_t` carries
   "char m_rgchConnect[k_cchMaxRichPresenceValueLength];" (`isteamfriends.h:570`, with
