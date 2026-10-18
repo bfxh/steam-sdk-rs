@@ -1991,6 +1991,20 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Changed
 
+- **`chat-example` no longer copies the lobby id to the clipboard, and six advisories left with it**
+  (`examples/chat-example/Cargo.toml`, `examples/chat-example/src/main.rs`, its `README.md`, and
+  `Cargo.lock`). GitHub reported 6
+  open Dependabot advisories on `master` (3 critical, 1 high, 1 moderate, 1 low) and all six are the
+  same chain: `clipboard 0.5.0` -> `x11-clipboard 0.3.3` -> `xcb 0.8.2`, whose fixes are published as
+  1.0.0 and 1.6.0 -- outside `clipboard`'s own semver bound, so no in-range upgrade exists. The
+  dependency was one call in one example (`ClipboardProvider::new().unwrap()` + `set_contents` after
+  a lobby was created), and the id was already printed on the line above, so the example now prints
+  it and the `clipboard` subtree leaves the lock entirely: 77 lines, 8 packages (`clipboard`,
+  `clipboard-win`, `x11-clipboard`, `xcb`, `block`, `objc`, `objc-foundation`, `objc_id`). `cargo
+  check -p chat-example` passes after the change (rc=0). The library never depended on any of them --
+  this only ever reached a Linux user building the example -- but the advisories sit on the default
+  branch and were the only six open.
+
 - **Breaking: `QueryHandle`'s builder is fallible too, and the whole file lost its panic surface.**
   All 29 `-> Self` setters now return `Result<Self, SteamError>` (30 do today, counting
   `add_required_tag_group`, which was already fallible), and `fetch`, `fetch_total` and `fetch_ids`
