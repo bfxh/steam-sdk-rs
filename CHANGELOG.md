@@ -1435,6 +1435,34 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Rejecting a session request closed it twice** (`src/networking_messages.rs`). `SessionRequest` kept
+  a flag named `accepted`, which only `accept()` set, so `reject()` -- which calls
+  `CloseSessionWithUser` -- left the request looking unanswered and `Drop` closed the same session a
+  second time. `CloseSessionWithUser` is "Call this when you're done talking to a user to immediately
+  free up resources under-the-hood.  If the remote user tries to send data to you again, another
+  SteamNetworkingMessagesSessionRequest_t callback will be posted." (`isteamnetworkingmessages.h:103-105`)
+  and the header promises no idempotency, so the second close is not a no-op: a session re-established
+  in between -- and sending implicitly accepts a pending one ("Calling SendMessageToUser() will
+  implicitly accepts any pending session request to that user.", `:100`) -- is torn down by it.
+  The flag is now `answered`, set by one function `mark_answered` that also reports whether Steam is
+  still owed a close; `accept`, `reject_inner` and `Drop` all consult it, and `Drop` no longer restates
+  the rule from a flag only one path set. Public signatures are unchanged (`accept`/`reject` behave the
+  same apart from the missing second close).
+  **What the tests pin, and the limit of that, measured rather than assumed.** Two tests assert the
+  state machine directly -- the first answer owes exactly one close and no later answer does; an
+  ignored request still owes exactly one, so the refactor cannot quietly stop rejecting what Steam
+  expects to see closed. Mutation replay: removing the record (`answered = true` never happening) and
+  making the guard always owe a close both turn those tests **red by assertion**. The third mutation --
+  deleting the guard in `reject_inner`, the historical bug shape -- does **not** fail an assertion: the
+  test binary dies with `0xC0000005` (`rc=3221225477`) because the now-unguarded close dereferences the
+  null interface pointer the fixture carries. CI therefore notices that mutation loudly but judges
+  nothing about it, and the honest statement is that the *wiring* ("does the closer consult the state?")
+  has no CI-verifiable coverage: `CloseSessionWithUser` is a Steam call with no seam to count through,
+  and this file carries no `#[ignore]`d client-dependent test either -- so the end-to-end behaviour
+  (exactly one close observed by Steam) is asserted nowhere, in CI or locally. The correction that
+  produces it is not in doubt -- the old code plainly reached the close twice -- but the guarantee is
+  registered as unproven rather than dressed up as a lock.
+
 - **`RemoteStorage::files` singled out -1 and cast every other negative into a capacity**
   (`src/remote_storage/api.rs`). `GetFileCount` is "virtual int32 GetFileCount() = 0;"
   (`isteamremotestorage.h:228`), a signed count; the loop guarded `count == -1` and then did

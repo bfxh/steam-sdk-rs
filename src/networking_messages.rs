@@ -333,7 +333,7 @@ impl SessionRequestBuilder {
         self.inner.upgrade().map(|inner| SessionRequest {
             remote,
             messages: self.message,
-            accepted: false,
+            answered: false,
             _inner: inner,
         })
     }
@@ -366,10 +366,10 @@ impl_callback!(cb: SteamNetworkingMessagesSessionFailed_t => NetworkingMessagesS
 pub struct SessionRequest {
     remote: NetworkingIdentity,
     messages: *mut sys::ISteamNetworkingMessages,
-    /// Keep track if connection should be rejected on drop
-    // This is used instead of `std::mem::forget` to properly clean up other
-    // resources. Is it even wise to automatically reject the connection?
-    accepted: bool,
+    /// Whether this request has been answered -- by `accept`, by `reject`, or by `Drop`.
+    /// It was called `accepted` and only `accept` ever set it, so a request that had been rejected
+    /// still looked unanswered here and `Drop` closed the session a second time.
+    answered: bool,
     _inner: Arc<Inner>,
 }
 
@@ -382,9 +382,26 @@ impl SessionRequest {
         &self.remote
     }
 
+    /// Records that this request has been answered, and reports whether Steam is still owed a close.
+    ///
+    /// The first caller gets `true`, everybody after it gets `false`. That is the entire point of this
+    /// function: `CloseSessionWithUser` is "Call this when you're done talking to a user to
+    /// immediately free up resources under-the-hood.  If the remote user tries to send data to you
+    /// again, another SteamNetworkingMessagesSessionRequest_t callback will be posted."
+    /// (`isteamnetworkingmessages.h:103-105`), and the header promises no idempotency -- a second
+    /// close is not a no-op, because anything that re-established a session in between gets torn down
+    /// with it, and sending implicitly accepts a pending session ("Calling SendMessageToUser() will
+    /// implicitly accepts any pending session request to that user.", `:100`). Until now only
+    /// `accept()` marked the request, so `reject()` closed once and `Drop` closed again.
+    fn mark_answered(&mut self) -> bool {
+        let owed = !self.answered;
+        self.answered = true;
+        owed
+    }
+
     /// Accept the connection.
     pub fn accept(mut self) -> bool {
-        self.accepted = true;
+        self.mark_answered();
         unsafe {
             return sys::SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser(
                 self.messages,
@@ -400,6 +417,9 @@ impl SessionRequest {
 
     /// Reject the connection without consuming self, useful for implementing [`Drop`]
     fn reject_inner(&mut self) {
+        if !self.mark_answered() {
+            return;
+        }
         unsafe {
             sys::SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(
                 self.messages,
@@ -411,8 +431,65 @@ impl SessionRequest {
 
 impl Drop for SessionRequest {
     fn drop(&mut self) {
-        if !self.accepted {
-            self.reject_inner();
+        // Unconditional, on purpose: `reject_inner` owns the decision about who is owed a close, so
+        // the rule is stated once instead of being restated here from a flag only one path set.
+        self.reject_inner();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! `mark_answered` is the whole double-close guard and it is pure state, so it can be judged
+    //! without a client -- unlike the FFI call it gates, which needs Steam.
+    use super::*;
+    use crate::{Callbacks, Manager, NetworkingSocketsData};
+    use std::sync::Weak;
+
+    fn fresh_request() -> SessionRequest {
+        SessionRequest {
+            remote: NetworkingIdentity::default(),
+            messages: std::ptr::null_mut(),
+            answered: false,
+            _inner: Arc::new(Inner {
+                manager: Manager::Client,
+                callbacks: Callbacks::new(),
+                networking_sockets_data: std::sync::Mutex::new(NetworkingSocketsData {
+                    sockets: Default::default(),
+                    independent_connections: Default::default(),
+                    connection_callback: Weak::new(),
+                }),
+            }),
         }
+    }
+
+    /// Rejecting used to close the session and then leave `Drop` to close it a second time, because
+    /// the flag that suppressed `Drop` was only ever set by accepting.
+    #[test]
+    fn the_first_answer_owes_the_close_and_no_later_one_does() {
+        let mut request = fresh_request();
+        assert!(
+            request.mark_answered(),
+            "an unanswered request owes Steam exactly one close"
+        );
+        assert!(
+            !request.mark_answered(),
+            "a second answer must not close the session again"
+        );
+        assert!(!request.mark_answered(), "and neither must a third");
+    }
+
+    /// The behaviour that was correct before must survive the refactor: a request nobody answered is
+    /// still rejected when it goes out of scope, once.
+    #[test]
+    fn an_ignored_request_is_still_rejected_exactly_once() {
+        let mut request = fresh_request();
+        assert!(
+            request.mark_answered(),
+            "dropping an ignored request owes one close"
+        );
+        assert!(
+            !request.mark_answered(),
+            "and the drop path must not add a second one"
+        );
     }
 }
