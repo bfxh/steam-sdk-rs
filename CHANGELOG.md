@@ -1435,6 +1435,34 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **A downloaded leaderboard could publish uninitialised heap as player data**
+  (`src/user_stats/leaderboard.rs`). Inside the `DownloadLeaderboardEntries` callback, three of Steam's
+  own numbers were used as sizes without being checked, and this is the path that fills `Vec<i32>` for
+  every caller that reads scores:
+  - `Vec::with_capacity(len as usize)` on `m_cEntryCount`, which is "the number of entries downloaded"
+    (`isteamuserstats.h:385`) as a plain `int`. A negative answer became ~1.8e19 and an absurd positive
+    one a multi-gigabyte reservation -- either aborts, and it aborts *inside the callback Steam is
+    dispatching*, where the caller cannot catch it.
+  - `details.set_len(min(entry.m_cDetails as usize, capacity))` on a `Vec::with_capacity` buffer.
+    `m_cDetails` is "number of int32 details available for this entry" (`:78`), a signed `int32` that the
+    backend fills. Cast through, a negative value made `min` select the whole capacity, so `set_len`
+    published slots nobody had ever written as leaderboard details: undefined behaviour plus adjacent
+    heap disclosure. The buffer is now zero-filled and `truncate`d through a `details_len` helper that
+    clamps to the buffer, so no value Steam reports can extend it past what was written.
+  - `GetDownloadedLeaderboardEntry`'s `bool` return was discarded. It "Returns data about a single
+    leaderboard entry" (`:219`) -- false means it wrote nothing, and the old code pushed the zeroed
+    `LeaderboardEntry_t` anyway, so a failed read became a phantom entry with user 0 / rank 0 / score 0
+    in the caller's list. Failed reads are now skipped.
+  `max_details_len` is caller-supplied as a `usize` and was cast straight into the API's signed `int`
+  parameter; it is clamped to `c_int::MAX` before the buffer is built, so the cast cannot hand Steam a
+  negative capacity.
+  Four tests pin the two pure guards, each from both sides -- what must be refused and what must still
+  pass untouched -- and four mutations were replayed against them (cast straight through, and clamp
+  harder than warranted, for each guard); all four went red, file restored byte-identical from a `cp`
+  backup. **Registered rather than faked: the `continue` on a failed read lives in the FFI closure and
+  needs a running client**, so CI cannot judge it; it follows the same header line as the guard beside it
+  and is covered by the manual `#[ignore]`d leaderboard test at the bottom of the file.
+
 - **Two unchecked conversions from Steam's own numbers into memory sizes**
   (`src/networking_sockets/poll_group.rs`, `src/user_stats/stats.rs`). Both are the same shape as the
   `message.rs` guards in the commit above -- a value Steam fills in is used as a length or a size with

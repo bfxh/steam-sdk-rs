@@ -16,6 +16,7 @@ src/parties.rs 499
 src/matchmaking/mod.rs 478
 src/ugc/results.rs 473
 src/ugc/query.rs 464
+src/user_stats/leaderboard.rs 458
 src/user/voice.rs 445
 src/networking_sockets/fake_udp.rs 428
 src/networking_messages.rs 418
@@ -23,7 +24,6 @@ src/ugc/update.rs 404
 src/friends/friend.rs 401
 src/user/duration.rs 396
 src/networking_types/end.rs 384
-src/user_stats/leaderboard.rs 384
 src/user/mod.rs 381
 src/lib_tests.rs 354
 src/html_surface/browser.rs 352

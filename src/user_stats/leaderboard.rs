@@ -4,6 +4,32 @@
 
 use super::*;
 
+/// How many downloaded entries the callback may iterate and reserve for.
+///
+/// `m_cEntryCount` is "the number of entries downloaded" (`isteamuserstats.h:385`) and Steam's own
+/// sample iterates "use a for loop from 0 to LeaderboardScoresDownloaded_t::m_cEntryCount" (`:220`). It
+/// is a plain `int`, and the old code fed it to `Vec::with_capacity(len as usize)`: a negative answer
+/// became ~1.8e19 and an enormous positive one a multi-gigabyte reservation, either of which aborts --
+/// here, inside the callback Steam is dispatching, where a panic cannot be caught by the caller. The
+/// count is therefore only ever trusted as far as a non-negative number, and the entries vector is
+/// filled by pushing rather than by pre-reserving a stranger's arithmetic.
+fn entry_count(raw: ::std::os::raw::c_int) -> usize {
+    usize::try_from(raw).unwrap_or(0)
+}
+
+/// How many of an entry's detail slots were really written.
+///
+/// `m_cDetails` is "number of int32 details available for this entry" (`isteamuserstats.h:78`) and is
+/// filled by `GetDownloadedLeaderboardEntry`, which "Returns data about a single leaderboard entry"
+/// (`:219,233`) as a `bool`. Both halves matter: the value is a signed `int32`, and the vector it sizes
+/// holds at most `asked` slots. Casting a negative to `usize` yields a number so large that `min`
+/// selects the whole capacity, and `set_len` then hands the caller capacity's worth of memory nobody
+/// wrote -- uninitialised bytes presented as leaderboard data, plus the failure case where the `bool`
+/// said nothing was filled at all.
+fn details_len(raw: i32, asked: usize) -> usize {
+    usize::try_from(raw).unwrap_or(0).min(asked)
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct LeaderboardEntry {
@@ -236,25 +262,30 @@ impl UserStats {
                     cb(if io_error {
                         Err(SteamError::IOFailure)
                     } else {
-                        let len = v.m_cEntryCount;
-                        let mut entries = Vec::with_capacity(len as usize);
+                        let len = entry_count(v.m_cEntryCount);
+                        let mut entries = Vec::new();
+                        // Steam's size parameter is a signed `int`, so the number of slots this side is
+                        // willing to hand over is clamped before the buffer is built; the cast below
+                        // would otherwise be able to offer a negative capacity.
+                        let asked = max_details_len.min(::std::os::raw::c_int::MAX as usize);
                         for idx in 0..len {
                             let mut entry: sys::LeaderboardEntry_t = std::mem::zeroed();
-                            let mut details = Vec::with_capacity(max_details_len);
+                            // Zero-filled rather than `with_capacity`: a length that comes from Steam (or
+                            // from the backend behind it) must never be able to expose slots nobody wrote.
+                            let mut details = vec![0i32; asked];
 
-                            sys::SteamAPI_ISteamUserStats_GetDownloadedLeaderboardEntry(
+                            if !sys::SteamAPI_ISteamUserStats_GetDownloadedLeaderboardEntry(
                                 user_stats as *mut _,
                                 v.m_hSteamLeaderboardEntries,
-                                idx,
+                                idx as _,
                                 &mut entry,
                                 details.as_mut_ptr(),
-                                max_details_len as _,
-                            );
+                                asked as _,
+                            ) {
+                                continue;
+                            }
 
-                            details.set_len(std::cmp::min(
-                                entry.m_cDetails as usize,
-                                max_details_len as usize,
-                            ));
+                            details.truncate(details_len(entry.m_cDetails, asked));
 
                             entries.push(LeaderboardEntry {
                                 user: SteamId(entry.m_steamIDUser.m_steamid.m_unAll64Bits),
@@ -331,6 +362,49 @@ impl UserStats {
         unsafe {
             sys::SteamAPI_ISteamUserStats_GetLeaderboardEntryCount(self.user_stats, leaderboard.0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The two counts a downloaded leaderboard is built from, judged without a client. The FFI needs
+    //! Steam, but every decision made from its answers does not, and those decisions are what used to
+    //! size allocations and lengths.
+    use super::{details_len, entry_count};
+
+    /// `m_cEntryCount` fed `Vec::with_capacity(len as usize)`: a negative value became ~1.8e19 and an
+    /// absurd positive one a multi-gigabyte reservation, either of which aborts inside the callback
+    /// Steam is dispatching.
+    #[test]
+    fn a_negative_entry_count_iterates_nothing() {
+        assert_eq!(entry_count(-1), 0);
+        assert_eq!(entry_count(i32::MIN), 0);
+    }
+
+    /// The honest half: a count Steam really means still passes straight through.
+    #[test]
+    fn a_positive_entry_count_is_not_second_guessed() {
+        assert_eq!(entry_count(0), 0);
+        assert_eq!(entry_count(1), 1);
+        assert_eq!(entry_count(50), 50);
+    }
+
+    /// `set_len(min(entry.m_cDetails as usize, capacity))` on a `with_capacity` vector: casting -1 made
+    /// `min` select the whole capacity, so uninitialised bytes were handed out as leaderboard details.
+    #[test]
+    fn a_negative_or_oversized_detail_count_never_exceeds_the_buffer() {
+        assert_eq!(details_len(-1, 8), 0);
+        assert_eq!(details_len(i32::MIN, 8), 0);
+        assert_eq!(details_len(1000, 8), 8);
+        assert_eq!(details_len(i32::MAX, 0), 0);
+    }
+
+    /// And a truthful count is used exactly, not rounded down to some smaller policy limit.
+    #[test]
+    fn a_declared_detail_count_is_kept_when_it_fits() {
+        assert_eq!(details_len(3, 8), 3);
+        assert_eq!(details_len(8, 8), 8);
+        assert_eq!(details_len(0, 8), 0);
     }
 }
 
