@@ -1422,6 +1422,43 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Four pointers into the generated bindings had rotted, and nothing judged them red**
+  (`docs/defect-03-resize-deep-dive.md`, `docs/SuperSteam-Design.md`). `header_citations.py` judges
+  citations into the SDK headers; `doc_pointers.py` judges that a documented *path* resolves. Neither
+  looks at a line number inside `windows_bindings.rs` & friends -- and those move on every
+  regeneration. Counting the whole repo with a broad pattern (not the narrow comment-block walk that
+  first suggested "there is nothing here"): **10 pointers named a generated-layer line; 1 sits in
+  `src/`, 9 in prose** -- and this entry adds three more, by quoting the numbers it replaced. Each was
+  judged against the file it names. Four were wrong, and all four sat
+  in the living docs: `:4662` and `:1750` both landed on a bare `}`, `linux_bindings.rs:20284` landed
+  on `#[repr(C)]`, and `:19611` landed on a parameter of `SteamAPI_ManualDispatch_GetNextCallback` --
+  eleven lines from the `ManualDispatch_Init` binding the sentence was pointing at. Repaired to the
+  lines that actually hold the claimed item: `windows_bindings.rs:4658-4661` (`pub m_cubParam: uint32`),
+  `:1745-1749` (`m_cubParam: c_int`), `linux_bindings.rs:20269-20273` (`cubCallback: c_int`) -- the three
+  that make the 2GB/4GB asymmetry visible -- and `:19600` (`SteamAPI_ManualDispatch_Init`). Five spans
+  are now written from the item's declaration through the field it quotes, adding
+  `windows_bindings.rs:11770-11772` and `:11773-11774`; that widening exposed an off-by-one header
+  pointer on the same line: the "lower latency / one callback at a time" sentence
+  is at `isteaminput.h:873`, so the citation now reads `872-873`.
+  **A gate for this family was measured and refused.** The tempting rule -- the identifier the block
+  names must appear inside the cited span -- turned 3 of these red *before* the widening, for the wrong
+  reason: a field claim names its enclosing item, which sits up to four lines above the field. That is
+  the failure the header-side version of the same rule already measured (7 flags, 0 defects), so the
+  drift stays a documented hazard rather than a gate that cries wolf -- but the widening makes the rule
+  hold anyway: re-measured after it, **no live pointer fails it** -- 6 pass it on the line that carries
+  the claim (`windows_bindings.rs:4658-4661`, `:1745-1749`, `linux_bindings.rs:20269-20273`,
+  `:11770-11772`, `:11773-11774`, `:408`), and the 7th (`:19600`) names its symbol on the preceding
+  line, so it was read by hand: that line holds `pub fn SteamAPI_ManualDispatch_Init();`. The only
+  flag left is CHANGELOG:477, a dated record. The CHANGELOG's two mentions of
+  `:17499-17501` are left as dated records of the pre-regeneration state, consistent with the 30
+  pointers `doc_pointers.py` already registers as historical.
+  Re-running the same check over the crate's *own* files (78 numbered `src/*.rs:NNN` pointers in the
+  docs; 63 in range and non-blank, 15 naming a file that no longer exists -- all 15 already in that
+  historical register) caught one pointer in the sentence just repaired, in the failure mode
+  `doc_pointers.py` says it cannot see: `src/lib.rs:264` exists, is not blank, and does not call
+  `SteamAPI_ManualDispatch_Init` -- the call is at `src/lib.rs:431` (and `src/server/lifecycle.rs:100`
+  on the game-server side). Both now cited.
+
 - **The citation gate could not see a sentence Steam had wrapped, and one real mis-citation hid behind
   that** (`scripts/ci/header_citations.py`, `src/user_stats/stats.rs`). The ruler joined header lines
   with their `//` markers still attached, so any phrase spanning two or more header lines was

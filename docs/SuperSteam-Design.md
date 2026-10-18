@@ -80,7 +80,7 @@
 
 在初步分析中，我曾断言 `SteamAPI_ManualDispatch_Init` 不存在于 Rust 绑定（基于在预编译 `libsteam_api64.dll` 导出表里找不到该符号）。
 
-**这个判断是错的。** 头文件 `steam_api.h:210` 明确定义了该函数，`windows_bindings.rs:19611` 也正确生成了绑定，`src/lib.rs:264` 确实调用了它。导出表搜不到的原因是该符号可能通过序号或宏转发导出。事实是：**Rust 侧调用是正确的，C 侧实现存在**。
+**这个判断是错的。** 头文件 `steam_api.h:210` 明确定义了该函数，`windows_bindings.rs:19600` 也正确生成了绑定，`src/lib.rs:431` 确实调用了它（游戏服侧同一处是 `src/server/lifecycle.rs:100`）。导出表搜不到的原因是该符号可能通过序号或宏转发导出。事实是：**Rust 侧调用是正确的，C 侧实现存在**。
 
 我把这条更正明确写在这里，因为「凭已编译二进制导出表下结论」正是容易产生假结论的取证方式——我在这个项目里踩了一次。
 
@@ -961,8 +961,8 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 | 未封方法 | 判据（读绑定与头文件，不靠猜） |
 |---|---|
-| `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11771` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
-| `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11774`）——裸 C 函数指针回调，头文件 h:872 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
+| `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11770-11772` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
+| `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11773-11774`）——裸 C 函数指针回调，头文件 h:872-873 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
 | `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
 
 顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 resize 那一行"的行为，其 `resize`

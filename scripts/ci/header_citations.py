@@ -54,6 +54,20 @@ resolves the handle; the identifier itself is at 135 and 428). A verdict with th
 wolf this file already refuses to cry, so the rule lives here as a recorded negative result rather than
 in the gate.
 
+**Its twin for the generated layer was measured and refused too.** Pointers of the form
+``windows_bindings.rs:4658-4661`` are invisible here (this file matches ``*.h``) and to
+``doc_pointers.py`` (the path resolves; the number is not read). Counting the repo for them:
+**10 pointers, 1 in ``src/``, 9 in prose** -- and of the 6 living-doc pointers, **4 named a line that no
+longer held what the prose claimed** (two landed on a bare ``}``, one on ``#[repr(C)]``, one on a
+parameter of a different function; the FakeIP regeneration had moved the file under them). The obvious
+gate -- "the identifier the block names must sit inside the cited span" -- flags **3 of those 6 for the
+wrong reason**: a field claim names its enclosing struct, whose declaration sits above the field. Same
+precision problem as the rejected rule above, so this family stays unjudged and carries a convention
+instead: prefer a header line (checked here) or the symbol name, and when a generated-layer line really
+is the evidence, write the span from the item's declaration through the field. After the docs were
+rewritten that way, **no live pointer fails the rule** -- which is what makes the convention worth
+following rather than an excuse for not building the gate.
+
 Output is ``<path> <red>``, ``<path>~unjudged <n>`` and ``<path>~undeclared <n>`` for every source file
 that cites a header, plus ``#scanned <rows>`` so an empty scan cannot pass.
 """

@@ -43,9 +43,9 @@ m_cubParam = 0xffffffff (4294967295 B) → as c_int = -1           ⚠ 负数！
 
 | 项 | 类型 | 证据 | 上限 |
 |----|------|------|------|
-| `SteamAPICallCompleted_t.m_cubParam` | `uint32` | `isteamutils.h:269`、`windows_bindings.rs:4662` | 4294967295（约 4GB） |
-| `GetAPICallResult` 的 `cubCallback` 参数 | `c_int` | `linux_bindings.rs:20284`、`steam_api.h:225` | 2147483647（约 2GB） |
-| `CallbackMsg_t.m_cubParam`（外层回调结构） | `c_int` | `windows_bindings.rs:1750` | 2GB |
+| `SteamAPICallCompleted_t.m_cubParam` | `uint32` | `isteamutils.h:269`、`windows_bindings.rs:4658-4661` | 4294967295（约 4GB） |
+| `GetAPICallResult` 的 `cubCallback` 参数 | `c_int` | `linux_bindings.rs:20269-20273`、`steam_api.h:225` | 2147483647（约 2GB） |
+| `CallbackMsg_t.m_cubParam`（外层回调结构） | `c_int` | `windows_bindings.rs:1745-1749` | 2GB |
 
 **原判断修正**：早期分析曾把 `m_cubParam` 猜成可能到达 `usize::MAX` 的值，实际是 `uint32`，上限 4GB——这条更正已在主文档第 0 节记录，本次深挖进一步发现**结构体自身的两个字段（`CallbackMsg_t.m_cubParam` 是 c_int，`SteamAPICallCompleted_t.m_cubParam` 是 uint32）类型就不一致**，Valve 头文件内部就有 2GB/4GB 两个口径。
 
