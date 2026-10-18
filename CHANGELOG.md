@@ -1525,11 +1525,16 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   before a push -- is taken: `1.80.0-x86_64-pc-windows-gnu` is installed here and the local replay runs
   both `-D warnings` shapes. Both mistakes reached CI for the same reason: the chain had no 1.80.0
   compile in it at all.
-  Registered rather than changed: `$EXAMPLES` in those two command lines has never been assigned in
-  either workflow, so it expands to empty and the steps compile the root package plus its
-  same-invocation dependencies -- not the four `examples/*` members, which are built by the
-  `--features steamworks/futures` step without the ban. Deleting the token would change what the line
-  claims to cover, and I have not measured the examples under `-D warnings`.
+  Registered rather than widened: `$EXAMPLES` in those two command lines has never been assigned in
+  either workflow, so it expands to empty and the quality step compiles the root package plus its
+  same-invocation dependencies. The four `examples/*` members are compiled by their own
+  `examples (workspace members)` job with `--workspace --features steamworks/futures`, and that
+  command deliberately carries no `-D warnings` -- measured on stable it is clean (rc=0 with the flag
+  set), but the same flag would reach `fontdue` and the other registry dependencies that command pulls
+  in, and the same command run on 1.80.0 stops long before any lint matters: `error[E0658]: use of
+  unstable library feature 'integer_sign_cast'` in `fontdue` (which is why that job is stable-only).
+  Buying four small crates by promising that no dependency will ever emit a new warning is the same
+  trade this unit had to make twice, in the other direction.
 
 - **Retracted: the rustc-warnings gate did not only bite hand-written code, and MSRV said so**
   (`.github/workflows/ci.yml`). The step as written in `ee60ab9` denied warnings for the whole workspace

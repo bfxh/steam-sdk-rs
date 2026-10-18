@@ -90,9 +90,13 @@ jobs:
       #      只把 `*mut ISteamX` 交回 Steam，从不构造它们。A/B 是同一命令、同一工具链、只改那一行：
       #      没有 allow 时 rc=101，有 allow 时 rc=0。
       # 覆盖面：这一步编的是根包 `steamworks` 与它的同调用依赖；`$EXAMPLES` 一直是未定义变量
-      # （展开为空），examples 那四个成员由下面 `--workspace --features steamworks/futures` 那一步
-      # 编译，但不带这条 -D。`scripts/ci/workflow_inputs.py` 盯住形状：-D 只能出现在 check 那一步，
-      # clippy 那一步不许出现，整条 workflow 一条都不许少。
+      # （展开为空）。examples 那四个成员不在这里，它们由下面独立的 `examples (workspace members)`
+      # 作业用 `--workspace --features steamworks/futures` 编译，不带这条 -D。刻意没有把 -D 加到
+      # 那一行：实测它在 stable 下确实 0 warning，但那条命令会把 fontdue 等第三方依赖一起拖进
+      # `RUSTFLAGS` 的射程（同一作业在 1.80.0 下连 fontdue 都编不过：`integer_sign_cast` 是后来
+      # 才稳定的）。花"每个依赖以后都不许有新 warning"换四个示例包，不值。
+      # `scripts/ci/workflow_inputs.py` 盯住形状：-D 只能出现在 check 那一步，clippy 那一步不许出现，
+      # 整条 workflow 一条都不许少。
       - name: check (all targets, rustc warnings denied)
         env:
           RUSTFLAGS: -D warnings
