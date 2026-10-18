@@ -230,6 +230,22 @@ impl AchievementHelper<'_> {
         Some(self.internal_get_achievement_icon(true)?.0)
     }
 
+    /// The RGBA buffer size Steam writes for an image of `width` x `height`, and the value to pass as
+    /// its size: "the destination buffer size should be 4 * height * width * sizeof(char)"
+    /// (`isteamutils.h:85`).
+    ///
+    /// An associated function rather than an inline expression, because the arithmetic has to be
+    /// checked. The product used to be `width * height * 4` in `u32` with `.try_into().unwrap()`, and
+    /// the dimensions are values `ISteamUtils::GetImageSize` fills in -- not the caller's. A large
+    /// image overflowed the multiplication (debug builds panic, release builds wrap), so `dest` was
+    /// allocated at a length far below the buffer size handed to Steam, which the FFI then wrote past.
+    /// Clamping at the `c_int` boundary is the same hazard from the other side: this is the 2GB half of
+    /// the asymmetry `docs/defect-03-resize-deep-dive.md` measures on the callback path.
+    fn rgba_buffer_len(width: u32, height: u32) -> Option<i32> {
+        let bytes = width.checked_mul(height)?.checked_mul(4)?;
+        i32::try_from(bytes).ok()
+    }
+
     fn internal_get_achievement_icon(&self, avoid_big_icons: bool) -> Option<(Vec<u8>, u32, u32)> {
         unsafe {
             let utils: *mut sys::ISteamUtils = sys::SteamAPI_SteamUtils_v010();
@@ -248,13 +264,14 @@ impl AchievementHelper<'_> {
             if avoid_big_icons && (width != 64 || height != 64) {
                 return None;
             }
-            let mut dest = vec![0; (width * height * 4).try_into().unwrap()];
-            if !sys::SteamAPI_ISteamUtils_GetImageRGBA(
-                utils,
-                img,
-                dest.as_mut_ptr(),
-                (width * height * 4).try_into().unwrap(),
-            ) {
+            // Steam fills the dimensions, so the size is checked rather than trusted: an image whose
+            // 4*h*w does not fit the `c_int` the API takes would otherwise allocate a buffer the FFI
+            // writes past.
+            let Some(len) = Self::rgba_buffer_len(width, height) else {
+                return None;
+            };
+            let mut dest = vec![0; len as usize];
+            if !sys::SteamAPI_ISteamUtils_GetImageRGBA(utils, img, dest.as_mut_ptr(), len) {
                 return None;
             }
             Some((dest, width, height))
@@ -273,5 +290,41 @@ impl AchievementHelper<'_> {
         let (vec, width, height) = self.internal_get_achievement_icon(false)?;
         let img = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_vec(width, height, vec)?;
         return Some(img);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The size arithmetic Steam's answer depends on, judged without a client. The FFI call needs one,
+    //! so the decision it feeds is the part that can be pinned here -- and that decision is what used to
+    //! allocate a buffer smaller than the write Steam performs.
+    use super::AchievementHelper;
+
+    #[test]
+    fn a_normal_icon_size_needs_four_bytes_per_pixel() {
+        assert_eq!(AchievementHelper::rgba_buffer_len(64, 64), Some(16_384));
+        assert_eq!(AchievementHelper::rgba_buffer_len(1, 1), Some(4));
+        assert_eq!(AchievementHelper::rgba_buffer_len(0, 40), Some(0));
+    }
+
+    /// 32768x32768 is where `width * height * 4` left `u32`: the old expression wrapped (and panicked
+    /// in debug), so `dest` came out smaller than the size handed to `GetImageRGBA`, which then wrote
+    /// past it. A refusal is the only defined answer here.
+    #[test]
+    fn a_product_that_leaves_u32_is_refused_rather_than_wrapped() {
+        assert_eq!(AchievementHelper::rgba_buffer_len(32_768, 32_768), None);
+        assert_eq!(AchievementHelper::rgba_buffer_len(u32::MAX, 2), None);
+    }
+
+    /// The buffer size parameter is a signed `c_int`, so a product that fits `u32` but not `i32` would
+    /// otherwise be handed over as a negative length. This is the 2GB/4GB split
+    /// `docs/defect-03-resize-deep-dive.md` measures on the callback path.
+    #[test]
+    fn a_size_that_overflows_the_signed_parameter_is_refused() {
+        assert_eq!(
+            AchievementHelper::rgba_buffer_len(16_384, 16_384),
+            Some(1_073_741_824)
+        );
+        assert_eq!(AchievementHelper::rgba_buffer_len(32_768, 16_384), None);
     }
 }

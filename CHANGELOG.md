@@ -445,10 +445,18 @@ plus the callbacks the wrapper can deliver.
   `receive_messages` clamps Steam's returned count with `received_count` before using it as a length:
   a negative `int` would wrap to an enormous `usize`, and a count above the batch size would claim
   slots nobody offered. **Worth recording as an observation about the existing code**: `NetPollGroup`'s
-  sibling (`src/networking_sockets/poll_group.rs:67` today; the coordinate was re-measured by content when that code moved out of the module root) does `... as usize; set_len(count)` with no such
-  clamp, so the same hazard is live there today. It is not fixed in this commit -- it is a different
+  sibling did `... as usize; set_len(count)` with no such
+  clamp, so the same hazard was live there. It is not fixed in this commit -- it is a different
   surface, and changing a hot path that games already use deserves its own measurement rather than
   riding along as a drive-by.
+  **Corrected 2026-10-18: that hazard is no longer live.** `NetPollGroup::receive_messages` now routes
+  Steam's return through `message_count` (`src/networking_sockets/poll_group.rs:64`), which reads
+  "If the connection handle is invalid, -1 is returned" (`isteamnetworkingsockets.h:321`) as zero and
+  truncates a count above the array's capacity; the call site is `src/networking_sockets/poll_group.rs:85`.
+  Disclosed in the same breath: `FakeUDPPort::receive_messages` already had exactly this clamp as
+  `received_count` (`src/networking_sockets/fake_udp.rs:47`, tested at `:313-320`), so there are now two
+  implementations of one rule in this module; consolidating them is queued rather than done here, because
+  moving a function two sibling modules share changes files this unit otherwise would not touch.
   Three tests, four mutation controls: the copied ceiling drifting from the header, the maximum not
   enforced, a negative count trusted, and the batch clamp removed -- each turned its test red, files
   restored byte for byte.
@@ -858,8 +866,13 @@ the drift-artifact entry under **Added -- CI and release automation**.
   reads `impl NetworkingSockets {` and the closer is exactly `}`, so a recalled boundary cannot be used
   again, and the FakeUDPPort unit's citation of the old module root's 588-604 range -- a fourth
   `set_len` pointer, naming a file that this same change shrank to 260 lines -- was re-anchored by
-  content to `src/networking_sockets/poll_group.rs:67`, the
-  line the unclamped `as usize; set_len(count)` actually sits on today.
+  content to line 67 of `src/networking_sockets/poll_group.rs`, the line the unclamped
+  `as usize; set_len(count)` actually sat on that day. The coordinate is written out in prose rather
+  than as a live pointer on purpose: re-measured 2026-10-18, that file's line 67 is blank, the clamp
+  that replaced the hazard is declared at `src/networking_sockets/poll_group.rs:64` and called at
+  `src/networking_sockets/poll_group.rs:85`. A dated coordinate is not a claim about today's tree, and
+  `doc_pointers.py` only exempts pointers whose *file* is gone -- so the honest fix is to stop
+  presenting a past line number as a present pointer, not to widen the gate.
 - `src/friends/mod.rs` (790 lines, the largest module root still holding its own implementation) became
   wiring plus eight children beside the `callbacks.rs`, `chat.rs` and `friend.rs` already there:
   `clans.rs` 174 (count, roster, name, tag, owner, officers, the two public/official flags, chat member
@@ -1421,6 +1434,44 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 
 ### Fixed
+
+- **Two unchecked conversions from Steam's own numbers into memory sizes**
+  (`src/networking_sockets/poll_group.rs`, `src/user_stats/stats.rs`). Both are the same shape as the
+  `message.rs` guards in the commit above -- a value Steam fills in is used as a length or a size with
+  no sign or width check -- and both were found by the sandbox audit rather than by reading the diff.
+  - `NetPollGroup::receive_messages` did `... ReceiveMessagesOnPollGroup(...) as usize` and
+    `set_len(count)`. Steam's contract is that the count "Returns the number of messages returned into
+    your array, up to nMaxMessages.  If the connection handle is invalid, -1 is returned"
+    (`isteamnetworkingsockets.h:320-321`), and the poll-group entry point claims "the same guarantees
+    are present as mentioned in ReceiveMessagesOnConnection" (`:552-553`). `create_poll_group` does not
+    reject an invalid handle, so -1 is reachable, and `-1 as usize` handed `set_len` a longer `Vec`
+    than any allocation -- UB at the moment the messages were drained. A `message_count` helper now
+    reads the negative answer as zero and truncates a count above the capacity to it. Three tests, and
+    both halves are pinned: the clamp and the fact that an honest count passes through untouched.
+  - `AchievementHelper` sized its RGBA buffer with `(width * height * 4).try_into().unwrap()`, where
+    `width`/`height` come from `ISteamUtils::GetImageSize`. The product is computed in `u32`, so an
+    image of 32768 on a side overflowed it -- panic in debug, wrap in release -- and the allocation
+    ended up smaller than the size passed to `GetImageRGBA`, which then wrote past it; the required
+    size is spelled out as "the destination buffer size should be 4 * height * width * sizeof(char)"
+    (`isteamutils.h:85`). `rgba_buffer_len` now does `checked_mul` twice and refuses anything that does
+    not fit the signed parameter it has to pass, which is also the 2GB boundary
+    `docs/defect-03-resize-deep-dive.md` measures on the callback path. Three tests cover the normal
+    case, the product leaving `u32`, and a size that fits `u32` but not `i32`.
+  Four mutation controls, all red: the wrapping product, the signed parameter ignored, the count cast
+  straight through, and the capacity clamp removed. Files restored from `cp` backups and compared
+  byte-for-byte.
+  Two things this unit also turned up about its own documentation and the audit's claims, recorded here
+  rather than quietly fixed:
+  **a)** the earlier note that `NetConnection`'s `Drop` would panic on its `.expect` is **wrong** --
+  `close()` sets `is_handled = true` at `connection.rs:205` before it hands the connection to Steam, so
+  the branch is never reached. It stays as a defensive arm and is registered, not tested, per the rule
+  about unreachable fallbacks.
+  **b)** `FakeUDPPort::receive_messages` has held this exact clamp as `received_count`
+  (`src/networking_sockets/fake_udp.rs:47`, tested at `:313-320`) all along, so `message_count` is a
+  second implementation of one rule; consolidating them is queued. And two `CHANGELOG.md` coordinates
+  that pointed at `poll_group.rs:67` were re-measured rather than left dangling -- the pointer register
+  in `doc_pointers.py` exempts only pointers whose *file* is gone, so a dated line number in a file that
+  still exists stays the author's problem, which is the right outcome.
 
 - **Four defects a sandbox audit executed rather than inferred** (`src/networking_types/message.rs`,
   `identity.rs`, `config.rs` and the six call sites that pass options to Steam). Each was reproduced in
