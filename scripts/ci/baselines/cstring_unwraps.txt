@@ -1,0 +1,38 @@
+# `CString::new(x).unwrap()` / `.expect(..)` where `x` is not a provably-safe literal.
+#
+# `CString::new` fails on interior nul bytes and nothing else, so when `x` is caller-supplied the
+# unwrap is a panic safe code can trigger from outside the crate. Measured 2026-10-18 by
+# scripts/ci/cstring_unwraps.py: 66 fallible conversions in the hand-written sources, 10 of them
+# on literals with no `\0` escape (those cannot fail, so they are not debt), leaving **56 sites
+# across 23 files** as the register below. Two independent measurements agreed on 56/23 before this
+# ledger was recorded (the ruler and a throwaway paren-matching script), which is the only reason
+# the number is worth writing down.
+#
+# This is a debt register, not a target line: the comparator judges both directions, so a new site
+# is red, and so is fixing one until the ledger is re-recorded downward. The direction is 0.
+# Two forms are already paid back and must not come back: `close()`'s debug string truncates at the
+# first nul instead (`src/networking_sockets/connection.rs`), and `http.rs` / `html_surface/mod.rs`
+# route through a `cstr()` that answers `InvalidParameter`.
+src/app.rs 1
+src/friends/friend.rs 2
+src/friends/overlay.rs 4
+src/friends/rich_presence.rs 2
+src/input/actions.rs 3
+src/input/core.rs 1
+src/input/origins.rs 1
+src/matchmaking/mod.rs 7
+src/matchmaking/queries.rs 4
+src/networking_sockets/connection.rs 1
+src/networking_types/config.rs 1
+src/remote_storage/api.rs 1
+src/screenshots.rs 1
+src/server/config.rs 10
+src/server/lifecycle.rs 1
+src/timeline.rs 4
+src/ugc/mod.rs 1
+src/user/mod.rs 1
+src/user_stats/achievements.rs 1
+src/user_stats/leaderboard.rs 2
+src/user_stats/stats.rs 1
+src/user_stats/stats_io.rs 4
+src/utils/text_input.rs 2

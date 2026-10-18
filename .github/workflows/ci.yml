@@ -132,6 +132,14 @@ jobs:
       # 44 个持裸指针，其中 7 个没有 owner（Browser/CookieContainer/HttpResponse/InventoryResult/
       # InventoryUpdateHandle/ServerListRequest/FileWriteBatch）；这 7 个现在都补了 owner，台账目标 0。
       # 空台账靠尺子自带的 `#scanned <N>` 自证读过了源码，否则"没扫到"和"扫到但都合规"同形。
+      # `CString::new(x).unwrap()` 在 x 含内嵌 NUL 时失败 —— x 是调用方给的话，这就是安全代码能从仓外
+      # 触发的 panic。2026-10-18 实测：66 处可失败转换里 10 处的参数是不含空字节转义的字面量（不可能失败，故不算债），
+      # 余 **56 处 / 23 个文件** 记成只许变短的债台账。字面量与 `.expect` 形态的分类理由写在尺子 docstring。
+      - name: fallible CString conversions stay counted as debt
+        run: |
+          python3 scripts/ci/cstring_unwraps.py src > "$RUNNER_TEMP/cstring_unwraps.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/cstring_unwraps.txt "$RUNNER_TEMP/cstring_unwraps.txt"
+
       - name: interface handles keep the client alive
         run: |
           python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"

@@ -217,6 +217,58 @@ def canary_handle_owners():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def canary_cstring_unwraps():
+    print("cstring_unwraps.py -- which CString::new(..) panics, and which only looks like one")
+    ruler = ROOT / CI / "cstring_unwraps.py"
+    tmp, dst = fixture(ruler)
+    try:
+        write(tmp / "src" / "caller.rs",
+              "pub fn set(value: &str) -> CString { CString::new(value).unwrap() }\n")
+        write(tmp / "src" / "safe_lit.rs",
+              'pub fn fixed() -> CString { CString::new("Handle was dropped").unwrap() }\n')
+        # The one literal shape that *does* fail: an escaped nul is the input CString::new rejects.
+        write(tmp / "src" / "nul_lit.rs",
+              'pub fn sneaky() -> CString { CString::new("a\\0b").unwrap() }\n')
+        write(tmp / "src" / "expect.rs",
+              'pub fn with_msg(value: &str) -> CString {\n'
+              '    CString::new(value).expect("no nul in the name")\n}\n')
+        # A substitution is not a panic; counting it would let a safe fallback be reported as debt.
+        write(tmp / "src" / "or_default.rs",
+              "pub fn fallback(value: &str) -> CString {\n"
+              "    CString::new(value).unwrap_or_default()\n}\n")
+        # And prose about the pattern must not become a site -- the changelog is full of it.
+        write(tmp / "src" / "prose.rs",
+              "// Upstream used CString::new(name).unwrap() here.\n"
+              "pub fn clean(value: &str) -> Result<CString, ()> { CString::new(value).map_err(|_| ()) }\n")
+        for i in range(20):  # the ruler's own floor is 20 scanned sources
+            write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        expect("a caller-supplied unwrap is a site",
+               0 if "src/caller.rs 1" in out.stdout else 1, 0)
+        expect("a literal with no nul is not a site",
+               0 if "safe_lit.rs" not in out.stdout else 1, 0)
+        expect("an escaped nul inside a literal is a site",
+               0 if "src/nul_lit.rs 1" in out.stdout else 1, 0)
+        expect("expect(..) counts the same as unwrap()",
+               0 if "src/expect.rs 1" in out.stdout else 1, 0)
+        expect("unwrap_or_default is not a panic",
+               0 if "or_default.rs" not in out.stdout else 1, 0)
+        expect("a comment about the pattern is not a site",
+               0 if "prose.rs" not in out.stdout else 1, 0)
+        expect("the coverage half of the claim is stated",
+               0 if "of 4 fallible CString conversions" in out.stderr else 1, 0)
+        measure = write(tmp / "cur.txt", out.stdout)
+        expect("the comparator turns the sites red against an empty ledger",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), measure]).returncode, 1)
+        probe = floor_probe(dst, "floor_probe.py", "if files < 20 or total == 0:",
+                            "if files < 5000 or total == 0:")
+        expect("too little scanned is refused rather than passed",
+               run_script(probe, ["src"], cwd=tmp).returncode, 2)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def replace_block(text, start, new):
     """Swap a whole `NAME = { ... }` literal for a fixture one.
 
@@ -567,6 +619,7 @@ def canary_shell_hatches():
 
 
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
+            canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,

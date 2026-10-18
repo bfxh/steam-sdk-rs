@@ -930,6 +930,38 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**
+  (new `scripts/ci/cstring_unwraps.py`, `scripts/ci/baselines/cstring_unwraps.txt`, a `quality` step, and
+  `canary_cstring_unwraps`). Measured, by two independent implementations that agreed before anything was
+  written down (the ruler, and a throwaway paren-matching script): **66 fallible `CString::new`
+  conversions in the hand-written sources, 10 of them on literals that contain no nul escape and so
+  cannot fail, leaving 56 caller-triggerable panic sites across 23 files** -- worst are
+  `src/server/config.rs` (10), `src/matchmaking/mod.rs` (7), then `friends/overlay.rs`,
+  `matchmaking/queries.rs`, `timeline.rs` and `user_stats/stats_io.rs` (4 each). The ledger is the 56 and
+  may only shrink in both directions, so a new site is red *and* fixing one stays red until the register
+  is re-recorded downward. Four classification decisions are what make the number mean something, and
+  each has a fixture behind it (73 canary assertions, up from 64): `.expect("…")` counts the same as
+  `.unwrap()` (a message does not make a panic cheaper); a string literal counts **only when it carries a
+  `\0` escape**, because that is precisely the input `CString::new` rejects and it looks safe at a glance;
+  `.unwrap_or_default()` does **not** count -- it substitutes instead of failing, and calling that a
+  panic site would inflate the debt with code that cannot crash (this correction landed before the
+  ledger was recorded, and the real corpus turned out to contain no such site, so the 56 did not move);
+  and comments are blanked line-and-all, not stripped of their `//` marker -- the same failure mode that
+  blinds a struct-body ruler, and here the changelog itself is full of `CString::new(..).unwrap()`
+  written as prose.
+  The gate caught its first real error before it was pushed, and the error was mine: writing the step's
+  Chinese comment through a shell heredoc turned the `\0` in "无 `\0` 的字面量" into an actual NUL byte
+  inside `.github/workflows/ci.yml`, and `workflow_inputs.py` went red with "only 5 referenced paths
+  found" instead of 45 -- a broken YAML does not look like a violation, it looks like an empty scan,
+  which is exactly the failure that gate exists to refuse. After the repair the file holds no NUL bytes,
+  `yaml.safe_load` parses it, and the `quality` job measures 21 steps (18 named); the local replay is 26
+  verdicts and `baseline_files.py` counts 13 ledgers. The local chain then went red on its own wiring,
+  which is worth recording next to the gate: both new rulers print their per-site detail on stderr, and
+  the replay lines I wrote sent `2>&1` into the measurement file, so `compare_baseline.py` choked on
+  `value is not an integer: 'CString::new(key).unwrap()'`. The CI steps were never wrong (they redirect
+  stdout only); the local `EXIT=0`-per-last-step habit is what let the mistake sit in the script at all,
+  and the `RED_VERDICTS` counter added earlier in the day is what caught it.
+
 - **The bindings-drift classifier is a script now, and it can see the case it used to miss**
   (`scripts/ci/bindings_drift.py`, four new canaries -- `canaries.py` runs 33 assertions where it ran
   29). `Rebuild bindings` has to answer "is this drift a reason to commit, or just the runner's C++

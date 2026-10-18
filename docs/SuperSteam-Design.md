@@ -1386,9 +1386,10 @@ struct Callbacks {
 ```
 
 上面这段是 2026-10-11 的规划稿，`deny`/`miri` 至今没进链（记在这里是为了别把它当成已存在）。
-**实际在跑的是 `quality` 作业的 20 个 step（其中 17 个具名，2026-10-18 按 YAML 复数：`- name:` 17 条、
-`- ` 步 20 条）**，
-外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 25 项判定。
+**实际在跑的是 `quality` 作业的 21 个 step（其中 18 个具名，2026-10-18 按 YAML 复数：`- name:` 18 条、
+`- ` 步 21 条）**，
+外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 26 项判定
+（`RED_VERDICTS` 是累计的，最后一行的 rc 不代表整条链）。
 2026-10-18 新增的是「句柄包装必须同时持住 client」这一步（`scripts/ci/handle_owners.py` +
 `baselines/handle_owners.txt`，目标 0）：实测 169 个 `pub struct` 里 44 个持裸
 `*mut sys::ISteam*`，其中 7 个过去不带 `Arc<Inner>`，于是 `Client` 一掉、`SteamAPI_Shutdown` 就在它们
