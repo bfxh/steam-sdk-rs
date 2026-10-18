@@ -1467,6 +1467,25 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+
+- **A listen-socket dispatch stops aborting on a state number it cannot name**
+  (`src/networking_sockets_callback.rs`). `listen_socket_callback` read the connection's state with
+  `event.connection_info.state().expect("invalid state")` -- and `state()` is exactly the fallible one of
+  this file's two end-side reads, `Result<NetworkingConnectionState, InvalidConnectionState>`, because
+  bindgen's `ENetConnection` is non-exhaustive and Steam can answer with a discriminant the crate has no
+  variant for. That value had one use: deciding whether to reject a connection nobody is left to accept.
+  So an unnameable state now takes the same path as any other non-`Connecting` state (`.ok()`, compared
+  as `Some(NetworkingConnectionState::Connecting)`), which is what the sibling method in the same file
+  already did with the same answer -- `independent_connection_callback` reads it as
+  `let Ok(new_state) = .. else { return; }`. The panic was this file disagreeing with itself, not a
+  precondition anyone wrote down.
+  No public shape changed and no new test is claimed: the call site needs an `Arc<InnerSocket>`, i.e. a
+  running client, so it is registered as uncovered -- the judgment it depends on
+  (`NetworkingConnectionState`'s conversion being fallible) is the crate's own declared signature, and the
+  unknown-answer handling now matches the other path that has to make the same decision.
+  Production panic-capable expressions: **34 -> 33**.
+
+
 - **The end-reason table got its first tests, and the two `expect(..)` calls that pretended it could
   fail are gone** (`src/networking_types/end.rs`, `src/networking_types/connection_info.rs`,
   `src/networking_types/events.rs`). `NetConnectionEnd` is built from Steam's plain `int` by

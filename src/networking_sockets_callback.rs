@@ -65,12 +65,18 @@ impl ConnectionCallbackHandler {
                 .and_then(|(socket, sender)| socket.upgrade().map(|socket| (socket, sender)))
             {
                 let connection_handle = event.connection;
-                let state = event.connection_info.state().expect("invalid state");
+                // The only use of this value is to decide whether to reject a connection that nobody is
+                // left to accept, so an unnameable state code takes the same path as "not connecting":
+                // nothing is rejected on the strength of a number this crate cannot read. The `.expect`
+                // that used to sit here aborted the dispatch, while the sibling method below in this
+                // file already handles the same unknown answer by leaving the branch
+                // (`independent_connection_callback`, which reads it as `let Ok(..) = .. else`).
+                let state = event.connection_info.state().ok();
                 if let Ok(event) = event.into_listen_socket_event(socket) {
                     if let Err(_err) = sender.send(event) {
                         // If the main socket was dropped, but the inner socket still exists, reject all new connections,
                         // as there's no way to accept them.
-                        if let NetworkingConnectionState::Connecting = state {
+                        if let Some(NetworkingConnectionState::Connecting) = state {
                             self.reject_connection(connection_handle);
                         }
                     }
