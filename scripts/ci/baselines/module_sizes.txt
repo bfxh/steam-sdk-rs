@@ -25,6 +25,7 @@ src/ugc/update.rs 404
 src/user/duration.rs 396
 src/html_surface/browser.rs 387
 src/networking_types/end.rs 384
+src/networking_sockets/mod.rs 383
 src/user/mod.rs 382
 src/lib_tests.rs 354
 src/inventory/result.rs 346
@@ -34,7 +35,6 @@ src/user_stats/stats.rs 333
 src/remote_storage/files.rs 331
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 330
-src/networking_sockets/mod.rs 315
 src/matchmaking/filters.rs 314
 src/server_stats.rs 309
 src/matchmaking/chat.rs 281
@@ -74,10 +74,10 @@ src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
 src/user_stats/stats_io.rs 130
 src/server/callbacks.rs 129
-src/networking_sockets/listen_socket.rs 122
 src/video.rs 122
 src/inventory/actions.rs 121
 src/networking_sockets_callback.rs 117
+src/networking_sockets/listen_socket.rs 113
 src/matchmaking/callbacks.rs 111
 src/networking_sockets/poll_group.rs 111
 src/server/auth.rs 107

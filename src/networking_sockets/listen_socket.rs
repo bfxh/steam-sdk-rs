@@ -107,16 +107,7 @@ impl ListenSocket {
                 results.as_mut_ptr(),
             );
             // Error codes are returned as negative numbers, while positive numbers are message numbers
-            results
-                .into_iter()
-                .map(|x| {
-                    if x >= 0 {
-                        Ok(MessageNumber(x as u64))
-                    } else {
-                        Err((-x).try_into().expect("invalid error code"))
-                    }
-                })
-                .collect()
+            results.into_iter().map(super::send_outcome).collect()
         }
     }
 }

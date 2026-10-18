@@ -1467,6 +1467,63 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Both `send_messages` sites stop panicking on an error code this crate has never seen**
+  (`src/networking_sockets/mod.rs`, `src/networking_sockets/listen_socket.rs`). The out-array of
+  `ISteamNetworkingSockets::SendMessages` is `int64` -- `pOutMessageNumberOrResult: *mut int64` in the
+  generated binding, and "If sending failed, then a negative EResult value is placed into the array.
+  For example, the array will hold -k_EResultInvalidState if the connection was in an invalid state."
+  (`isteamnetworkingsockets.h:297-299`) -- and both callers read it with
+  `Err((-x).try_into().expect("invalid error code"))`. `SteamError::try_from` answers
+  `InvalidSteamError::Unknown(raw)` for a code outside the mapped table, which is precisely the case
+  `expect` turned into an abort inside the caller's frame, on a value Steam chose, in a function whose
+  own return type is `Vec<SteamResult<MessageNumber>>`. It now maps through `send_outcome`, a pure
+  function next to `messages_received`, and an unmapped code becomes `SteamError::Generic` -- the
+  convention this crate already set for the same shape of answer when it fixed the FakeIP result status
+  (`src/lib.rs`, "An answer this enum has no variant for becomes `Fail` rather than a panic"; the exact
+  number stays reachable through `SteamError::try_from`). No public type or signature changed.
+  The negation is `checked_neg`, not `-x`: `-i64::MIN` is not representable, and the old form panicked
+  in a debug build while silently wrapping in a release one. Four tests cover the slot (non-negative
+  is a message number; a known negative decodes to the variant it names -- chosen to be `InvalidState`
+  so it cannot be confused with the fallback; `-4242` and `i64::MIN` are failures, not aborts).
+  Five mutants, all caught, with the judging mechanism named rather than assumed: flipping `>= 0` to
+  `> 0`, collapsing every failure to `Generic`, and never flipping the sign each went red on an
+  `assert`, so those three are locks; making the fallback `panic!` and un-checking the negation went
+  red because the function itself aborted -- which is the behaviour the two tests are named after, but
+  note the second of those only dies because the test profile has overflow checks on, and in a release
+  build the unchecked mutant would have wrapped into the same `Generic` answer by luck rather than by
+  contract.
+  Measured with the same ruler before and after: **43 -> 41** caller-visible panic-capable
+  expressions in production sources. The citation ruler caught one of my own sentences on its first run
+  (1 `~unjudged`): I had put the phrase `"a failure we cannot name"` in quotation marks in the same
+  block as two genuine ones, and a quote this repository wrote is debt, not a verdict. Paid by taking
+  the marks off, not by re-recording the debt column -- the ruler now reports 181 spans with all three debt columns at
+  0, the two `isteamnetworkingsockets.h` quotes matching verbatim.
+  Ledger moved deliberately, in both directions:
+  `module_sizes` `src/networking_sockets/mod.rs` 315 -> 383 (the pure function, its doc and its four
+  tests) and `src/networking_sockets/listen_socket.rs` 122 -> 113 (the caller it no longer duplicates);
+  registered total 29260 -> 29319. The first 380 was measured before `cargo fmt` re-wrapped the
+  `checked_neg` chain, and the entry quotes the number the ledger actually holds.
+
+- **The count of production panic sites was 43, not 81: the ruler could not see a bare `#[test]`
+  function living in a production file** (`scripts/ci/`, measurement only -- no gate was built on the
+  wrong number). Two scoping rules already exist here: `is_test_material` drops whole test files
+  (`src/lib_tests.rs` and friends) and `strip_test_modules` drops `#[cfg(test)] mod name { ... }`
+  blocks. Neither sees the third form, which this repository also uses: `#[test]` fns written at module
+  level, gated by nothing at all, because rustc only builds them for the test harness. 38 of the 79
+  sites found by the two existing rules sat in that form -- `src/remote_storage/mod.rs` alone accounts
+  for 12 of them (`test_one_shot_cloud_io`, `test_cloud`), and `matchmaking_servers.rs` another 7.
+  The number the next unit had been handed was therefore 1.9x its real target. The fix is in the
+  measuring tool, not in the tree: the triage script now blanks every `#[test]`-attributed function
+  body by brace counting, and re-running it against the tree is what produced the 43 above.
+  That scratch script is deliberately not shipped as a gate: "is this expression caller-triggerable"
+  needs a reading of the enclosing call, not a pattern count, and a ledger that pretends otherwise
+  would be the same vocabulary test `shell_hatches.py` had to stop being. The 43 split as 14 lock
+  poisoning (`Mutex`/`RwLock::lock().unwrap()`, reachable only after a holder already panicked),
+  ~10 decisions made from a Steam-supplied value or enum, 6 caller preconditions asserted in the
+  crate's documented idiom (one of which, `src/ugc/read.rs:110`, is a `const _: () = assert!(..)` and
+  never runs at all), and the rest internal invariants and un-failable literals.
+
+
 - **The CString ledger could have counted a test's own fixture as user-facing debt, and the rule that
   stops it was already in this repo under a different name** (`scripts/ci/api_coverage.py`,
   `scripts/ci/cstring_unwraps.py`, `canaries.py`). This crate keeps its bigger suites out of line --

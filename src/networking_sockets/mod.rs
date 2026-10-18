@@ -70,6 +70,83 @@ pub(crate) fn messages_received(raw: std::os::raw::c_int, offered: usize) -> usi
     usize::try_from(raw).unwrap_or(0).min(offered)
 }
 
+/// One slot of `SendMessages`' out-array: a message number, or the failure Steam put there.
+///
+/// The array is `int64`, and the header says which half of that range means what: "pOutMessageNumberOrResult
+/// is an optional array that will receive, for each message, the message number that was assigned to the
+/// message if sending was successful.  If sending failed, then a negative EResult value is placed into the
+/// array.  For example, the array will hold -k_EResultInvalidState if the connection was in an invalid
+/// state." (`isteamnetworkingsockets.h:295-299`).
+///
+/// So the negative branch is a value Steam chose, and the code is not guaranteed to be one this crate's
+/// table knows: `SteamError::try_from` answers `InvalidSteamError::Unknown(raw)` for exactly that case.
+/// An unmapped code becomes `SteamError::Generic` here rather than a panic, which is the convention this
+/// crate already set for the same shape of answer (`src/lib.rs`, the FakeIP result status). `Generic` is
+/// the coarsest true thing that can be said about such a code, and the exact number is still reachable by
+/// calling `SteamError::try_from` on the slot directly.
+///
+/// The negation is checked because `-i64::MIN` is not representable: the old `-x` would have panicked in
+/// a debug build and wrapped to the same negative number in a release one, which then fails the
+/// conversion anyway -- so the honest reading of that slot is an unnamed failure, not a number.
+pub(crate) fn send_outcome(code: i64) -> SteamResult<MessageNumber> {
+    if code >= 0 {
+        return Ok(MessageNumber(code as u64));
+    }
+    match code
+        .checked_neg()
+        .and_then(|raw| SteamError::try_from(raw).ok())
+    {
+        Some(error) => Err(error),
+        None => Err(SteamError::Generic),
+    }
+}
+
+#[cfg(test)]
+mod send_slot_tests {
+    //! The pure half of `send_messages`: what one `int64` slot of the out-array means. The FFI call
+    //! needs a running client, the reading of its answer does not, so the decision lives in
+    //! `send_outcome` and is judged here instead of being registered as uncovered.
+    use super::send_outcome;
+    use crate::networking_types::MessageNumber;
+    use crate::SteamError;
+    use steamworks_sys as sys;
+
+    #[test]
+    fn a_non_negative_slot_is_a_message_number() {
+        assert_eq!(send_outcome(0), Ok(MessageNumber(0)));
+        assert_eq!(send_outcome(4242), Ok(MessageNumber(4242)));
+        assert_eq!(send_outcome(i64::MAX), Ok(MessageNumber(i64::MAX as u64)));
+    }
+
+    /// "If sending failed, then a negative EResult value is placed into the array"
+    /// (`isteamnetworkingsockets.h:297-298`), so `-k_EResultInvalidState` has to arrive as the error
+    /// it names -- a variant of its own, which is what tells this apart from the fallback below.
+    #[test]
+    fn a_known_negative_slot_decodes_to_the_error_it_names() {
+        let code = -(sys::EResult::k_EResultInvalidState as i64);
+        assert!(matches!(send_outcome(code), Err(SteamError::InvalidState)),);
+    }
+
+    /// A code outside this crate's table used to abort the caller's frame on `.expect(..)`.
+    #[test]
+    fn an_unknown_negative_slot_is_an_unnamed_failure_not_a_panic() {
+        assert!(matches!(send_outcome(-4242), Err(SteamError::Generic)));
+        // `k_EResultFail` is *mapped*, to `Generic` (`src/error.rs:25`); this asserts the two routes
+        // do not get confused with each other by the fallback being the same variant.
+        assert!(matches!(
+            send_outcome(-(sys::EResult::k_EResultFail as i64)),
+            Err(SteamError::Generic)
+        ));
+    }
+
+    /// `-i64::MIN` overflows, and the slot is an `i64` Steam wrote. Debug builds panicked on the old
+    /// bare `-x`; release wrapped it back to a negative number that then failed conversion.
+    #[test]
+    fn the_extreme_negative_slot_is_a_failure_too() {
+        assert!(matches!(send_outcome(i64::MIN), Err(SteamError::Generic)));
+    }
+}
+
 #[cfg(test)]
 mod receive_count_tests {
     //! Pure half of the batched receive: the count clamp. The FFI call itself needs a running
@@ -300,16 +377,7 @@ impl NetworkingSockets {
                 messages.as_ptr(),
                 results.as_mut_ptr(),
             );
-            results
-                .into_iter()
-                .map(|x| {
-                    if x >= 0 {
-                        Ok(MessageNumber(x as u64))
-                    } else {
-                        Err((-x).try_into().expect("invalid error code"))
-                    }
-                })
-                .collect()
+            results.into_iter().map(send_outcome).collect()
         }
     }
 }
