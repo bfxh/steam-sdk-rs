@@ -1,8 +1,9 @@
-//! The two calls whose whole contract is an out-parameter: the account's local storage folder
-//! (`isteamuser.h:69`) and the finished encrypted app ticket (h:173).
+//! The two calls whose whole contract is an out-parameter: the account's local storage folder,
+//! which `isteamuser.h:67-69` describes as "the local storage folder for current Steam account to
+//! write application data", and the finished encrypted app ticket (`h:173`).
 //!
-//! Both were held back in `docs/SuperSteam-Design.md` §6.1d for exactly one reason -- "who
-//! allocates, how big, and what does a short buffer answer" -- and this module answers that from
+//! Both were held back in `docs/SuperSteam-Design.md` §6.1d for exactly one question -- who
+//! allocates, how big, and what does a short buffer answer -- and this module answers that from
 //! the header rather than from the signature. What it does not do is guess: where the header is
 //! silent about a failure mode, the wrapper detects the condition on its own side and refuses
 //! instead of returning something plausible.
@@ -12,7 +13,8 @@ use super::*;
 /// The buffer [`User::user_data_folder`] reads into.
 ///
 /// `GetUserDataFolder` returns a plain `bool` and the header never says what `false` means
-/// (`isteamuser.h:67-69`), so the size is chosen to make "it did not fit" effectively unreachable,
+/// (`isteamuser.h:67-69`), so the size is chosen to make a did-not-fit answer unreachable in
+/// practice,
 /// and the case is still detected (see `terminated_prefix`) rather than assumed away: 32 KiB is
 /// more than a hundred times Windows' own 260-character path limit, and the example Steam gives
 /// (`"C:\Progam Files\Steam\userdata\<SteamID>\<AppID>\local"`, `isteamuser.h:68`) is a fraction of
@@ -70,7 +72,8 @@ impl User {
     /// things can go wrong and both come back as errors, not as a quiet string:
     ///
     ///   * Steam returns `false`, whose meaning the header never states -- so it is reported as
-    ///     [`SteamError::InvalidState`] and nothing is inferred from it beyond "not granted".
+    ///     [`SteamError::InvalidState`], and nothing is inferred from it beyond the grant being
+    ///     absent.
     ///   * the path fills the whole buffer without terminating, which would be a truncated path.
     ///     That is detected here (`terminated_prefix`) because a cut path still *reads* like a
     ///     path.
@@ -101,7 +104,7 @@ impl User {
     /// it will be zero" (`isteamuser.h:167-172`).
     ///
     /// So: probe with NULL/0, allocate exactly what the probe reported, then fetch. A probe that
-    /// reports zero is [`SteamError::InvalidState`] ("no ticket yet"); a reported size above
+    /// reports zero is [`SteamError::InvalidState`] (nothing is available yet); a reported size above
     /// `MAX_TICKET_BYTES` is [`SteamError::InvalidParameter`] rather than a huge allocation; and
     /// a second round that still refuses after being given its own number is
     /// [`SteamError::InvalidState`] -- the protocol did not converge, which is Steam's problem to

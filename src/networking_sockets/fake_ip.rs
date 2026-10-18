@@ -102,7 +102,7 @@ impl NetworkingSockets {
     /// `:104-105` singles it out as the one failure a poller may tolerate), InvalidParameter,
     /// LimitExceeded (too many ports asked for, or a second request after one had succeeded) and
     /// NoMatch (never asked). A struct Steam left untouched reads as its zero value, and `EResult`'s
-    /// zero is not OK (`windows_bindings.rs:408` numbers `k_EResultOK` as 1), so "never answered" still
+    /// zero is not OK (`windows_bindings.rs:408` numbers `k_EResultOK` as 1), so a never-answered
     /// comes back `Err` instead of a successful-looking allocation with a zero address.
     pub fn get_fake_ip(&self) -> Result<FakeIpAllocation, SteamError> {
         let mut raw = std::mem::MaybeUninit::<sys::SteamNetworkingFakeIPResult_t>::zeroed();

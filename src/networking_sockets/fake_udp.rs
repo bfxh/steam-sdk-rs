@@ -72,7 +72,8 @@ pub struct FakeUDPPort {
 // Steam states one rule and then relaxes it: "this function call is not threadsafe with respect to
 // any other method of this interface. (However, in general all other operations are threadsafe with
 // respect to each other.)" (`steamnetworkingfakeip.h:33-35`). `destroy` therefore takes the value by
-// ownership and `receive_messages` takes `&mut self`, which is how Rust expresses "nothing else may
+// ownership and `receive_messages` takes `&mut self`, which is how Rust expresses that nothing
+// else may
 // be in flight"; everything else is shared `&self`.
 unsafe impl Send for FakeUDPPort {}
 unsafe impl Sync for FakeUDPPort {}

@@ -330,6 +330,7 @@ HEADER_FIXTURE = """// line one
 
 // line four says something else entirely about widgets and gadgets
 // and this sentence keeps talking on the line after it
+// deprecated - "this sentence is quoted inside the header comment"
 """
 OTHER_FIXTURE = "// a sentence that only lives in the other header, about trampolines\n"
 
@@ -369,6 +370,14 @@ def canary_header_citations():
          '/// `fake.h:2` quotes "a sentence that only lives in the other header"\n', 1),
         ("the author's own summary in quotes is debt, not a verdict",
          '/// `fake.h:2` is "a paraphrase no header contains verbatim at all"\n', 0),
+        # Paired so the inner-quote case cannot pass by matching nothing: the same phrase cited one line
+        # early is verbatim in the header but outside the span, which the gate must call red.
+        ("an inner quotation mark in Steam's comment is still matchable",
+         '/// `fake.h:6` says "deprecated - this sentence is quoted inside the header comment"\n', 0),
+        ("that same phrase, cited one line early, is red",
+         '/// `fake.h:5` says "deprecated - this sentence is quoted inside the header comment"\n', 1),
+        ("a one-word emphasis quote is neither judged nor debt",
+         '/// `fake.h:2` sets "colour", nothing else quoted\n', 0),
         # Both halves of this pair exist because the real ruler once joined header lines with their
         # `//` markers still attached, which makes any phrase Steam wrapped across two lines
         # unmatchable: measured on the repository, 25 of 93 verbatim quotes were invisible to it, and

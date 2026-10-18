@@ -1060,6 +1060,28 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   naming a shorthand `:873-875` in full makes it countable), `module_sizes` registered total
   27862 -> 27874. What is left on this ledger is 21 quoted phrases that no header contains verbatim --
   paraphrases wearing quotation marks, which is the next thing to pay down, not coverage to leave.
+- **Batch 4: both debt columns are empty, and the last two fixes were about this tool's own
+  approximations.** Splitting those 21 by what they actually were: **8 are emphasis** -- one- or
+  two-word quotes (`"nil value"`, `"not yet"`, `"UDP port"`) that neither claim a sentence nor locate a
+  line -- so `header_citations.py` now treats a quote below `MIN_PHRASE` as neither judged nor debt,
+  which is also what makes `~unjudged` mean "a claim that failed" instead of "a quotation mark".
+  **4 were Steam's own words the ruler could not see**, because their comments carry inner quotation
+  marks (`// deprecated - "you've been playing for 3 hours; take a break"`) and a quote delimited by
+  `"..."` cannot hold them: `norm` now drops `"` on both sides, so those four moved from debt to judged
+  instead of being deleted from the prose. The remaining 9 were this crate labelling something and
+  dressing the label as a quotation; each either got the header's real sentence -- `src/input/effects.rs`
+  now quotes "nFlags is a bitmask of values from ESteamInputLEDFlag - 0 will default to setting a color"
+  -- or had its marks taken off.
+  Two mistakes made *while* fixing this, both worth keeping:
+  * writing "colour" where the header writes "color" while turning a paraphrase into a quotation -- the
+    exact smoothing this exercise exists to stop, committed by the person doing the stopping. The gate
+    reported it as the last debt entry, which is the only reason it was noticed.
+  * taking quotation marks off four blocks moved their citations from `~unjudged` into `~undeclared`
+    (9 -> 1 while 0 -> 4): honest, but the wrong direction for a two-column debt ledger. Each of those
+    four then got a real quote in its place, so the marks came off *and* the citation stayed checked.
+  Final state: **130 spans, 0 findings, 0 unjudged, 0 undeclared** -- every SDK line citation in `src/`
+  is checked against the header it names, and an empty debt column is now the expected state rather than
+  a ceiling. `module_sizes` registered total 27874 -> 27882.
 - **The `Rebuild bindings` workflow can no longer commit its own diagnostic into the source tree.**
   `compare` uploads a drift diff as an artifact, and `compare`/`apply` both collect the regenerated
   bindings with `pattern: bindings-*` and `path: steamworks-sys/src/`. The artifact was named

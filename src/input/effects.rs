@@ -69,9 +69,10 @@ impl Input {
 
     /// Set the controller LED colour on supported controllers.
     ///
-    /// `flags` is a bitmask of `ESteamInputLEDFlag`; 0 means "set a colour". Steam restores the
-    /// default on exit, so a caller does not need to put it back while shutting down
-    /// (`isteaminput.h:962-963`).
+    /// `isteaminput.h:962-963`: "nFlags is a bitmask of values from ESteamInputLEDFlag - 0 will
+    /// default to setting a color", and Steam restores "the behavior on exit of your program so
+    /// you don't need to try restore the default as you are shutting down".
+    /// The flags are `ESteamInputLEDFlag` values.
     pub fn set_led_color(
         &self,
         controller: sys::InputHandle_t,

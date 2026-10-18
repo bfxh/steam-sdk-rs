@@ -19,9 +19,11 @@ pub enum UserHasLicense {
 
 /// Steam's answer to [`User::market_eligibility`].
 ///
-/// The response carries no result code -- `MarketEligibilityResponse_t` is the callback id plus the
+/// The response carries no result code: `isteamuser.h:385` is "struct MarketEligibilityResponse_t"
+/// and the body is the callback id plus the
 /// five fields below (`isteamuser.h:385-394`) -- so there is no failure this type could represent:
-/// Steam says "not allowed" through [`MarketEligibility::allowed`] and its reason bitfield.
+/// Steam declines through [`MarketEligibility::allowed`] and its reason bitfield, not through a
+/// result code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MarketEligibility {
     /// `isteamuser.h:388` declares the field as "bool m_bAllowed;" and puts no comment on it,
@@ -39,8 +41,9 @@ pub struct MarketEligibility {
     /// `sys::EMarketNotAllowedReasonFlags`.
     pub not_allowed_reason: sys::EMarketNotAllowedReasonFlags,
     /// `m_rtAllowedAtTime`, a Steam `RTime32` (the bindings define `pub type RTime32 = uint32`).
-    /// The header gives this field no comment (`isteamuser.h:390`), so it is forwarded as a raw
-    /// number and no meaning -- including "0 means nothing was said" -- is invented for it.
+    /// The header gives this field no comment -- `isteamuser.h:390` is all of "RTime32
+    /// m_rtAllowedAtTime;" -- so it is forwarded as a raw
+    /// number and no meaning -- including that a zero means nothing was said -- is invented for it.
     pub allowed_at: u32,
     /// "The number of days any user is required to have had Steam Guard before they can use the
     /// market" (`isteamuser.h:392`).

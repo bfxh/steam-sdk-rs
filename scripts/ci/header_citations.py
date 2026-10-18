@@ -71,11 +71,20 @@ ELISION = re.compile(r"\.\.\.|…")
 # Shorter than this and the "phrase" is a common English fragment: matching it proves nothing about
 # a line number, and a gate that approves by accident is worse than one that stays quiet.
 MIN_PHRASE = 10
+# Set by --explain. Off by default so CI output stays free of non-verdict lines.
+EXPLAIN = False
 
 
 def norm(text):
-    """Strip Markdown emphasis and collapse whitespace: prose decorates, headers do not."""
-    return re.sub(r"\s+", " ", text.replace("`", "").replace("*", "")).strip().lower()
+    """Strip Markdown emphasis, quotation marks and whitespace runs.
+
+    Dropping `"` is forced by the ruler's own syntax, not by taste: a quote is delimited by `"..."`,
+    so a sentence whose Steam comment contains its own quotation marks (`// deprecated - "you've been
+    playing for 3 hours; take a break"`) cannot be transcribed inside one without losing those marks.
+    Comparing with them removed on both sides is the only way such a quote can match at all; measured
+    on the corpus, four entries were in that situation, all of them genuinely Steam's words.
+    """
+    return re.sub(r"\s+", " ", text.replace("`", "").replace("*", "").replace('"', "")).strip().lower()
 
 
 def strip_comment(text):
@@ -181,7 +190,14 @@ def judge_quotes(line, block, spans, headers):
             if len(piece) >= MIN_PHRASE
         ]
         if not fragments:
-            unjudged += 1
+            # Every quoted run in this block is shorter than MIN_PHRASE. A one- or two-word quote
+            # ("nil value", "not yet", "UDP port") is emphasis, not a claim about Steam's wording, and
+            # it cannot locate a line either way -- so it is neither judged nor debt. Measured on the
+            # first full pass: 8 of the 21 entries in this column were of that kind, which is why the
+            # column is a count of *failed claims* rather than of quotation marks.
+            if EXPLAIN:
+                print(f"::note:: {line}: {quote.group(1)[:70]!r} -- emphasis, not a claim",
+                      file=sys.stderr)
             continue
         if any(
             all(any(piece in span for span in joined) for piece in fragments)
@@ -209,6 +225,9 @@ def judge_quotes(line, block, spans, headers):
             # not judging it: measured on today's corpus, one such fragment accounted for a quarter
             # of all reds the first version produced.
             unjudged += 1
+            if EXPLAIN:
+                print(f"::debt:: {line}: {quote.group(1)[:70]!r} -- boilerplate in "
+                      f"{len(uncited)} headers, attributes to none", file=sys.stderr)
         elif uncited:
             problems.append(
                 f"{line}: {quote.group(1)[:60]!r} is verbatim in {', '.join(uncited)}, "
@@ -216,6 +235,9 @@ def judge_quotes(line, block, spans, headers):
             )
         else:
             unjudged += 1
+            if EXPLAIN:
+                print(f"::debt:: {line}: {quote.group(1)[:70]!r} -- no header contains it; "
+                      "this crate's own wording inside quotation marks", file=sys.stderr)
     return problems, unjudged
 
 
@@ -260,9 +282,16 @@ def scan(path, headers, sdk_dir):
 
 def main():
     # Two optional arguments exist for the canary fixtures; the CI step runs it with none, on the
-    # repository's own `src/` and vendored SDK.
-    src = sys.argv[1] if len(sys.argv) > 1 else SRC
-    sdk_dir = sys.argv[2] if len(sys.argv) > 2 else SDK_DIR
+    # repository's own `src/` and vendored SDK. `--explain` is for paying the debt down: it names each
+    # unjudged phrase and why it is unjudged, which is the only way to tell "this is Steam's sentence,
+    # smoothed out" apart from "this is our sentence wearing quotation marks".
+    argv = sys.argv[1:]
+    global EXPLAIN
+    if "--explain" in argv:
+        EXPLAIN = True
+        argv = [a for a in argv if a != "--explain"]
+    src = argv[0] if len(argv) > 0 else SRC
+    sdk_dir = argv[1] if len(argv) > 1 else SDK_DIR
     if not os.path.isdir(sdk_dir):
         print(f"::error {sdk_dir} is missing, so no citation can be checked against anything",
               file=sys.stderr)
