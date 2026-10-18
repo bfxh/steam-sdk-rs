@@ -6,7 +6,7 @@ src/error.rs 603
 src/ugc/answers.rs 600
 src/ugc/mod.rs 598
 src/matchmaking_servers.rs 587
-src/timeline.rs 578
+src/timeline.rs 579
 src/callback.rs 560
 src/ugc/types.rs 559
 src/app.rs 550
@@ -15,13 +15,13 @@ src/networking_utils.rs 510
 src/networking_sockets/fake_ip.rs 506
 src/networking_messages.rs 502
 src/parties.rs 486
-src/matchmaking/mod.rs 478
+src/matchmaking/mod.rs 479
 src/ugc/results.rs 473
 src/ugc/query.rs 464
-src/user_stats/leaderboard.rs 458
+src/user_stats/leaderboard.rs 459
 src/user/voice.rs 436
 src/ugc/update.rs 404
-src/friends/friend.rs 401
+src/friends/friend.rs 402
 src/user/duration.rs 396
 src/html_surface/browser.rs 387
 src/networking_types/end.rs 384

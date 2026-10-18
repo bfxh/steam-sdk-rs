@@ -221,6 +221,10 @@ def canary_cstring_unwraps():
     print("cstring_unwraps.py -- which CString::new(..) panics, and which only looks like one")
     ruler = ROOT / CI / "cstring_unwraps.py"
     tmp, dst = fixture(ruler)
+    # This ruler imports `strip_test_modules` from its sibling `api_coverage.py`, so the fixture has to
+    # carry that dependency too -- otherwise the copy fails to start and every assertion in here reports
+    # a crash as if it were a verdict.
+    shutil.copyfile(ROOT / CI / "api_coverage.py", dst.parent / "api_coverage.py")
     try:
         write(tmp / "src" / "caller.rs",
               "pub fn set(value: &str) -> CString { CString::new(value).unwrap() }\n")

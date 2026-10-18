@@ -40,6 +40,13 @@ def strip_comments(text):
 
 
 def strip_test_modules(text):
+    """Blank file-scope `#[cfg(test)]` module bodies, **keeping one output line per input line**.
+
+    Blanking instead of dropping is load-bearing for every ruler that reports `path:line`: a line
+    number counted on text with lines removed points at the wrong source line, and it is wrong only
+    in the files that have a test module -- exactly where a reviewer stops trusting the report. The
+    set of names this yields is unchanged either way, so coverage counts do not move.
+    """
     lines = text.splitlines()
     kept = []
     skip_until_close = False
@@ -48,11 +55,13 @@ def strip_test_modules(text):
         if skip_until_close:
             if line == "}":
                 skip_until_close = False
+            kept.append("")
             continue
         if pending:
             pending = False
             if re.match(r"^mod \w+\s*\{$", line):
                 skip_until_close = True
+                kept.append("")
                 continue
         if line.strip() == "#[cfg(test)]":
             pending = True

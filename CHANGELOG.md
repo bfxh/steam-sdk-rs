@@ -1467,6 +1467,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Thirteen more fire-and-forget setters stopped panicking on a caller's nul byte**
+  (`src/friends/friend.rs`, `src/friends/overlay.rs`, `src/matchmaking/mod.rs`, `src/timeline.rs`,
+  `src/user_stats/leaderboard.rs`, `scripts/ci/api_coverage.py`). `invite_user_to_game`, the four
+  `activate_game_overlay*` / invite-dialog methods, `set_lobby_member_data` (key and value),
+  `set_timeline_state_description`, `add_timeline_event` (icon, title, description) and
+  `find_leaderboard` / `find_or_create_leaderboard` all took `CString::new(x).unwrap()` on a
+  caller-supplied string and return nothing but a callback registration, so the panic had no exit. They
+  share `c_string_prefix` now. `activate_invite_dialog_connect_string` carried a
+  `/// # Panics` / "Panics if the `connect` str contains a null byte." section -- a doc that promises a
+  panic is a claim about the public contract, so it was rewritten rather than left to rot; two such
+  sections remain live in `src/friends/rich_presence.rs` and `src/matchmaking/filters.rs`, which are
+  still-unpaid debt rows, not stale docs.
+  Paying them exposed a defect in the tooling rather than the code, and it is the kind that quietly
+  ruins a report: `cstring_unwraps.py` skips test modules by importing
+  `api_coverage.strip_test_modules`, and that function **dropped** lines. Line numbers were then counted
+  on text that was shorter than the file, so every `path:line` it printed was wrong in exactly the files
+  that have a `#[cfg(test)]` module -- it pointed me at `src/screenshots.rs:280` as a production setter
+  when the real site was a test, and that misdirection was the only reason I found it. It now blanks
+  those lines instead of dropping them (`api_coverage`'s own numbers did not move: 66 entries, total
+  1557, baseline holds), and the debt register re-measured to **31 sites across 17 files** from 44/20.
+  Importing that helper rather than copying it is what the canary suite caught next: `fixture()` copies
+  only the ruler under test into a temp tree, so the new sibling import made the copy fail to start, and
+  the canary reported "too little scanned is refused rather than passed" as a failure -- a crash wearing
+  a verdict's clothes. The fixture now carries `api_coverage.py` alongside, and 73 assertions pass.
+  Gate probe on the real tree, with the mtime discipline the previous unit established: restoring
+  `CString::new(description).unwrap()` at the range-event site made the ruler emit `src/timeline.rs 1`
+  (32 sites) and `compare_baseline.py` exit 1; restoring the file gave 31 sites and rc=0, and the suite
+  was green (198 passed). Ledger: `cstring_unwraps` 44 -> 31, `module_sizes` 29135 -> 29139,
+  `type_surface` 857 unchanged.
+
 - **Eleven setters panicked on a caller's nul byte, and they now share one rule**
   (`src/server/config.rs`, `src/networking_sockets/connection.rs`, new helper in
   `src/utils/strings.rs`). All ten `Server::set_*` string setters (`set_product`,

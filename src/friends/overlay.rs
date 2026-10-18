@@ -3,6 +3,7 @@
 //! invite dialogs.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 pub enum OverlayToStoreFlag {
     None = 0,
@@ -12,7 +13,7 @@ pub enum OverlayToStoreFlag {
 
 impl Friends {
     pub fn activate_game_overlay(&self, dialog: &str) {
-        let dialog = CString::new(dialog).unwrap();
+        let dialog = c_string_prefix(dialog);
         unsafe {
             sys::SteamAPI_ISteamFriends_ActivateGameOverlay(self.friends, dialog.as_ptr());
         }
@@ -21,7 +22,7 @@ impl Friends {
     // I don't know why these are part of friends either
     pub fn activate_game_overlay_to_web_page(&self, url: &str) {
         unsafe {
-            let url = CString::new(url).unwrap();
+            let url = c_string_prefix(url);
             sys::SteamAPI_ISteamFriends_ActivateGameOverlayToWebPage(
                 self.friends,
                 url.as_ptr(),
@@ -54,7 +55,7 @@ impl Friends {
     }
 
     pub fn activate_game_overlay_to_user(&self, dialog: &str, user: SteamId) {
-        let dialog = CString::new(dialog).unwrap();
+        let dialog = c_string_prefix(dialog);
         unsafe {
             sys::SteamAPI_ISteamFriends_ActivateGameOverlayToUser(
                 self.friends,
@@ -73,11 +74,10 @@ impl Friends {
 
     /// Opens up an invite dialog that will send Rich Presence connect string to friends
     ///
-    /// # Panics
-    ///
-    /// Panics if the `connect` str contains a null byte.
+    /// A connect string containing a nul byte is cut at that byte rather than crashing: Steam's
+    /// parameter is a `const char *`, so nothing past the nul could have reached it.
     pub fn activate_invite_dialog_connect_string(&self, connect: &str) {
-        let connect = CString::new(connect).unwrap();
+        let connect = c_string_prefix(connect);
         unsafe {
             sys::SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialogConnectString(
                 self.friends,

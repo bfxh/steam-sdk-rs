@@ -9,6 +9,7 @@
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 use super::*;
+use crate::utils::c_string_prefix;
 #[cfg(test)]
 use serial_test::serial;
 
@@ -230,8 +231,8 @@ impl Matchmaking {
     ///
     /// Triggers a LobbyDataUpdate callback.
     pub fn set_lobby_member_data(&self, lobby: LobbyId, key: &str, value: &str) {
-        let key = CString::new(key).unwrap();
-        let value = CString::new(value).unwrap();
+        let key = c_string_prefix(key);
+        let value = c_string_prefix(value);
         unsafe {
             sys::SteamAPI_ISteamMatchmaking_SetLobbyMemberData(
                 self.mm,

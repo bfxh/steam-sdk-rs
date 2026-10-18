@@ -19,24 +19,32 @@
 # is `c_string_prefix` in src/utils/strings.rs, and `debug_string_prefix` in
 # src/networking_sockets/connection.rs now delegates to it instead of keeping its own copy -- one
 # rule, one implementation.
+# Re-recorded immediately after: the ruler now drops file-scope `#[cfg(test)]` modules, using the
+# same scoping rule api_coverage.py already applies (imported, not reimplemented). That removed one
+# record -- src/input/origins.rs's `CString::new(vec![b'a', 0xff, b'b']).unwrap()` is a test choosing
+# a fixture, not a caller-triggerable crash -- so the register is 44 across 20 files.
+# Re-recorded again for the second payment: 13 more sites gone (friends/friend.rs, friends/overlay.rs
+# x4, matchmaking/mod.rs x2, timeline.rs x4, user_stats/leaderboard.rs x2), so the register is 31
+# across 17 files. Every one of those methods returns nothing -- no channel to answer through --
+# which is what makes cutting at the first NUL the faithful choice rather than a swallowed error.
+# Of the 32 fallible conversions left in non-test code, exactly 1 is an infallible literal
+# ("Handle was dropped" in NetConnection::drop), and no site is inside a #[cfg(test)] module any
+# more: the ruler blanks file-scope test modules through api_coverage.strip_test_modules, which had
+# to become line-preserving first because its dropped lines shifted every reported `path:line`.
 src/app.rs 1
-src/friends/friend.rs 2
-src/friends/overlay.rs 4
+src/friends/friend.rs 1
 src/friends/rich_presence.rs 2
 src/input/actions.rs 3
 src/input/core.rs 1
-src/input/origins.rs 1
-src/matchmaking/mod.rs 7
+src/matchmaking/mod.rs 5
 src/matchmaking/queries.rs 4
 src/networking_types/config.rs 1
 src/remote_storage/api.rs 1
 src/screenshots.rs 1
 src/server/lifecycle.rs 1
-src/timeline.rs 4
 src/ugc/mod.rs 1
 src/user/mod.rs 1
 src/user_stats/achievements.rs 1
-src/user_stats/leaderboard.rs 2
 src/user_stats/stats.rs 1
 src/user_stats/stats_io.rs 4
 src/utils/text_input.rs 2

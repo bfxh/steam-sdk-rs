@@ -18,6 +18,11 @@ The classification is the whole design, and it is deliberately narrow:
     prose can read a comment *about* `CString::new(..).unwrap()` as a live site -- and this crate's
     changelog and doc comments talk about that pattern constantly.
 
+Test code is skipped with the same rule `api_coverage.py` uses (imported, not copied): a
+`CString::new(..).unwrap()` inside a file-scope `#[cfg(test)]` module is the test *choosing* to
+panick on a bad fixture, not something a caller can trigger, so counting it would make the ledger a
+number nobody wants to drive to zero.
+
 The argument is found by paren matching rather than one-line regex, so a call wrapped across lines
 still counts, and `text[i:i+60]` for the method keeps `.unwrap()` attached to *this* conversion rather
 than to something later on the line.
@@ -28,6 +33,9 @@ files**. This ledger is that 56, and it may only shrink.
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api_coverage import strip_test_modules  # noqa: E402  (one test-scoping rule, not two)
 
 CALL = re.compile(r"CString::new\s*\(")
 LITERAL = re.compile(r'^(?:&?r?#*"|r"|#")')
@@ -91,7 +99,7 @@ def violations(root):
     for path in sorted(Path(root).rglob("*.rs")):
         if "bindings" in path.name:
             continue
-        text = blank_comments(path.read_text(encoding="utf-8", errors="replace"))
+        text = strip_test_modules(blank_comments(path.read_text(encoding="utf-8", errors="replace")))
         for line, method, argument in conversions(text):
             total += 1
             infallible = LITERAL.match(argument) and not NUL_ESCAPE.search(argument)

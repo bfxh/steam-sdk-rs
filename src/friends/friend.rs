@@ -6,6 +6,7 @@
 //! per-friend query, which is a different axis from the interface methods in `mod.rs`.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 pub struct Friend {
     id: SteamId,
@@ -169,7 +170,7 @@ impl Friend {
     /// If the game is already running for that user, then they will receive a GameRichPresenceJoinRequested_t callback with the connect string.
     pub fn invite_user_to_game(&self, connect_string: &str) {
         unsafe {
-            let connect_string = CString::new(connect_string).unwrap();
+            let connect_string = c_string_prefix(connect_string);
             sys::SteamAPI_ISteamFriends_InviteUserToGame(
                 self.friends,
                 self.id.0,

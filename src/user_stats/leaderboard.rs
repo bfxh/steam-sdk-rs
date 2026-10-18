@@ -3,6 +3,7 @@
 //! The manual `test()` at the bottom is the end-to-end leaderboard round-trip against Steam.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 /// How many downloaded entries the callback may iterate and reserve for.
 ///
@@ -96,7 +97,7 @@ impl UserStats {
         F: FnOnce(Result<Option<Leaderboard>, SteamError>) + 'static + Send,
     {
         unsafe {
-            let name = CString::new(name).unwrap();
+            let name = c_string_prefix(name);
             let api_call =
                 sys::SteamAPI_ISteamUserStats_FindLeaderboard(self.user_stats, name.as_ptr());
             register_call_result::<sys::LeaderboardFindResult_t, _>(
@@ -127,7 +128,7 @@ impl UserStats {
         F: FnOnce(Result<Option<Leaderboard>, SteamError>) + 'static + Send,
     {
         unsafe {
-            let name = CString::new(name).unwrap();
+            let name = c_string_prefix(name);
 
             let sort_method = match sort_method {
                 LeaderboardSortMethod::Ascending => {
