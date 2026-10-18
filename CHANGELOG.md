@@ -1467,6 +1467,35 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Eleven setters panicked on a caller's nul byte, and they now share one rule**
+  (`src/server/config.rs`, `src/networking_sockets/connection.rs`, new helper in
+  `src/utils/strings.rs`). All ten `Server::set_*` string setters (`set_product`,
+  `set_game_description`, `set_game_data`, `log_on`, `set_mod_dir`, `set_map_name`,
+  `set_server_name`, `set_tags`, and `set_key_value`'s pair) plus `set_connection_name` were
+  `CString::new(x).unwrap()` on an argument the caller chooses, and none of them returns anything --
+  there is no channel to report a failure through, so `unwrap` was a crash with no exit. They now build
+  the string with `c_string_prefix`, which cuts at the first NUL: every one of those parameters is a
+  `const char *` in the headers, so the NUL already ended the value Steam would read and nothing
+  observable is lost. Where a setter *does* have a channel the answer is `Err(InvalidParameter)`
+  (`cstr()` in `src/http.rs` and `src/html_surface/mod.rs`), and the helper's doc states that split so
+  the next one is not guessed. `debug_string_prefix` in `connection.rs` now delegates to the same helper
+  instead of keeping its own copy of the rule.
+  Mutation replay on the rule: dropping the cut (`Q1`) and taking the last piece instead of the first
+  (`Q2`) each turned tests red by assertion message -- in both files' modules at once, since they now
+  share one implementation. On the *gate*: putting `CString::new(product).unwrap()` back into
+  `set_product` made `cstring_unwraps.py` emit `src/server/config.rs 1` and `compare_baseline.py` exit 1
+  against the freshly re-recorded ledger ("1 of 22 entries disagree"), which is the proof the register
+  has teeth instead of being a list. Three tests cover the helper.
+  A methodology catch, because it nearly produced a false claim: the probe driver restored each file with
+  `shutil.copy2`, which **preserves the source's mtime**, so after the last restore `cargo test` reused
+  the binary built from the mutated source and the run's "final check" reported two assertion failures
+  that the tree did not contain. Touching the restored files and re-running turned that green (rc=0, 198
+  passed); the Q1/Q2 numbers above are from that second, honest run.
+  Ledger: `cstring_unwraps` 56 -> 45 across 21 files (both paid files leave the register),
+  `module_sizes` 29087 -> 29135, `type_surface` 857 and `api_coverage` 1557 unchanged -- no public
+  signature moved. The ruler's denominator reads 60 fallible conversions now (11 removed, plus 5 that
+  this unit's own test literals contributed), of which 15 are provably-safe literals.
+
 - **Seven public wrappers could outlive `SteamAPI_Shutdown`, because none of them held the client**
   (`src/html_surface/browser.rs`, `src/html_surface/mod.rs`, `src/http.rs`,
   `src/inventory/{mod,definitions,result}.rs`, `src/matchmaking_servers.rs`,

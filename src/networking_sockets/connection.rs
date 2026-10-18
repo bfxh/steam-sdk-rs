@@ -5,6 +5,7 @@
 //! method list grows independently of the listener and poll-group plumbing next door.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 pub struct NetConnection {
     pub(crate) handle: sys::HSteamNetConnection,
@@ -250,7 +251,7 @@ impl NetConnection {
 
     /// Set a name for the connection, used mostly for debugging
     pub fn set_connection_name(&self, name: &str) {
-        let name = CString::new(name).unwrap();
+        let name = c_string_prefix(name);
         unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_SetConnectionName(
                 self.sockets,
@@ -561,16 +562,15 @@ impl Drop for NetConnection {
 /// The debug string handed to Steam: the bytes up to the first nul, which is where a C string ends.
 ///
 /// `CString::new(value).unwrap()` used to sit at the top of `close()`, and `value` is a
-/// caller-supplied `Option<&str>`, so pasting a log line with a nul inside crashed the crate from
-/// safe code. Truncating is not a rule invented on this side: Steam's parameter is
-/// "const char *pszDebug" (`isteamnetworkingsockets.h:191`), so the nul already ended the string as
-/// far as Steam was concerned and everything after it was never going to be read.
+/// caller-supplied `Option<&str>`, so pasting a log line with a nul inside crashed the crate from safe
+/// code. The rule is `crate::utils::c_string_prefix`, shared with the other fire-and-forget setters;
+/// Steam's parameter is "const char *pszDebug" (`isteamnetworkingsockets.h:191`), so the nul already
+/// ended the string as far as Steam was concerned and everything after it was never going to be read.
 ///
 /// `None` for `None`, and an empty string keeps its own terminator: the caller asked for an empty
 /// debug string, not for no debug string.
 fn debug_string_prefix(value: Option<&str>) -> Option<CString> {
-    let head = value?.split('\0').next()?;
-    CString::new(head).ok()
+    Some(c_string_prefix(value?))
 }
 
 /// How much room this crate hands `GetConnectionName` for the connection's debug name.

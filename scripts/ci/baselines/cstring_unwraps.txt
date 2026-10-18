@@ -13,6 +13,12 @@
 # Two forms are already paid back and must not come back: `close()`'s debug string truncates at the
 # first nul instead (`src/networking_sockets/connection.rs`), and `http.rs` / `html_surface/mod.rs`
 # route through a `cstr()` that answers `InvalidParameter`.
+# Re-recorded the same day for the first payment: 11 of the 56 are gone (all 10 fire-and-forget
+# setters in src/server/config.rs plus set_connection_name), leaving 45 across 21 files. Both files
+# left the ledger entirely, which is the direction the register exists for. The rule they moved to
+# is `c_string_prefix` in src/utils/strings.rs, and `debug_string_prefix` in
+# src/networking_sockets/connection.rs now delegates to it instead of keeping its own copy -- one
+# rule, one implementation.
 src/app.rs 1
 src/friends/friend.rs 2
 src/friends/overlay.rs 4
@@ -22,11 +28,9 @@ src/input/core.rs 1
 src/input/origins.rs 1
 src/matchmaking/mod.rs 7
 src/matchmaking/queries.rs 4
-src/networking_sockets/connection.rs 1
 src/networking_types/config.rs 1
 src/remote_storage/api.rs 1
 src/screenshots.rs 1
-src/server/config.rs 10
 src/server/lifecycle.rs 1
 src/timeline.rs 4
 src/ugc/mod.rs 1

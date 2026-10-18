@@ -60,7 +60,7 @@ src/remote_play.rs 180
 src/input/origins.rs 178
 src/utils/text_input.rs 178
 src/friends/clans.rs 174
-src/server/config.rs 172
+src/server/config.rs 173
 src/server/lifecycle.rs 171
 src/music.rs 163
 src/friends/clan_chat.rs 157
@@ -79,6 +79,7 @@ src/inventory/actions.rs 121
 src/networking_sockets_callback.rs 117
 src/matchmaking/callbacks.rs 111
 src/networking_sockets/poll_group.rs 111
+src/utils/strings.rs 108
 src/server/auth.rs 107
 src/server/mod.rs 105
 src/input/actions.rs 104
@@ -103,7 +104,6 @@ src/input/roster.rs 67
 src/user/answers.rs 66
 src/html_surface/keys.rs 63
 src/user/callbacks.rs 61
-src/utils/strings.rs 61
 src/friends/messages.rs 60
 src/utils/ipv6.rs 60
 src/server/packets.rs 59
