@@ -10,6 +10,7 @@ pub use callbacks::*;
 pub use chat::*;
 pub use friend::*;
 pub use groups::FriendsGroupID;
+pub use profile_items::{ProfileItemProperty, ProfileItemPropertyKind, ProfileItemType};
 // The three readers above are helpers, not API: visible to this module, not re-exported.
 use chat::{chat_buffer_len, chat_entry_type_from, chat_text};
 
@@ -21,6 +22,7 @@ mod groups;
 mod list;
 mod messages;
 mod overlay;
+mod profile_items;
 mod rich_presence;
 mod sources;
 

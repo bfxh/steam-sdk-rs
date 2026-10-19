@@ -12,6 +12,27 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **The equipped profile items (`src/friends/profile_items.rs`)**: `has_equipped_profile_item`,
+  `profile_item_property_string` and `profile_item_property_uint` (`isteamfriends.h:431-433`), with
+  `ProfileItemType` (five slots, `:154-158`) and `ProfileItemProperty` (twelve properties, `:162-173`).
+  `ISteamFriends` moves 71 -> 74 of 78 and the project total to 692 of 913.
+  The property enum is annotated one entry at a time with the reader it belongs to -- "string" or
+  "uint32" in the comment column -- and the C interface does nothing to stop a caller asking
+  `GetProfileItemPropertyString` for `AppID`, which is a `uint32` property. `property_kind` turns that
+  comment column into a table the wrappers enforce before any call, so a mismatched reader is answered
+  with `InvalidParameter` rather than with whatever Steam's storage happens to hold. `Unrecognized(i32)`
+  on either enum cannot be sent at all: the generated layer declares no out-of-range name for these
+  enums, so there is no legal value to build (the same hard limit that shaped the UGC enums earlier).
+  `text_or_nothing` returns a string whole or not at all -- a lossy conversion would rewrite an item's
+  title into replacement characters that compare against nothing.
+  4 tests, 4 mutations, each killed by its own assertion message (AppID moved into the string block,
+  an unnamed number given a kind, lossy conversion, an unnamed item type sent as slot zero). Registered
+  unverified: what the three calls return for a user whose items were never requested -- that needs
+  `RequestEquippedProfileItems`, which is a `STEAM_CALL_RESULT` face and belongs to the callback work.
+  `MIN_PHRASE = 10` bit on this file first: two citing blocks quoted only "string"/"uint32", which is
+  six characters, so they landed in `~undeclared` (2 spans). They were anchored with sentences from the
+  header itself (`:150`, `:427`), not by dropping the citations.
+
 - **The source iterators (`src/friends/sources.rs`)** close the three calls Steam groups under
   "iterators for getting users in a chat room, lobby, game server or clan" (`isteamfriends.h:256-264`):
   `friend_count_from_source`, `friend_from_source` and `is_user_in_source`. `ISteamFriends` moves

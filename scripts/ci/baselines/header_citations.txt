@@ -112,7 +112,11 @@
 # 2026-10-20 friend sources face (src/friends/sources.rs): 3 more comment blocks cite the SDK,
 # so 47 files / 359 spans, and the three debt columns are still 0-0-0. Rows below are the fresh
 # measurement; the history above is kept by merging, never by overwriting this file.
+# 2026-10-20 profile-item face (src/friends/profile_items.rs): 48 files / 371 spans, debt
+# still 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10)
+# and were anchored with a Steam sentence of their own, not by dropping the citation.
 src/http.rs 0
+
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
 src/matchmaking_servers.rs 0
@@ -127,6 +131,9 @@ src/friends/callbacks.rs~undeclared 0
 src/friends/groups.rs 0
 src/friends/groups.rs~unjudged 0
 src/friends/groups.rs~undeclared 0
+src/friends/profile_items.rs 0
+src/friends/profile_items.rs~unjudged 0
+src/friends/profile_items.rs~undeclared 0
 src/friends/sources.rs 0
 src/friends/sources.rs~unjudged 0
 src/friends/sources.rs~undeclared 0
@@ -253,3 +260,6 @@ src/utils/strings.rs~undeclared 0
 src/utils/text_input.rs 0
 src/utils/text_input.rs~unjudged 0
 src/utils/text_input.rs~undeclared 0
+# 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10) and were
+# anchored with a Steam sentence of their own, not by dropping the citation.
+

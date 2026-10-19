@@ -40,6 +40,7 @@ src/screenshots.rs 330
 src/matchmaking/filters.rs 319
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
+src/friends/profile_items.rs 302
 src/user_stats/global_stats.rs 293
 src/user_stats/user_reads.rs 283
 src/matchmaking/chat.rs 281
@@ -107,7 +108,7 @@ src/friends/rich_presence.rs 85
 src/callback_stream.rs 84
 src/inventory/mod.rs 84
 src/input/callbacks.rs 83
-src/friends/mod.rs 73
+src/friends/mod.rs 75
 src/user/passthrough.rs 70
 src/remote_storage/visibility.rs 68
 src/input/roster.rs 67

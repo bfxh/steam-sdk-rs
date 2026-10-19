@@ -665,7 +665,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
-| ISteamFriends |   71 |  78 | ISteamGameServerStats |   10 |  10 |
+| ISteamFriends |   74 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
 | ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 689 / 913**（33 个接口；同日 ISteamFriends 好友分组读面 63→68、来源迭代面 68→71（`src/friends/sources.rs`，见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 692 / 913**（33 个接口；同日 ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74（`src/friends/profile_items.rs`，见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1246,6 +1246,21 @@ count 返回什么，所以这里既不承诺 0 也不承诺错误。3 测试 / 
 （新文件的三个块第一次交上去时 `~undeclared` 是 6，靠把三句头文件原话引进去还掉的——和前面几轮还
 `~undeclared` 债走的是同一条路）。ISteamFriends 余下 7 个未调：跟随列表 1、历史昵称 1、装备外观 4、
 协议注册 1。
+
+**2026-10-20 同日再补装备外观读面 71→74（3 只，`src/friends/profile_items.rs`）**：
+`isteamfriends.h:431-433` 三只同步读入口 + 两个枚举（槽位 5 个 `:154-158`、属性 12 个 `:162-173`）。
+本轮真正的缺陷在**属性那一列的注释**：每个属性后面写着 "string" 或 "uint32"，指明它属于哪只读函数，
+而 C 接口**什么都不拦**——拿 `GetProfileItemPropertyString` 去问 `AppID`（一个 uint32 属性）完全合法。
+`property_kind` 把那列注释变成表，两只读函数在**调用之前**按表拒错配（`InvalidParameter`）。
+`Unrecognized(i32)` 发不出去：生成层给这两个枚举**没有越界名**，所以没有合法值可造——
+和 UGC 那两个枚举当初的硬限制同一条（见上面 §6.1d 早段）。
+🔴 **本轮被尺子当场教了一次**：`MIN_PHRASE = 10`，而两个块只引了 "string"/"uint32"（6 个字符），
+于是 2 条 span 落进 `~undeclared`。还法是把头文件自己的句子（`:150`、`:427`）引进来，
+**不是把引用删掉**——引用没了，判据也没了。
+登记未证：这三只对着"从没请求过装备外观的用户"会返回什么——那要先走
+`RequestEquippedProfileItems`，它是 `STEAM_CALL_RESULT` 面，归回调那一批。
+ISteamFriends 余下 4 个未调：`RequestEquippedProfileItems`、`EnumerateFollowingList`（两只异步）、
+历史昵称 1、协议注册 1。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

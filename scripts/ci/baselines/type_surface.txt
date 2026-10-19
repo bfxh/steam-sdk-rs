@@ -1,4 +1,4 @@
-Friends 56
+Friends 59
 Server 49
 Input 45
 Matchmaking 38
