@@ -1102,10 +1102,11 @@ stats）。
 照旧改锚、不豁免。4 只测试、4 只变异全按断言消息判红（信出参、丢第四格、把 0 当日期、两格串起来各一刀）。
 
 **顺带量出下一轮该谈的一类债，不改行为**：`Result<_, ()>` 这种「只说失败、不说为什么」的公开签名还有
-25 个、`Err(())` 写法 30 处，落在 6 个文件里——`src/user_stats/` 四个文件 18 个签名（`stats.rs` 6、
-`stats_io.rs` 6、`global_stats.rs` 4、`achievements.rs` 2），`src/matchmaking_servers.rs` 7 个，
+26 个（**+1 是我自己添的**：2026-10-20 新写的 `cancel_query` 跟了同一类型另外五只方法的旧口径，没有另起
+一套混着两种错误类型的门面）、`Err(())` 写法 30 处，落在 6 个文件里——`src/user_stats/` 四个文件 18 个签名（`stats.rs` 6、
+`stats_io.rs` 6、`global_stats.rs` 4、`achievements.rs` 2），`src/matchmaking_servers.rs` 8 个，
 `src/matchmaking/mod.rs` 1 处 `Err(())`。把 `()` 换成 `SteamError` 是**破坏公开签名**的动作，与本仓已
-立的方向一致（builder 链那批就是这么改的），但一次动 25 个签名要用户点头才开工；未点头前本仓不动它，
+立的方向一致（builder 链那批就是这么改的），但一次动 26 个签名要用户点头才开工；未点头前本仓不动它，
 只把数写在这里。
 
 **同日再补 `ISteamUserStats` 全局成就百分位读面 37→41**（`src/user_stats/achievement_percents.rs` 新，
