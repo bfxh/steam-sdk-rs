@@ -109,6 +109,9 @@
 # inside double quotes (a `~unjudged` pair) and two citation blocks with no checkable phrase, fixed by
 # quoting Steam's declarations -- "typedef int16 FriendsGroupID_t", "returns the number of friends
 # groups" -- instead of paraphrasing them.
+# 2026-10-20 friend sources face (src/friends/sources.rs): 3 more comment blocks cite the SDK,
+# so 47 files / 359 spans, and the three debt columns are still 0-0-0. Rows below are the fresh
+# measurement; the history above is kept by merging, never by overwriting this file.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -124,6 +127,9 @@ src/friends/callbacks.rs~undeclared 0
 src/friends/groups.rs 0
 src/friends/groups.rs~unjudged 0
 src/friends/groups.rs~undeclared 0
+src/friends/sources.rs 0
+src/friends/sources.rs~unjudged 0
+src/friends/sources.rs~undeclared 0
 src/html_surface/browser.rs 0
 src/html_surface/browser.rs~unjudged 0
 src/html_surface/browser.rs~undeclared 0

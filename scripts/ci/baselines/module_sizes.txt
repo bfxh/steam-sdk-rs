@@ -54,7 +54,7 @@ src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244
 src/matchmaking/queries.rs 229
 src/remote_storage/api.rs 227
-src/friends/groups.rs 224
+src/friends/groups.rs 225
 src/networking_types/events.rs 224
 src/friends/chat.rs 216
 src/html_surface/mod.rs 215
@@ -78,6 +78,7 @@ src/user_stats/stat_callback.rs 152
 src/utils/mod.rs 148
 src/ugc/read.rs 142
 src/user_stats/achievements.rs 139
+src/friends/sources.rs 135
 src/inventory/prices.rs 132
 src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
@@ -106,7 +107,7 @@ src/friends/rich_presence.rs 85
 src/callback_stream.rs 84
 src/inventory/mod.rs 84
 src/input/callbacks.rs 83
-src/friends/mod.rs 72
+src/friends/mod.rs 73
 src/user/passthrough.rs 70
 src/remote_storage/visibility.rs 68
 src/input/roster.rs 67

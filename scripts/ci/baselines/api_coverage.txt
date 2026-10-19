@@ -1,4 +1,4 @@
-# 33 interfaces, 913 declared, 686 called
+# 33 interfaces, 913 declared, 689 called
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -35,7 +35,7 @@ ISteamVideo.declared 4
 ISteamApps.called 29
 ISteamClient.called 0
 ISteamController.called 0
-ISteamFriends.called 68
+ISteamFriends.called 71
 ISteamGameServer.called 34
 ISteamGameServerStats.called 10
 ISteamHTMLSurface.called 37

@@ -81,8 +81,9 @@ fn name_or_none(raw: *const c_char) -> Option<String> {
 /// (measured: `steamclientpublic.h:796` offers only `BValidExternalSteamID()`, declared and defined
 /// inside the closed library). So this crate forwards the number it asked for and does not invent a
 /// validity rule to drop entries with: a group that changed size between the two calls shows up as
-/// trailing SteamIDs the caller can compare against its own list, which is the only comparison
-/// available to it anyway.
+/// trailing SteamIDs, and [`SteamId::is_invalid`] -- which decodes the account-type field that same
+/// default constructor writes (`steamclientpublic.h:494`) -- is the comparison a caller has, without
+/// this crate claiming it is Steam's `BValid()`.
 fn member_slots(count: c_int) -> usize {
     count_or_zero(count)
 }

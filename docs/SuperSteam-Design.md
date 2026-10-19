@@ -665,7 +665,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
-| ISteamFriends |   68 |  78 | ISteamGameServerStats |   10 |  10 |
+| ISteamFriends |   71 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
 | ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 686 / 913**（33 个接口；同日 ISteamFriends 好友分组读面 63→68（`src/friends/groups.rs`，五个读入口，见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 689 / 913**（33 个接口；同日 ISteamFriends 好友分组读面 63→68、来源迭代面 68→71（`src/friends/sources.rs`，见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1230,6 +1230,22 @@ k_FriendsGroupID_Invalid"）。
 `module_sizes`、`package_inventory` +1、`test_floor_lib` 292；`MIN_BASELINES` 抬到实测的 **15**，
 而第一次抬到 16（我自己数错）被那道门自己判红——地板真在承重。
 余下 10 个未调：来源服务器 3、跟随列表 1、历史昵称 1、装备外观 4、协议注册 1（清单见上面聊天簇那段）。
+
+**2026-10-20 同日再补 `ISteamFriends` 来源迭代面 68→71（3 只，`src/friends/sources.rs`）**：
+`isteamfriends.h:256-264` 那一节（"iterators for getting users in a chat room, lobby, game server or
+clan"）。三条判断里只有**一条是 Steam 定的**：`id_or_unset` 把返回值 `0` 当作"没有这个人"，依据不是
+头文件的某句承诺，而是 `CSteamID` 默认构造把**四个分量全部写零**（`steamclientpublic.h:491-497`），
+其中两个枚举的声明值就是 0（`k_EAccountTypeInvalid` `:230`、`k_EUniverseInvalid` `steamuniverse.h:17`）
+⇒ packed union 全零 = 64 位 0，这是 Steam 自己的编码。另两条是本仓的：`source_index` 拒绝交不出
+`int` 的席位号，`source_count` 把负数夹到 0 而不是环绕成循环上界。**登记为未证**：头文件只写
+"note that large clans that cannot be iterated by the local user"（`:257`），**没说**迭代不动时
+count 返回什么，所以这里既不承诺 0 也不承诺错误。3 测试 / 3 变异各红在自己的那条断言上。
+同轮**自纠一句**：groups.rs 原文暗示调用方对"末尾无效席位"没有任何可比的东西——不实，本仓的
+`SteamId::is_invalid`（`src/identity.rs`）解的就是同一个 account-type 分量；已改成"有这一个可比，
+但它不等于头文件的 `BValid()`"。**引用尺本轮从 46 文件 / 347 span 涨到 47 / 359，三列债仍 0-0-0**
+（新文件的三个块第一次交上去时 `~undeclared` 是 6，靠把三句头文件原话引进去还掉的——和前面几轮还
+`~undeclared` 债走的是同一条路）。ISteamFriends 余下 7 个未调：跟随列表 1、历史昵称 1、装备外观 4、
+协议注册 1。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

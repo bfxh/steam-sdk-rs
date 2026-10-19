@@ -12,6 +12,30 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **The source iterators (`src/friends/sources.rs`)** close the three calls Steam groups under
+  "iterators for getting users in a chat room, lobby, game server or clan" (`isteamfriends.h:256-264`):
+  `friend_count_from_source`, `friend_from_source` and `is_user_in_source`. `ISteamFriends` moves
+  68 -> 71 of 78 and the project total to 689 of 913.
+  Two of the three decisions are this crate's, one is Steam's. `source_index` refuses a seat number
+  that cannot be handed over as C's `int` (a cast would have asked Steam about a different member than
+  the caller named). `source_count` clamps a negative at zero instead of wrapping it into a loop bound
+  of 18446744073709551615. `id_or_unset` answers `None` for the value `0` because that is what a
+  `CSteamID` holds when nobody wrote into it: Steam's own default constructor zeroes all four of its
+  components (`steamclientpublic.h:491-497`) and the two enums among them are declared as `0`
+  (`k_EAccountTypeInvalid`, `steamclientpublic.h:230`; `k_EUniverseInvalid`, `steamuniverse.h:17`), so
+  an all-zero 64-bit value in a packed union is Steam's encoding of "nothing", not a rule invented
+  here. Registered as unverified: what Steam actually returns for a clan its own comment says cannot be
+  iterated ("note that large clans that cannot be iterated by the local user", `:257`) -- the header
+  states the constraint and no out-of-range answer, so this wrapper neither promises 0 nor promises an
+  error for that case.
+  3 tests, 3 mutations, each killed by its own test (clamping replaced by `as usize`, refusing replaced
+  by a cast, the zero check removed). `header_citations` now measures 47 files / 359 spans with the
+  three debt columns at 0-0-0.
+  One correction to the friend-group bullet below, found while writing this one: it implied a caller
+  has no comparison available for the invalid trailing SteamIDs. It does -- this crate's own
+  `SteamId::is_invalid` (`src/identity.rs`) decodes that same account-type field -- and the module's doc
+  now says so. It is still not Steam's `BValid()`, which remains absent from the vendored SDK.
+
 - **The five friend-group readers (`src/friends/groups.rs`)** close the part of `ISteamFriends` that
   only needs a group number: `friends_group_count`, `friends_group_id`, `friends_group_name`,
   `friends_group_member_count` and `friends_group_members`, over the declarations at

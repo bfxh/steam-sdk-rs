@@ -22,6 +22,7 @@ mod list;
 mod messages;
 mod overlay;
 mod rich_presence;
+mod sources;
 
 pub use flags::*;
 pub use overlay::*;
