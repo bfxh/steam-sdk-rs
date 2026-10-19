@@ -300,6 +300,7 @@ pub enum NetworkingAvailability {
 /// In general, we will not automatically retry unless you take some action that
 /// depends on of requests this resource, such as querying the status, attempting
 /// to initiate a connection, receive a connection, etc.  If you do not take any
+#[non_exhaustive]
 #[derive(Debug, Error, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum NetworkingAvailabilityError {
     /// Internal dummy/sentinal. The network resource is probably not initialized yet
@@ -317,6 +318,16 @@ pub enum NetworkingAvailabilityError {
     /// We previously failed and are currently retrying
     #[error("We previously failed and are currently retrying")]
     Retrying,
+    /// A number outside the ladder this SDK declares, kept verbatim.
+    ///
+    /// Today exactly one declared value reaches this arm: "k_ESteamNetworkingAvailability__Force32bit =
+    /// 0x7fffffff," (`steamnetworkingtypes.h:124`), the width sentinel Steam puts at the end of every C
+    /// enum so the compiler gives it 32 bits -- a value that is not a status, which is why it is not
+    /// mapped onto one of the named answers above. A future SDK adding a rung to the ladder lands here
+    /// too, and the caller still gets the number. This replaced a `panic!`, which meant a value this
+    /// crate did not recognise aborted whoever asked for the status of a network resource.
+    #[error("availability code {0} is not a value this SDK declares")]
+    Unrecognized(i32),
 }
 
 impl TryFrom<sys::ESteamNetworkingAvailability> for NetworkingAvailability {
@@ -351,8 +362,94 @@ impl TryFrom<sys::ESteamNetworkingAvailability> for NetworkingAvailability {
             sys::ESteamNetworkingAvailability::k_ESteamNetworkingAvailability_Current => {
                 Ok(NetworkingAvailability::Current)
             }
-            _ => panic!("invalid networking availability {:?}", value),
+            // The ladder is total over the values Steam declares, and everything else -- today the
+            // width sentinel quoted on the variant above, tomorrow possibly a rung this SDK does not
+            // have -- becomes an answer the caller can read rather than a panic in their frame.
+            other => Err(NetworkingAvailabilityError::Unrecognized(other as i32)),
         }
+    }
+}
+
+#[cfg(test)]
+mod availability_tests {
+    //! The whole availability ladder, judged as a table. Nothing here needed a client before: the
+    //! conversion is a `match` over numbers Steam declares, and the interesting question is what the
+    //! crate answers for a number it does not.
+    use super::{NetworkingAvailability as Good, NetworkingAvailabilityError as Bad};
+    use std::convert::TryFrom;
+    use steamworks_sys as sys;
+    use sys::ESteamNetworkingAvailability as Raw;
+
+    /// "Negative values indicate a problem." (`steamnetworkingtypes.h:103`) -- the four positive rungs
+    /// are the trying-or-working side, and each negative one is its own named answer.
+    #[test]
+    fn the_ladder_reads_as_the_ladder_steam_declares() {
+        let table = [
+            (
+                Raw::k_ESteamNetworkingAvailability_NeverTried,
+                Good::NeverTried,
+            ),
+            (Raw::k_ESteamNetworkingAvailability_Waiting, Good::Waiting),
+            (
+                Raw::k_ESteamNetworkingAvailability_Attempting,
+                Good::Attempting,
+            ),
+            (Raw::k_ESteamNetworkingAvailability_Current, Good::Current),
+        ];
+        for (raw, good) in table {
+            assert_eq!(Good::try_from(raw), Ok(good), "{:?}", raw as i32);
+        }
+        let failures = [
+            (Raw::k_ESteamNetworkingAvailability_Unknown, Bad::Unknown),
+            (
+                Raw::k_ESteamNetworkingAvailability_CannotTry,
+                Bad::CannotTry,
+            ),
+            (Raw::k_ESteamNetworkingAvailability_Failed, Bad::Failed),
+            (
+                Raw::k_ESteamNetworkingAvailability_Previously,
+                Bad::Previously,
+            ),
+            (Raw::k_ESteamNetworkingAvailability_Retrying, Bad::Retrying),
+        ];
+        for (raw, bad) in failures {
+            assert_eq!(Good::try_from(raw), Err(bad), "{:?}", raw as i32);
+        }
+        assert_eq!(
+            table.len() + failures.len(),
+            9,
+            "the header declares nine values"
+        );
+    }
+
+    /// The width sentinel is not a status, and the answer for it used to be `panic!` -- a caller asking
+    /// "is this resource available?" got an abort out of a value that is only there to size the enum.
+    #[test]
+    fn the_width_sentinel_is_an_answer_not_an_abort() {
+        assert_eq!(
+            Good::try_from(Raw::k_ESteamNetworkingAvailability__Force32bit),
+            Err(Bad::Unrecognized(0x7fff_ffff)),
+            "the width sentinel arrives as itself, and the number is kept"
+        );
+    }
+
+    /// The five named answers stay distinguishable from each other and from the new one, so mapping a
+    /// value onto the wrong rung is something this table would notice.
+    #[test]
+    fn every_named_answer_is_still_distinguishable() {
+        let all = [
+            Bad::Unknown,
+            Bad::CannotTry,
+            Bad::Failed,
+            Bad::Previously,
+            Bad::Retrying,
+        ];
+        for (i, bad) in all.iter().enumerate() {
+            for (j, other) in all.iter().enumerate() {
+                assert_eq!(bad == other, i == j, "{:?} vs {:?}", bad, other);
+            }
+        }
+        assert_ne!(Bad::Unrecognized(0), Bad::Unknown);
     }
 }
 

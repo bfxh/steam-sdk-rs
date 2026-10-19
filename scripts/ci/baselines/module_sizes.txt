@@ -20,6 +20,7 @@ src/networking_types/end.rs 480
 src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 459
+src/networking_types/state.rs 458
 src/user/voice.rs 436
 src/friends/friend.rs 405
 src/ugc/update.rs 404
@@ -27,7 +28,6 @@ src/user/duration.rs 396
 src/html_surface/browser.rs 387
 src/networking_sockets/mod.rs 383
 src/user/mod.rs 382
-src/networking_types/state.rs 361
 src/lib_tests.rs 354
 src/inventory/result.rs 346
 src/networking_types/message.rs 342

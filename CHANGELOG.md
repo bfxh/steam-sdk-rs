@@ -1469,6 +1469,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Asking for a network resource's status no longer aborts on a number that is not a status**
+  (`src/networking_types/state.rs`). `TryFrom<ESteamNetworkingAvailability> for NetworkingAvailability`
+  ended in `panic!("invalid networking availability {:?}", value)`. Reading the header against the table:
+  Steam declares nine values and all nine were mapped -- "Negative values indicate a problem."
+  (`steamnetworkingtypes.h:103`) is the ladder's own rule, and the four rungs that are not problems are
+  `NeverTried`, `Waiting`, `Attempting`, `Current`. What reached the panic was
+  "k_ESteamNetworkingAvailability__Force32bit = 0x7fffffff," (`steamnetworkingtypes.h:124`): the width
+  sentinel C enums carry so the compiler sizes them, which is not a status at all. So the function that
+  already returns `Result<_, NetworkingAvailabilityError>` answered a harmless number by aborting the
+  caller, and a future SDK adding a rung would have done the same. The arm is now
+  `NetworkingAvailabilityError::Unrecognized(i32)`, which keeps the number instead of naming it wrongly;
+  unlike the connection-state table fixed in `836222f`, **no declared state was missing here** -- that
+  difference is what the table test now pins.
+  Three tests: the nine-row ladder (four positive rungs, five named problems, and an assertion that the
+  two groups really total nine, so the table cannot silently drop a rung), the width sentinel arriving as
+  `Unrecognized(0x7fffffff)` with its number intact, and pairwise distinctness among the named answers.
+  One of my first three drafts was thrown out before it shipped: a loop that asserted
+  `n == code || n == 0x7fffffff` passed for every input because of the `||` -- a green that judged
+  nothing, which is the same class of defect this repository has now caught in a `matches!` binding, a
+  comment-scoped ruler and a line-based panic count. Five mutants, all caught: restoring the `panic!` died
+  by aborting (the behaviour the test is named for), dropping the number, reading `Current` as
+  `NeverTried`, treating `Unknown` as available, and swapping two failure rungs each died on an
+  `assert_eq!`.
+  Production panic-capable expressions: **14 -> 13**. `header_citations` picked up the two spans above
+  (194 total, all three debt columns 0) after my first draft carried a scare-quoted paraphrase and a bare
+  citation with no phrase next to it -- both paid back by rewording, not by registering the growth.
+
+
+### Fixed
+
 - **Lock poisoning stopped being re-decided line by line: 22 guard requests, one policy**
   (`src/utils/locks.rs`, and the call sites in `src/lib.rs`, `src/callback.rs`, `src/matchmaking_servers.rs`,
   `src/networking_sockets_callback.rs`, `src/utils/warning.rs`, `src/networking_sockets/{connection,
@@ -2629,6 +2659,14 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **`NetworkingAvailabilityError` is `#[non_exhaustive]` and gained `Unrecognized(i32)`**
+  (`src/networking_types/state.rs`). Same category as the connection-state change in `836222f`: a match
+  that lists the five named answers without a wildcard stops compiling, and that is the point -- the
+  alternative was to keep answering an unrecognised number by aborting. Nothing in this repository matches
+  exhaustively on it (measured: the type appears only as a return type in
+  `src/networking_sockets/auth.rs`), and the variant is the one thing the old `panic!` could not express:
+  the number itself.
 
 - **Breaking, by the maintainer's pick: `NetworkingConnectionState` is now `#[non_exhaustive]` with four
   more variants, and its outgoing conversion is no longer infallible**
