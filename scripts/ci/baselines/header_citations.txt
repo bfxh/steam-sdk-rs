@@ -115,8 +115,11 @@
 # 2026-10-20 profile-item face (src/friends/profile_items.rs): 48 files / 371 spans, debt
 # still 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10)
 # and were anchored with a Steam sentence of their own, not by dropping the citation.
+# 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10) and were
+# anchored with a Steam sentence of their own, not by dropping the citation.
+# 2026-10-20 persona-history face (src/friends/history.rs): 49 files / 376 spans, debt 0-0-0;
+# two blocks first landed in ~undeclared and were anchored with the header's own sentence.
 src/http.rs 0
-
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
 src/matchmaking_servers.rs 0
@@ -131,6 +134,9 @@ src/friends/callbacks.rs~undeclared 0
 src/friends/groups.rs 0
 src/friends/groups.rs~unjudged 0
 src/friends/groups.rs~undeclared 0
+src/friends/history.rs 0
+src/friends/history.rs~unjudged 0
+src/friends/history.rs~undeclared 0
 src/friends/profile_items.rs 0
 src/friends/profile_items.rs~unjudged 0
 src/friends/profile_items.rs~undeclared 0
@@ -260,6 +266,3 @@ src/utils/strings.rs~undeclared 0
 src/utils/text_input.rs 0
 src/utils/text_input.rs~unjudged 0
 src/utils/text_input.rs~undeclared 0
-# 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10) and were
-# anchored with a Steam sentence of their own, not by dropping the citation.
-

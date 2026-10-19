@@ -19,6 +19,7 @@ mod clans;
 mod flags;
 mod followers;
 mod groups;
+mod history;
 mod list;
 mod messages;
 mod overlay;

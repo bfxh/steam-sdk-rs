@@ -1,4 +1,4 @@
-# counts: {'steamworks': 153, 'steamworks-sys': 74}
+# counts: {'steamworks': 154, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -26,6 +26,7 @@ steamworks/src/friends/flags.rs
 steamworks/src/friends/followers.rs
 steamworks/src/friends/friend.rs
 steamworks/src/friends/groups.rs
+steamworks/src/friends/history.rs
 steamworks/src/friends/list.rs
 steamworks/src/friends/messages.rs
 steamworks/src/friends/mod.rs

@@ -100,6 +100,7 @@ src/inventory/definitions.rs 102
 src/networking_sockets/connect.rs 100
 src/networking_sockets/status.rs 98
 src/input/layers.rs 96
+src/friends/history.rs 95
 src/friends/followers.rs 91
 src/friends/overlay.rs 88
 src/input/effects.rs 88
@@ -108,7 +109,7 @@ src/friends/rich_presence.rs 85
 src/callback_stream.rs 84
 src/inventory/mod.rs 84
 src/input/callbacks.rs 83
-src/friends/mod.rs 75
+src/friends/mod.rs 76
 src/user/passthrough.rs 70
 src/remote_storage/visibility.rs 68
 src/input/roster.rs 67

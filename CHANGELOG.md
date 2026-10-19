@@ -12,6 +12,23 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **The older persona names (`src/friends/history.rs`)**: `persona_name_history`, over the
+  declaration Steam introduces as "accesses old friends names - returns an empty string when their are
+  no more items in the history" (`isteamfriends.h:219-220`). `ISteamFriends` moves 74 -> 75 of 78 and
+  the project total to 693 of 913.
+  The header puts the end of the iterator *inside* the call, so there is no count method to pair with
+  it and the walk stops at the first `None`. `history_name` answers `None` for three different things
+  and the doc says which is whose: the empty string is Steam's declared marker, a null pointer is not
+  offered by the header at all, and a buffer that is not UTF-8 is refused rather than converted
+  lossily -- replacement characters would look like a handle a caller could compare against.
+  `history_index` refuses an entry number that cannot be handed over as Steam's `int`.
+  3 tests, 3 mutations, each killed by its own assertion message (empty marker forwarded as a name,
+  lossy conversion, cast instead of refusal). Two of this file's citing blocks first landed in
+  `~undeclared` for the same reason as the last unit: the phrase has to be at least
+  `MIN_PHRASE = 10` characters, so paraphrase-with-quotes does not anchor a block.
+  Registered unverified: whether Steam ever returns the null -- there is no client here, and the
+  header does not offer that answer either way.
+
 - **The equipped profile items (`src/friends/profile_items.rs`)**: `has_equipped_profile_item`,
   `profile_item_property_string` and `profile_item_property_uint` (`isteamfriends.h:431-433`), with
   `ProfileItemType` (five slots, `:154-158`) and `ProfileItemProperty` (twelve properties, `:162-173`).
