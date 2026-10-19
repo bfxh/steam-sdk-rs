@@ -5,9 +5,9 @@ UGC 37
 Browser 33
 QueryHandle 33
 User 33
+Matchmaking 32
 Apps 29
 Client 29
-Matchmaking 28
 Utils 28
 UserStats 24
 UpdateHandle 22

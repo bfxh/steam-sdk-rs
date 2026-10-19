@@ -2,7 +2,8 @@
 //! builder, and the chat side of a lobby.
 //!
 //! Split by who owns the code -- this file holds `Matchmaking` and the lobby lifecycle,
-//! `queries` holds the setter chain that configures a lobby-list request, `filters` holds the
+//! `queries` holds the setter chain that configures a lobby-list request, `favorites` holds
+//! the user's own stored server list, `filters` holds the
 //! types that chain accepts, `chat` holds the chat-entry vocabulary, and `callbacks` holds the
 //! payload structs Steam fires.
 
@@ -16,11 +17,13 @@ use serial_test::serial;
 
 mod callbacks;
 mod chat;
+mod favorites;
 mod filters;
 mod queries;
 
 pub use callbacks::*;
 pub use chat::*;
+pub use favorites::*;
 pub use filters::*;
 // `queries` adds no items of its own -- it is a second `impl Matchmaking` block, declared not
 // re-exported.

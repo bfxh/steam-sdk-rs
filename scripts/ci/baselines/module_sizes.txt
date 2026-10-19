@@ -13,7 +13,7 @@ src/app.rs 551
 src/networking_sockets/fake_udp.rs 536
 src/networking_sockets/fake_ip.rs 526
 src/networking_messages.rs 502
-src/matchmaking/mod.rs 495
+src/matchmaking/mod.rs 498
 src/parties.rs 486
 src/networking_types/end.rs 480
 src/ugc/results.rs 473
@@ -37,6 +37,7 @@ src/remote_storage/files.rs 331
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 330
 src/matchmaking/filters.rs 314
+src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
 src/matchmaking/chat.rs 281
 src/user_stats/global_stats.rs 280

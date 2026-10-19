@@ -64,6 +64,10 @@
 # the same 227 spans. `src/networking_utils.rs` left the ledger and `src/networking_utils/{fake_ip,
 # ping,relay}.rs` joined it -- the spans moved with the text, none were added, which is what the
 # `split_witness.py` reading of that commit is for.
+# Re-recorded again for the favorites unit: 38 files cite the SDK (was 37), 239 spans (was 227).
+# src/matchmaking/favorites.rs joins with four blocks; the spans came with the header sentences this
+# module had to quote to say what its own readings are, and the ruler judged none of them wrong --
+# the first time in three attempts, which is not evidence the ruler got weaker: its canary still bites.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -94,6 +98,9 @@ src/input/session.rs~undeclared 0
 src/matchmaking/chat.rs 0
 src/matchmaking/chat.rs~unjudged 0
 src/matchmaking/chat.rs~undeclared 0
+src/matchmaking/favorites.rs 0
+src/matchmaking/favorites.rs~unjudged 0
+src/matchmaking/favorites.rs~undeclared 0
 src/networking_sockets/connect.rs 0
 src/networking_sockets/connect.rs~unjudged 0
 src/networking_sockets/connect.rs~undeclared 0

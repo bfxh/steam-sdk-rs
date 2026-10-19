@@ -1,1 +1,1 @@
-255  # lib tests reached with --all-features, measured 2026-10-19 with the FakeIP identity lookup (2 tests added; floor was 165 while the suite had reached 242)
+262  # lib tests reached with --all-features, measured 2026-10-19 with the matchmaking favorites unit (7 tests added)

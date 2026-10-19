@@ -1003,6 +1003,36 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   they quote sit at 259 and 260 -- re-anchored, not exempted), lib test floor re-recorded at the
   measured 255.
 
+- **The user's own list of servers: `ISteamMatchmaking`'s favorites face**
+  (`src/matchmaking/favorites.rs`, new). `GetFavoriteGameCount`, `GetFavoriteGame`, `AddFavoriteGame`
+  and `RemoveFavoriteGame` (`isteammatchmaking.h:60-77`) become `favorite_game_count`,
+  `favorite_game(index) -> Option<FavoriteGame>`, `add_favorite_game(&FavoriteGame) -> Option<usize>`
+  and `remove_favorite_game(&FavoriteGame) -> bool`, with the two list bits exposed as a
+  `bitflags`-style `FavoriteFlags` built from Steam's own constants (`:525-527`). Four decisions are
+  this crate's, and the docs say so instead of dressing them up as Steam's:
+  * `AddFavoriteGame`'s header sentence describes what the call does and never says what a refusal
+    looks like, so a negative answer is read as `None` because a slot index cannot be negative --
+    anyone wanting Steam's exact int can still take the `sys::` binding.
+  * the `uint32` address word has no documented byte order either, so the crate keeps the reading it
+    already uses in both directions (`u32::from(addr)` out, `Ipv4Addr::from(bits)` back), and the
+    argument for it stays written once, on `User::advertise_game`.
+  * an unknown flag bit is retained rather than truncated, so `bits()` can always show the number
+    Steam wrote instead of quietly turning it into 0.
+  * `last_played_on_server` stays a raw `u32`: the header says the field "is filled in the with the
+    Unix time the favorite was added" (`:70`) and names no sentinel, so `0` is not "1970" and not
+    "unset".
+  Every clamp is a named function and every one has a lock: `favorite_count` (negative answer to 0,
+  never to `usize::MAX`), `favorite_index` (an index that cannot be a `c_int` never reaches Steam --
+  casting `usize::MAX` would hand over -1), `favorite_entry` (`false` means no entry and none of the
+  six out parameters is read), `stored_favorite_slot`, and the address pair
+  `favorite_address_word`/`favorite_address_from_word`, which exists as two functions precisely
+  because the previous unit's mutation replay showed that asserting `to_bits()` against itself tests
+  `std`. Seven tests, eight mutations, eight red on an assertion message. The four methods need a
+  running client, so the wiring is registered as unverified.
+  Ledgers: `ISteamMatchmaking.called` 28 -> 32 and the coverage total 647 -> 651 of 913, `Matchmaking`
+  28 -> 32 inherent methods, `src/matchmaking/favorites.rs` 310 lines with `mod.rs` 490 -> 498, header
+  citations 227 -> 239 spans across a 38th citing file, lib test floor re-recorded at the measured 262.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

@@ -1,4 +1,3 @@
-# counts: {'steamworks': 146, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -56,6 +55,7 @@ steamworks/src/lib.rs
 steamworks/src/lib_tests.rs
 steamworks/src/matchmaking/callbacks.rs
 steamworks/src/matchmaking/chat.rs
+steamworks/src/matchmaking/favorites.rs
 steamworks/src/matchmaking/filters.rs
 steamworks/src/matchmaking/mod.rs
 steamworks/src/matchmaking/queries.rs

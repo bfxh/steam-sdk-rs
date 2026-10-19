@@ -668,13 +668,13 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   31 |  44 | ISteamMusic |    9 |   9 |
-| ISteamMatchmaking |   28 |  38 | ISteamParentalSettings |    6 |   6 |
+| ISteamMatchmaking |   32 |  38 | ISteamParentalSettings |    6 |   6 |
 | ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
 | ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 647 / 913**（33 个接口；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 651 / 913**（33 个接口；同日再补 ISteamMatchmaking 的收藏服务器面 28→32（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -989,6 +989,25 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 | `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11770-11772` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
 | `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11773-11774`）——裸 C 函数指针回调，头文件 h:872-873 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
 | `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+
+**2026-10-19 补 `ISteamMatchmaking` 收藏服务器面 28→32**（`src/matchmaking/favorites.rs`，四个入口在
+`isteammatchmaking.h:60-77`、两个列表位在 `:525-527`）。两处判断不属于头文件，记在这里：
+
+- `AddFavoriteGame` 的返回，头文件只说 "adds the game server to the local list; updates the time
+  played of the server if it already exists in the list"（h:73），**没说拒绝长什么样**。本仓把它读成
+  `Option<usize>`，规则是自己定的："负数不是列表里的位置"（`stored_favorite_slot`），文档里写明这是
+  我们的读法而不是 Steam 的说法，要原始数字的人直接调 `sys::SteamAPI_ISteamMatchmaking_AddFavoriteGame`。
+- `uint32` 地址的字节序头文件同样没说。沿用本仓**双向已经在用**的那套（出去 `u32::from(addr)`、
+  回来 `Ipv4Addr::from(bits)`，于是 `192.168.1.1` = `0xC0A80101`；论证与那两个对拍点写在
+  `User::advertise_game` 的文档里，不在新模块重讲一遍），但收成两个具名函数
+  `favorite_address_word` / `favorite_address_from_word`——因为上一轮刚吃过一次教训：断言
+  `ip.to_bits()` 等于自己测的是 std，**必须有我方能被打变异的那一层**。改 `from_le_bytes` 一刀当场判红。
+
+其余照本仓老规矩：`favorite_count` 夹负（`-1 as usize` 会变成 18446744073709551615，任何按它循环的
+代码都跑到表外面）、`favorite_index` 拒绝放不下 `c_int` 的下标（否则 `usize::MAX` 会变成 -1 递给 Steam）、
+`favorite_entry` 在 `false` 那一路一个出参都不读、未知的 flag 位保留原值（`from_bits_retain`，
+不是 `from_bits_truncate` 那种把 Steam 的答复悄悄改成 0）。8 只变异 8 只按断言消息判红；
+四个方法本身要活客户端，登记为未验证。
 
 顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 resize 那一行"的行为，其 `resize`
 现在在 `src/lib.rs:323`（拆分与本行改动都让行号漂移过，本轮按内容重测；原句描述的行为本身没变）。
