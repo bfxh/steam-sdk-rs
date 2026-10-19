@@ -103,6 +103,12 @@
 # return, the lower the count the faster...", `isteammatchmaking.h:120`). One near-miss repeated and was
 # fixed the same way as before: a Steam declaration put inside backticks is NOT a citation to this ruler
 # (it needs double quotes), which is the second time that exact mistake cost a `~undeclared` span.
+# Re-recorded 2026-10-20 with the friend-group read face (`src/friends/groups.rs`, 5 wrappers): 46 files
+# cite the SDK, 347 spans, 0/0/0. The new file entered with 13 spans and clean citations on its first
+# pass except two blocks and two quotes of mine, which the ruler named before the commit: my own wording
+# inside double quotes (a `~unjudged` pair) and two citation blocks with no checkable phrase, fixed by
+# quoting Steam's declarations -- "typedef int16 FriendsGroupID_t", "returns the number of friends
+# groups" -- instead of paraphrasing them.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -115,6 +121,9 @@ src/networking_messages.rs~undeclared 0
 src/friends/callbacks.rs 0
 src/friends/callbacks.rs~unjudged 0
 src/friends/callbacks.rs~undeclared 0
+src/friends/groups.rs 0
+src/friends/groups.rs~unjudged 0
+src/friends/groups.rs~undeclared 0
 src/html_surface/browser.rs 0
 src/html_surface/browser.rs~unjudged 0
 src/html_surface/browser.rs~undeclared 0

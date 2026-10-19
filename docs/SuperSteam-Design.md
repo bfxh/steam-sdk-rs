@@ -665,7 +665,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
-| ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
+| ISteamFriends |   68 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
 | ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 681 / 913**（33 个接口；同日 `ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 686 / 913**（33 个接口；同日 ISteamFriends 好友分组读面 63→68（`src/friends/groups.rs`，五个读入口，见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1209,6 +1209,27 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   `gen_server_list_fn!` 生成的方法 ⇒ 台账里 `MatchmakingServers` 记 **4** 个内在方法，真实 **9** 个
   （写出来的 4 只：lan/ping/player_details/server_rules；宏生成 5 只，本轮起 6 只）。双向判红仍然成立，
   但它守的是 9 只里的 4 只；要补得先教尺子认宏体，列在这里待做。
+
+**2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
+声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，
+第一只是 "returns the number of friends groups"，索引越界那条是 "invalid indices return
+k_FriendsGroupID_Invalid"）。
+四条判断全部纯函数化，因此不需要活客户端就能进 CI：`group_index`（`usize` 装不进 `c_int` 就 `None`，
+不再 `as` 截断）、`group_id_or_none`（Steam 的 `k_FriendsGroupID_Invalid` 译成 `None`，不把 `-1`
+当组号发出去）、`count_or_zero`（负数不再环绕成 `usize::MAX`）、`name_or_none`（先验空指针再
+`CStr::from_ptr`）。
+**这一面刻意不做的两件事**：① 不按 Valve 的说法丢掉"排在末尾的无效用户"——成员表那条声明写着
+"if fewer exist than requested those positions' SteamIDs will be invalid"（`:237`），而能判这件事的
+`CSteamID::BValid()` 在绑定层**不存在**
+（`steamclientpublic.h:796` 只有 `BValidExternalSteamID`），替 Steam 发明"什么叫无效"正是本仓反复
+登记要避免的那类主张，所以原样交回 `FriendsGroupID` 与条数，让调用方拿去和自己的好友列表比；
+② 四个写入口（`CreateFriendGroup`/`DestroyFriendGroup`/`AddFriendToGroup`/`RemoveFriendFromGroup`）
+在生成层 **0 次出现**——不是"漏封"，是随仓 SDK 里根本没有可 call 的东西，登记而非硬造。
+4 只测试、4 只变异，各按**不同**断言消息判红（放行 `Some(-1)`、`as usize`、去掉空指针检查、
+`as c_int` 换掉 `try_from`）。台账随之重录：`api_coverage` Friends 68、`type_surface` Friends 48→53、
+`module_sizes`、`package_inventory` +1、`test_floor_lib` 292；`MIN_BASELINES` 抬到实测的 **15**，
+而第一次抬到 16（我自己数错）被那道门自己判红——地板真在承重。
+余下 10 个未调：来源服务器 3、跟随列表 1、历史昵称 1、装备外观 4、协议注册 1（清单见上面聊天簇那段）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

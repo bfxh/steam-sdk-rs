@@ -1,1 +1,1 @@
-288  # lib tests reached with --all-features, measured 2026-10-20 with the server-query handle (3 tests added)
+292  # lib tests reached with --all-features, measured 2026-10-20 with the friend-group read face (4 tests added)

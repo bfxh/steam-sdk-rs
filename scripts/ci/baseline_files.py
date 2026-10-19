@@ -72,7 +72,7 @@ EXCUSED_EMPTY = {
 
 # Measured on 2026-10-16: 11 files (the twelfth candidate, `header_citations.txt`, arrived with the
 # SDK-citation gate that day). Below this the scan is not looking at the real inventory.
-MIN_BASELINES = 14
+MIN_BASELINES = 15
 
 
 def tracked():

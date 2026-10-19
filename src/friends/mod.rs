@@ -9,6 +9,7 @@ mod friend;
 pub use callbacks::*;
 pub use chat::*;
 pub use friend::*;
+pub use groups::FriendsGroupID;
 // The three readers above are helpers, not API: visible to this module, not re-exported.
 use chat::{chat_buffer_len, chat_entry_type_from, chat_text};
 
@@ -16,6 +17,7 @@ mod clan_chat;
 mod clans;
 mod flags;
 mod followers;
+mod groups;
 mod list;
 mod messages;
 mod overlay;

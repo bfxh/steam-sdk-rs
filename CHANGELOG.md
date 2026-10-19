@@ -12,6 +12,30 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **The five friend-group readers (`src/friends/groups.rs`)** close the part of `ISteamFriends` that
+  only needs a group number: `friends_group_count`, `friends_group_id`, `friends_group_name`,
+  `friends_group_member_count` and `friends_group_members`, over the declarations at
+  `isteamfriends.h:228-238`. The mutators are not missing from this wrapper by oversight -- `CreateFriendGroup`,
+  `DestroyFriendGroup`, `AddFriendToGroup` and `RemoveFriendFromGroup` have **zero occurrences** in the
+  generated layer, so there is nothing to call; only the reads exist in the vendored SDK.
+  Every answer that could be nonsense is decided by a pure function so CI can judge it without a client:
+  `group_index` refuses an index that does not fit `c_int` rather than truncating it, `group_id_or_none`
+  maps Steam's `k_FriendsGroupID_Invalid` to `None` instead of handing out `-1` as if it named a group,
+  `count_or_zero` refuses a negative count where a `usize` would have wrapped it to the largest number
+  the type holds, and `name_or_none` refuses a null `const char *` instead of dereferencing it.
+  What this module deliberately does **not** do is drop the trailing entries that Valve calls invalid: the
+  declaration of `GetFriendsGroupMembersList` says that if fewer members exist than requested
+  "those positions' SteamIDs will be invalid" (`isteamfriends.h:237`), and the C++ helper that would filter
+  them, `CSteamID::BValid()`, is not in the bindings at all (`steamclientpublic.h:796` has only
+  `BValidExternalSteamID`), so deciding "is this seat a real friend" would be this crate inventing a
+  rule Steam never gave us. The raw `FriendsGroupID` and the raw count are returned instead, with the
+  caller able to compare against `SteamId::new` / their own friends list.
+  Four tests, four mutations, each killed by a different assertion message (`group_id_or_none` returning
+  `Some(-1)`, `count_or_zero` using `as usize`, `name_or_none` skipping the null check, `group_index`
+  casting instead of `try_from`). `ISteamFriends` moves 63 -> 68 of 78 and the project total to 686 of
+  913. `MIN_BASELINES` was raised to the measured 15 ledgers, and the first attempt at it -- 16, counted
+  wrongly by me -- was refused by that same gate.
+
 - **`ISteamMatchmakingServers` is closed at 17 of 17, because the last call needed a handle to exist**
   (`src/matchmaking_servers.rs`). `CancelServerQuery` (`isteammatchmaking.h:516`) was the only
   interface function still unwrapped, and it could not honestly be wrapped as a bare method: the three
