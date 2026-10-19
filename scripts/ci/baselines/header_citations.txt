@@ -78,6 +78,10 @@
 # (was 256), still 0/0/0. src/server/status.rs joined; two of its citations were off by one line and
 # two of its phrases were my own wording inside quotation marks -- the ruler judged all four, which is
 # the only reason the 275 means anything.
+# Re-recorded again for the clan-association unit: 40 files, 283 spans (was 275), still 0/0/0.
+# Two of the new citations were judged wrong on the first try by the same ruler -- a phrase from
+# :380 cited at 381-387, and one of my own sentences inside quotation marks -- and both were fixed in
+# the prose rather than exempted.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0

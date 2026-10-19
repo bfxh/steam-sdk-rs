@@ -663,7 +663,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
-| ISteamGameServer |   32 |  41 | ISteamNetworkingMessages |    6 |   6 |
+| ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 666 / 913**（33 个接口；同日再补 ISteamGameServer 状态面 23→32（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 668 / 913**（33 个接口；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1011,10 +1011,17 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 version of the SDK"（h:178-179）这两行底下；`SendUserConnectAndAuthenticate_DEPRECATED`（:236）与
 `SendUserDisconnect_DEPRECATED`（:250）名字里就带 `_DEPRECATED`，整个尾部段落的标题是
 "Deprecated functions.  These will be removed in a future version of the SDK."（:259）。
-剩下的 `RequestUserGroupStatus`（:173 "results returns async by GSUserGroupStatus_t"）、
-`AssociateWithClan`/`ComputeNewPlayerCompatibility`（返回 `SteamAPICall_t`）与
-`CreateUnauthenticatedUserConnection`/`BUpdateUserData` 都**留给下一轮**，原因是它们要么需要一条异步回调
-（那是回调单元的事），要么语义挂在这条已废弃的连接流程上——不是漏了。
+同日补掉 `AssociateWithClan`（:215）与 `ComputeNewPlayerCompatibility`（:219）——两个结果结构体
+（`AssociateWithClanResult_t` :374、`ComputeNewPlayerCompatibilityResult_t :381-387`）在绑定里都有，
+所以走 `register_call_result`，23→34。四只变异四只按断言消息判红：`io_error` 必须盖过载荷
+（没答上来的调用，结构体里 `m_eResult` 仍是 OK）、三个计数各归各位、候选者 id 不许丢、
+以及**只能读 64 位并集的低 32 位**这一刀。最后那刀第一次跑**照绿**，原因是夹具里的候选者 id 写的是 42
+——放得进 32 位，截断看不出来；换成真的 SteamID64（76561197960287930）才判红。
+⇒ 记一条口径：**"断言字段被原样送出"的测试，夹具必须大到截断/窄化会露出来**。
+**但 `RequestUserGroupStatus` 不封，而且理由不是"看起来麻烦"**：它自己的注释写"results returns async by
+GSUserGroupStatus_t"（:173），可是这个结构体在随仓 SDK 里**根本没有声明**——实测该名字只出现一次，
+就是那句注释，struct 定义为 0——绑定没有类型可回，封出来就是一个只有问题、没有答案出口的桩。
+剩下 `CreateUnauthenticatedUserConnection`/`BUpdateUserData` 仍留给下一轮（语义挂在那条废弃连接流程上）。
 
 **同日再补 lobby 控制面 32→38（该接口到满）并修掉一张缺号的表**（`src/matchmaking/mod.rs`、
 `queries.rs`）：

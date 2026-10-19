@@ -1,5 +1,5 @@
+Server 49
 Friends 48
-Server 47
 Input 45
 Matchmaking 38
 UGC 37

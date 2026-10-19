@@ -20,6 +20,7 @@ src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 459
 src/networking_types/state.rs 458
+src/server/status.rs 450
 src/user/voice.rs 436
 src/networking_types/addresses.rs 415
 src/friends/friend.rs 405
@@ -42,7 +43,6 @@ src/server_stats.rs 309
 src/matchmaking/chat.rs 281
 src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
-src/server/status.rs 274
 src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking.rs 257

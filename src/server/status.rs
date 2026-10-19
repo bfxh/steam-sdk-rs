@@ -1,6 +1,12 @@
 //! What Steam says about this server right now: whether it is logged on and to what standard,
-//! whether the master server wants it restarted, the address Steam advertises for it, and whether a
-//! given user holds a licence for a given app.
+//! whether the master server wants it restarted, the address Steam advertises for it, whether a
+//! given user holds a licence for a given app, and the two clan-association calls that answer async.
+//!
+//! One entry point in this interface stays unwrapped, and the reason is measured rather than
+//! inferred: `RequestUserGroupStatus` (`isteamgameserver.h:175`) says its result "returns async by
+//! GSUserGroupStatus_t" (`:173`), but no such struct is declared anywhere in the vendored SDK --
+//! measured: one mention, that comment, and zero definitions, so the generated layer has no type to
+//! hand back and the call would be a question with no way to read the answer.
 
 use super::*;
 use crate::utils::c_string_prefix;
@@ -48,6 +54,51 @@ pub enum UserLicense {
     /// while this means "Steam answered with something this build cannot read", and folding the two
     /// together would tell a caller to authenticate a user who already is.
     Unrecognized(i32),
+}
+
+/// Steam's answer to whether the current players and one candidate would each other.
+///
+/// The four numbers are Steam's own field names in `ComputeNewPlayerCompatibilityResult_t`, which
+/// the header introduces as "Sent as a reply to ComputeNewPlayerCompatibility()"
+/// (`isteamgameserver.h:380-387`): how many of the current players dislike the candidate, how many
+/// the candidate dislikes, and how many *clan* players dislike the candidate. They stay `i32`
+/// because the header declares no range for them -- see
+/// [`Server::compute_new_player_compatibility`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ClanCompatibility {
+    pub outcome: Result<(), SteamError>,
+    pub players_that_dont_like_candidate: i32,
+    pub candidate_doesnt_like: i32,
+    pub clan_players_that_dont_like_candidate: i32,
+    pub candidate: SteamId,
+}
+
+/// One answer's status, with the transport failure taken first.
+fn clan_association_answer(io_error: bool, raw: sys::EResult) -> Result<(), SteamError> {
+    if io_error {
+        return Err(SteamError::IOFailure);
+    }
+    crate::to_steam_result(raw)
+}
+
+/// The whole answer, with the transport failure written into the status rather than dropping the
+/// numbers Steam sent alongside it. The candidate is read here too, one level deeper than the
+/// counters, because that path is a decision of its own.
+fn clan_compatibility(
+    io_error: bool,
+    raw: &sys::ComputeNewPlayerCompatibilityResult_t,
+) -> ClanCompatibility {
+    ClanCompatibility {
+        outcome: clan_association_answer(io_error, raw.m_eResult),
+        players_that_dont_like_candidate: raw.m_cPlayersThatDontLikeCandidate,
+        candidate_doesnt_like: raw.m_cPlayersThatCandidateDoesntLike,
+        clan_players_that_dont_like_candidate: raw.m_cClanPlayersThatDontLikeCandidate,
+        candidate: SteamId::from_raw(unsafe {
+            // `m_steamid` is a union whose 64-bit view spans the whole field, so this reads the
+            // number Steam wrote rather than any of the narrower views beside it.
+            raw.m_SteamIDCandidate.m_steamid.m_unAll64Bits
+        }),
+    }
 }
 
 /// The address, from the three pieces Steam stored.
@@ -181,6 +232,59 @@ impl Server {
         let name = c_string_prefix(name);
         unsafe { sys::SteamAPI_ISteamGameServer_SetSpectatorServerName(self.server, name.as_ptr()) }
     }
+    /// Associates this server with a clan, and reports what Steam decided.
+    ///
+    /// Steam's sentence for the call is "associate this game server with this clan for the purposes
+    /// of computing player compat" (`isteamgameserver.h:213`), and the reply it names at `:214`
+    /// carries one field -- `m_eResult`, whose own comment reads "Result of the call" (`:377`). So
+    /// the outcome is a status and nothing else; `Ok(())` means Steam accepted the association.
+    ///
+    /// `callback` runs when the answer arrives, not when this returns, and it is dropped without
+    /// running if Steam never answers -- which is why this takes an ordinary closure rather than
+    /// pretending to be synchronous.
+    pub fn associate_with_clan<F>(&self, clan: SteamId, callback: F)
+    where
+        F: FnOnce(Result<(), SteamError>) + 'static + Send,
+    {
+        let api_call =
+            unsafe { sys::SteamAPI_ISteamGameServer_AssociateWithClan(self.server, clan.raw()) };
+        unsafe {
+            register_call_result::<sys::AssociateWithClanResult_t, _>(
+                &self.inner,
+                api_call,
+                move |answer, io_error| {
+                    callback(clan_association_answer(io_error, answer.m_eResult))
+                },
+            );
+        }
+    }
+
+    /// Asks whether this server's current clan members and one candidate player would each other.
+    ///
+    /// "ask if any of the current players dont want to play with this new player - or vice versa"
+    /// (`isteamgameserver.h:217`), answered by `ComputeNewPlayerCompatibilityResult_t` (`:218`),
+    /// which carries Steam's status plus three counters and the candidate the numbers are about.
+    /// The counters stay `i32` because that is the type Steam declares them as: the header says
+    /// nothing about their range, and turning a value it never described into a `usize` would be this
+    /// wrapper inventing a domain -- see [`ClanCompatibility`] for what each one counts.
+    pub fn compute_new_player_compatibility<F>(&self, candidate: SteamId, callback: F)
+    where
+        F: FnOnce(ClanCompatibility) + 'static + Send,
+    {
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamGameServer_ComputeNewPlayerCompatibility(
+                self.server,
+                candidate.raw(),
+            )
+        };
+        unsafe {
+            register_call_result::<sys::ComputeNewPlayerCompatibilityResult_t, _>(
+                &self.inner,
+                api_call,
+                move |answer, io_error| callback(clan_compatibility(io_error, answer)),
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -189,8 +293,10 @@ mod status_tests {
     //! registered as unverified: every method in this module needs a logged-on game server.
 
     use super::{
-        address_from_steam_parts, license_from_raw, ServerAddress as Addr, UserLicense as License,
+        address_from_steam_parts, clan_association_answer, clan_compatibility, license_from_raw,
+        ServerAddress as Addr, UserLicense as License,
     };
+    use crate::SteamId;
     use std::net::{Ipv4Addr, Ipv6Addr};
     use steamworks_sys as sys;
 
@@ -251,6 +357,76 @@ mod status_tests {
         assert_eq!(pairs.len(), 3, "the header declares three answers");
         // "not authenticated" and "has no licence" are different facts and must not collapse.
         assert_ne!(License::NoAuth, License::DoesNotHaveLicense);
+    }
+
+    /// Steam's reply struct, filled field by field so a crossed assignment shows up as a wrong
+    /// number in the wrong slot rather than as a plausible answer.
+    fn reply(
+        dont_like_candidate: i32,
+        candidate_doesnt_like: i32,
+        clan_dont_like_candidate: i32,
+        candidate: u64,
+    ) -> sys::ComputeNewPlayerCompatibilityResult_t {
+        sys::ComputeNewPlayerCompatibilityResult_t {
+            m_eResult: sys::EResult::k_EResultOK,
+            m_cPlayersThatDontLikeCandidate: dont_like_candidate,
+            m_cPlayersThatCandidateDoesntLike: candidate_doesnt_like,
+            m_cClanPlayersThatDontLikeCandidate: clan_dont_like_candidate,
+            m_SteamIDCandidate: sys::CSteamID {
+                m_steamid: sys::CSteamID_SteamID_t {
+                    m_unAll64Bits: candidate,
+                },
+            },
+        }
+    }
+
+    /// The transport failure has to win over the payload: Steam's own status field still says OK on
+    /// a call whose answer never arrived, so reading the payload first would turn "no answer" into
+    /// "accepted".
+    #[test]
+    fn a_lost_answer_is_reported_even_though_the_payload_says_ok() {
+        assert_eq!(
+            clan_association_answer(true, sys::EResult::k_EResultOK),
+            Err(crate::SteamError::IOFailure)
+        );
+        assert_eq!(
+            clan_association_answer(false, sys::EResult::k_EResultOK),
+            Ok(())
+        );
+        assert_eq!(
+            clan_association_answer(false, sys::EResult::k_EResultFail),
+            Err(crate::SteamError::Generic),
+            "a real refusal from Steam is not a transport problem"
+        );
+        let lost = clan_compatibility(true, &reply(4, 5, 6, 76561197960287930));
+        assert_eq!(lost.outcome, Err(crate::SteamError::IOFailure));
+        assert_eq!(
+            lost.candidate,
+            SteamId(76561197960287930),
+            "the numbers Steam sent are still reported alongside a failed status"
+        );
+    }
+
+    /// Each counter keeps its own slot. The mutation this exists for is crossing two of them, which
+    /// reads plausible and reports the wrong player population -- so the fixture values differ per
+    /// field and the candidate id is checked too.
+    #[test]
+    fn each_count_lands_in_its_own_field() {
+        // The candidate is a full 64-bit Steam ID on purpose: a fixture that fit in 32 bits
+        // would not notice a read that took only the low half of the union.
+        let candidate = 76561197960287930u64;
+        let answer = clan_compatibility(false, &reply(1, 2, 3, candidate));
+        assert_eq!(answer.outcome, Ok(()));
+        assert_eq!(answer.players_that_dont_like_candidate, 1);
+        assert_eq!(answer.candidate_doesnt_like, 2);
+        assert_eq!(answer.clan_players_that_dont_like_candidate, 3);
+        assert_eq!(answer.candidate, SteamId(candidate));
+        // A negative count stays negative rather than becoming a huge unsigned one, because the
+        // header describes no range for these and `i32` is what it declares.
+        assert_eq!(
+            clan_compatibility(false, &reply(-1, 0, 0, 1)).players_that_dont_like_candidate,
+            -1
+        );
     }
 
     /// A premise pin, not a lock on this crate's code: the numbers above are Steam's numbering, and

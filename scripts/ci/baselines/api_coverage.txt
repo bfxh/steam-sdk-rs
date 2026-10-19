@@ -35,7 +35,7 @@ ISteamApps.called 29
 ISteamClient.called 0
 ISteamController.called 0
 ISteamFriends.called 63
-ISteamGameServer.called 32
+ISteamGameServer.called 34
 ISteamGameServerStats.called 10
 ISteamHTMLSurface.called 37
 ISteamHTTP.called 22

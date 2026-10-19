@@ -1093,6 +1093,30 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   spans across a 40th citing file (the ruler judged two of my citations off by one line and flagged two
   of my own sentences wearing quotation marks before it was clean), lib test floor at the measured 269.
 
+- **The two clan-association calls that do answer, and the one whose answer type does not exist**
+  (`src/server/status.rs`). `AssociateWithClan` and `ComputeNewPlayerCompatibility`
+  (`isteamgameserver.h:215`, `:219`) become `associate_with_clan(SteamId, FnOnce(Result<(),
+  SteamError>))` and `compute_new_player_compatibility(SteamId, FnOnce(ClanCompatibility))`, both
+  through the crate's existing call-result registration; `ISteamGameServer` goes 32 -> 34. The reply
+  structs carry what the header says they carry and nothing more -- `AssociateWithClanResult_t` is one
+  field whose comment reads "Result of the call" (`:377`) -- and `ClanCompatibility`'s three counters
+  stay `i32`, Steam's declared type, because the header describes no range for them and widening an
+  undescribed value into `usize` would be the wrapper inventing a domain. The two decisions that are
+  real ones are functions: `clan_association_answer` puts the transport failure ahead of the payload
+  (a call that never answered still carries `k_EResultOK` in its struct, and reading the payload first
+  would turn "no answer" into "accepted"), and `clan_compatibility` keeps each counter in its own slot.
+  Four mutations, four red on an assertion message: ignoring `io_error`, crossing two counters,
+  dropping the candidate, and reading only the low half of the 64-bit union. The last one is worth
+  recording because it survived its first run: the fixture candidate was `42`, which fits in 32 bits,
+  so a narrowing read could not be seen -- the candidate became a real Steam ID (`76561197960287930`)
+  and only then did that mutation go red. A fixture that is too small is not a test.
+  `RequestUserGroupStatus` is **not** wrapped, and the reason is measured rather than judged from the
+  name: its own comment promises the result "returns async by GSUserGroupStatus_t"
+  (`isteamgameserver.h:173`), but that struct is declared nowhere in the vendored SDK -- measured: one
+  mention, the comment itself, and zero definitions -- so the generated layer has no type to hand back
+  and the call would be a question with no way to read an answer. Wrapping the `bool` alone would look
+  like coverage and deliver a stub.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

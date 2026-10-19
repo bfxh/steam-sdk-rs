@@ -1,1 +1,1 @@
-269  # lib tests reached with --all-features, measured 2026-10-19 with the game-server status unit (4 tests added)
+271  # lib tests reached with --all-features, measured 2026-10-19 with the clan-association unit (2 tests added)
