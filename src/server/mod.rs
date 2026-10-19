@@ -10,8 +10,10 @@ mod config;
 mod interfaces;
 mod lifecycle;
 mod packets;
+mod status;
 
 pub use callbacks::*;
+pub use status::*;
 
 /// The main entry point into the steam client for servers.
 ///

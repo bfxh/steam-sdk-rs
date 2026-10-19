@@ -42,6 +42,7 @@ src/server_stats.rs 309
 src/matchmaking/chat.rs 281
 src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
+src/server/status.rs 274
 src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking.rs 257
@@ -86,8 +87,8 @@ src/matchmaking/callbacks.rs 111
 src/networking_sockets/listen_socket.rs 110
 src/networking_sockets/poll_group.rs 107
 src/server/auth.rs 107
+src/server/mod.rs 107
 src/input/actions.rs 105
-src/server/mod.rs 105
 src/utils/filtering.rs 103
 src/inventory/definitions.rs 102
 src/networking_sockets/connect.rs 100

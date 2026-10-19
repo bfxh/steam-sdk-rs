@@ -1,7 +1,7 @@
 Friends 48
+Server 47
 Input 45
 Matchmaking 38
-Server 38
 UGC 37
 Browser 33
 QueryHandle 33

@@ -1,1 +1,1 @@
-265  # lib tests reached with --all-features, measured 2026-10-19 with the lobby-control unit (3 tests added)
+269  # lib tests reached with --all-features, measured 2026-10-19 with the game-server status unit (4 tests added)

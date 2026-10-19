@@ -74,6 +74,10 @@
 # ('no limit is defined' quoted in a block that cited :225-226 while the sentence is at :227) and
 # flagged one of my own sentences inside quotation marks, which is the second time this week the gate
 # caught the author wording rather than Steam's.
+# Re-recorded again for the game-server status unit: 40 files cite the SDK (was 39), 275 spans
+# (was 256), still 0/0/0. src/server/status.rs joined; two of its citations were off by one line and
+# two of its phrases were my own wording inside quotation marks -- the ruler judged all four, which is
+# the only reason the 275 means anything.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -155,6 +159,9 @@ src/remote_storage/api.rs~undeclared 0
 src/remote_storage/files.rs 0
 src/remote_storage/files.rs~unjudged 0
 src/remote_storage/files.rs~undeclared 0
+src/server/status.rs 0
+src/server/status.rs~unjudged 0
+src/server/status.rs~undeclared 0
 src/ugc/answers.rs 0
 src/ugc/answers.rs~unjudged 0
 src/ugc/answers.rs~undeclared 0

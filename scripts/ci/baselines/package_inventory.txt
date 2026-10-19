@@ -105,6 +105,7 @@ steamworks/src/server/interfaces.rs
 steamworks/src/server/lifecycle.rs
 steamworks/src/server/mod.rs
 steamworks/src/server/packets.rs
+steamworks/src/server/status.rs
 steamworks/src/server_stats.rs
 steamworks/src/timeline.rs
 steamworks/src/ugc/answers.rs

@@ -1059,6 +1059,40 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   that Steam's promise -- the target "will receive a LobbyInvite_t callback" (`:152`) -- is not
   delivered by this crate today, rather than implying it is.
 
+- **The game server's own state, and an address that carries two byte orders**
+  (`src/server/status.rs`, new). `LogOff`, `BLoggedOn`, `BSecure`, `WasRestartRequested`,
+  `GetPublicIP`, `UserHasLicenseForApp`, `SetRegion`, `SetSpectatorPort` and
+  `SetSpectatorServerName` (`isteamgameserver.h:65-75`, `:105-116`, `:136-137`, `:169-171`,
+  `:184-187`) become `log_off`, `is_logged_on`, `is_secure`, `restart_requested`,
+  `public_address() -> ServerAddress`, `user_has_license(SteamId, AppId) -> UserLicense`,
+  `set_region`, `set_spectator_port` and `set_spectator_server_name`. `ISteamGameServer` goes 23 -> 32.
+  `ServerAddress` exists because Steam's own struct documents the two families differently --
+  `m_unIPv4` as "Host order" and `m_rgubIPv6` as "Network order! Same as inaddr_in6"
+  (`steamtypes.h:115-116`) -- so the decode (`address_from_steam_parts`) reads the tag and applies the
+  order that field states; swapping the IPv4 word and letting a v6 tag fall into the v4 arm are both
+  killed by tests. The same struct has no tag for an unknown family, and `k_ESteamIPTypeIPv4` *is*
+  zero, so a struct nobody wrote reads as IPv4 `0.0.0.0` -- the docs say that rather than letting a
+  caller read it as "no address".
+  `UserLicense::Unrecognized` is registered as what it is: a future-only arm. `ESteamIPType` and
+  `EUserHasLicenseForAppResult` declare every value their tables name, so no legal input reaches that
+  arm, and this repository's rule is that an unreachable arm gets no test -- unlike the FakeIP
+  classifier earlier today, whose fallback is reachable through a declared sentinel and therefore has
+  one. That claim was checked rather than assumed: a mutation rewriting the fallback to return an
+  address **survived**, which is the reading this entry records.
+  Left unwrapped, each with the header's own words as the reason: `GetGameplayStats` and
+  `GetServerReputation` sit under "these two functions s are deprecated, and will not return results"
+  and "they will be removed in a future version of the SDK" (`isteamgameserver.h:178-179`); the two
+  `SendUser…_DEPRECATED` calls carry it in their names (`:236`, `:250`) under a section headed
+  "Deprecated functions." (`:259`). And `RequestUserGroupStatus` (`:173`, "results returns async by
+  GSUserGroupStatus_t"), `AssociateWithClan` and `ComputeNewPlayerCompatibility` (both returning
+  `SteamAPICall_t`) wait on the callback unit rather than being half-wrapped here.
+  Four tests, five mutations: four killed by assertion message -- including the premise pin, reddened
+  by renumbering `k_EUserHasLicenseResultNoAuth` to 6 in the generated layer -- and the one above
+  surviving by design. Restores verified byte-for-byte against a copy.
+  Ledgers: `Server` 38 -> 47 inherent methods, coverage 657 -> 666 of 913, header citations 256 -> 275
+  spans across a 40th citing file (the ruler judged two of my citations off by one line and flagged two
+  of my own sentences wearing quotation marks before it was clean), lib test floor at the measured 269.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

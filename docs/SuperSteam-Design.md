@@ -663,7 +663,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
-| ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    6 |   6 |
+| ISteamGameServer |   32 |  41 | ISteamNetworkingMessages |    6 |   6 |
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 657 / 913**（33 个接口；同日 ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 666 / 913**（33 个接口；同日再补 ISteamGameServer 状态面 23→32（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -989,6 +989,32 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 | `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11770-11772` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
 | `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11773-11774`）——裸 C 函数指针回调，头文件 h:872-873 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
 | `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+
+**同日补 `ISteamGameServer` 状态面 23→32**（`src/server/status.rs`）：`LogOff`、`BLoggedOn`、`BSecure`、
+`WasRestartRequested`、`GetPublicIP`、`UserHasLicenseForApp`、`SetRegion`、`SetSpectatorPort`、
+`SetSpectatorServerName`（h:65-75、:105-116、:136-137、:169-171、:184-187）。两处值得记的判据：
+
+- **`GetPublicIP` 返回的结构体里，两个族的字节序不一样**：`m_unIPv4` 是 "Host order"、
+  `m_rgubIPv6` 是 "Network order!"（`steamtypes.h:115-116`），所以解码必须按标签分两路，
+  写成 `address_from_steam_parts` 纯函数并各测一半（把 IPv4 的字 swap_bytes、或让 v6 标签走 v6 以外那一路，
+  都当场判红）。另一个坑是 `k_ESteamIPTypeIPv4 = 0`：全零结构体读出来就是 IPv4 `0.0.0.0`，
+  头文件没有"未知族"这个标签，所以文档明说这点而不是把它当成"没有地址"。
+- **`UserLicense::Unrecognized` 今天是不可达兜底**（`ESteamIPType`/`EUserHasLicenseForAppResult`
+  在绑定里只有声明的那几个值，造第三个越界值就是 UB），所以它**没有测试**，
+  而且我专门跑了一只"把兜底改成返回 IPv4 零地址"的变异确认它**照绿**——
+  这条存活不是测试太弱，是那条臂本来就到不了；登记成登记，不写成锁。
+  反过来，具名的三个答案各有自己的变体，"没认证过"不塌成"没许可证"（把 `NoAuth` 折进
+  `DoesNotHaveLicense` 的变异由表测试判红）。
+
+**照旧登记不封的理由，并且都引头文件原句**：`GetGameplayStats` 与 `GetServerReputation` 就在
+"these two functions s are deprecated, and will not return results / they will be removed in a future
+version of the SDK"（h:178-179）这两行底下；`SendUserConnectAndAuthenticate_DEPRECATED`（:236）与
+`SendUserDisconnect_DEPRECATED`（:250）名字里就带 `_DEPRECATED`，整个尾部段落的标题是
+"Deprecated functions.  These will be removed in a future version of the SDK."（:259）。
+剩下的 `RequestUserGroupStatus`（:173 "results returns async by GSUserGroupStatus_t"）、
+`AssociateWithClan`/`ComputeNewPlayerCompatibility`（返回 `SteamAPICall_t`）与
+`CreateUnauthenticatedUserConnection`/`BUpdateUserData` 都**留给下一轮**，原因是它们要么需要一条异步回调
+（那是回调单元的事），要么语义挂在这条已废弃的连接流程上——不是漏了。
 
 **同日再补 lobby 控制面 32→38（该接口到满）并修掉一张缺号的表**（`src/matchmaking/mod.rs`、
 `queries.rs`）：
