@@ -1,7 +1,7 @@
 src/lib.rs 833
 src/networking_sockets/connection.rs 712
 src/networking_types/config.rs 676
-src/matchmaking/mod.rs 655
+src/matchmaking/mod.rs 657
 src/matchmaking_servers.rs 641
 src/http.rs 616
 src/ugc/mod.rs 604
@@ -20,15 +20,15 @@ src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 459
 src/networking_types/state.rs 458
-src/server/status.rs 450
 src/user/voice.rs 436
-src/networking_types/addresses.rs 415
+src/networking_types/addresses.rs 417
 src/friends/friend.rs 405
 src/ugc/update.rs 404
 src/user/duration.rs 396
 src/html_surface/browser.rs 387
 src/networking_sockets/mod.rs 383
-src/user/mod.rs 382
+src/server/status.rs 378
+src/user/mod.rs 368
 src/lib_tests.rs 354
 src/inventory/result.rs 346
 src/networking_types/message.rs 342
@@ -45,8 +45,8 @@ src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
 src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
+src/networking_utils/fake_ip.rs 261
 src/networking.rs 257
-src/networking_utils/fake_ip.rs 254
 src/html_surface/callbacks.rs 247
 src/remote_storage/mod.rs 247
 src/user/auth.rs 244
@@ -77,6 +77,7 @@ src/user_stats/achievements.rs 138
 src/inventory/prices.rs 132
 src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
+src/user/answers.rs 130
 src/user_stats/stats_io.rs 130
 src/server/callbacks.rs 129
 src/networking_sockets_callback.rs 123
@@ -106,7 +107,6 @@ src/friends/mod.rs 70
 src/user/passthrough.rs 70
 src/remote_storage/visibility.rs 68
 src/input/roster.rs 67
-src/user/answers.rs 66
 src/input/core.rs 64
 src/html_surface/keys.rs 63
 src/user/callbacks.rs 61

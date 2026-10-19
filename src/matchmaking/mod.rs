@@ -617,7 +617,9 @@ mod lobby_type_tests {
         for (named, raw) in pairs {
             assert_eq!(lobby_type_to_raw(named), raw, "{:?}", named);
         }
-        assert_eq!(pairs.len(), 5, "the header declares five types");
+        // The header's five types are what the variant docs cite; a row count only catches a row
+        // dropped from this table, and its message says so rather than claiming to watch Steam.
+        assert_eq!(pairs.len(), 5, "this table enumerates five types");
     }
 
     /// The premise the table rests on: Steam's numbering, straight from the declarations behind it --

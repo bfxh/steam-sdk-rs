@@ -202,23 +202,9 @@ impl User {
     /// This can only be called after authenticating
     /// with the user using `begin_authentication_session`.
     pub fn user_has_license_for_app(&self, user: SteamId, app_id: AppId) -> UserHasLicense {
-        unsafe {
-            let license_response =
-                sys::SteamAPI_ISteamUser_UserHasLicenseForApp(self.user, user.0, app_id.0);
-
-            match license_response {
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultHasLicense => {
-                    UserHasLicense::HasLicense
-                }
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultDoesNotHaveLicense => {
-                    UserHasLicense::DoesNotHaveLicense
-                }
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultNoAuth => {
-                    UserHasLicense::NoAuth
-                }
-                _ => UserHasLicense::Unknown,
-            }
-        }
+        license_answer(unsafe {
+            sys::SteamAPI_ISteamUser_UserHasLicenseForApp(self.user, user.0, app_id.0)
+        })
     }
 
     /// Tells the Steam China duration-control system what the game's online state is now.

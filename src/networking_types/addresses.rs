@@ -80,7 +80,9 @@ impl SteamIpAddr {
 
     /// The address in Rust's own type, decoded from Steam's bytes rather than asked of Steam.
     ///
-    /// Both arms of the union are 16 bytes ("Store an IP and port", `steamnetworkingtypes.h:195`),
+    /// Both arms of the union are 16 bytes -- `uint8 m_ipv6[ 16 ]` beside the four-word mapped
+    /// struct (`steamnetworkingtypes.h:227-238`), inside the type Steam heads as "Store an IP and
+    /// port" (`:195`),
     /// so reading `m_ipv6` reads the same bytes a mapped IPv4 was written into, and the classification
     /// is the one Steam documents: "IPv4 aa.bb.cc.dd => IPv6 ::ffff:aabb:ccdd" (`:196`). Going through
     /// the generated accessors instead -- [`Self::is_ipv4`], then `GetIPv4` -- would need a live client for

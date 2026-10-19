@@ -999,7 +999,18 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
   写成 `address_from_steam_parts` 纯函数并各测一半（把 IPv4 的字 swap_bytes、或让 v6 标签走 v6 以外那一路，
   都当场判红）。另一个坑是 `k_ESteamIPTypeIPv4 = 0`：全零结构体读出来就是 IPv4 `0.0.0.0`，
   头文件没有"未知族"这个标签，所以文档明说这点而不是把它当成"没有地址"。
-- **`UserLicense::Unrecognized` 今天是不可达兜底**（`ESteamIPType`/`EUserHasLicenseForAppResult`
+- **复审改掉一处"两个 union 成员都读出来再看标签"**：`m_unIPv4` 声明成 `uint32`、`m_rgubIPv6` 声明成
+  `uint8[16]`（`steamtypes.h:115-116`），标签是 IPv4 时那 16 字节里有 12 字节没人写过——写错的不是
+  **值**（`address_from_steam_parts` 仍按标签选，报出来的地址是对的），是那次**读**：读未初始化
+  内存。现在 `public_address` 按标签只读选中的那一支。这一支选择要活着的 game server 才跑得动，
+  **登记为未覆盖**，纯函数那半照旧由各测一半钉住。
+- **两个接口问同一个问题，就只留一张表**：`User::user_has_license_for_app` 与
+  `Server::user_has_license` 原先各有一份许可证枚举（`user::UserHasLicense` 与这一轮新写的
+  `server::UserLicense`），现在都走 `user::answers.rs` 里的 `license_answer` 返回同一个
+  `UserHasLicense`；同时把兜底臂改名 `Unrecognized(i32)`，并给 `UserHasLicense`、`ServerAddress`
+  补上 `#[non_exhaustive]`——理由与 `LobbyType` 那条一样：往后 Steam 加值不该由我提前替调用方
+  决定"这算破坏性变更"。
+- **`UserHasLicense::Unrecognized` 今天是不可达兜底**（`ESteamIPType`/`EUserHasLicenseForAppResult`
   在绑定里只有声明的那几个值，造第三个越界值就是 UB），所以它**没有测试**，
   而且我专门跑了一只"把兜底改成返回 IPv4 零地址"的变异确认它**照绿**——
   这条存活不是测试太弱，是那条臂本来就到不了；登记成登记，不写成锁。

@@ -25,8 +25,8 @@ bitflags! {
     }
 }
 
-/// One stored server: the seven values Steam fills in for `GetFavoriteGame`
-/// (`isteammatchmaking.h:71`).
+/// One stored server: the six values Steam fills in for `GetFavoriteGame`
+/// (`isteammatchmaking.h:71`), which is also the index the caller asked about.
 ///
 /// `ip` and `connect_port` are what Steam reports as the server's address -- "*pnIP, *pnConnPort
 /// are filled in the with IP:port of the game server" (`:68`) -- and `last_played_on_server` is

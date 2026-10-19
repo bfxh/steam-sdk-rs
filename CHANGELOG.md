@@ -1064,7 +1064,7 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   `GetPublicIP`, `UserHasLicenseForApp`, `SetRegion`, `SetSpectatorPort` and
   `SetSpectatorServerName` (`isteamgameserver.h:65-75`, `:105-116`, `:136-137`, `:169-171`,
   `:184-187`) become `log_off`, `is_logged_on`, `is_secure`, `restart_requested`,
-  `public_address() -> ServerAddress`, `user_has_license(SteamId, AppId) -> UserLicense`,
+  `public_address() -> ServerAddress`, `user_has_license(SteamId, AppId) -> UserHasLicense`,
   `set_region`, `set_spectator_port` and `set_spectator_server_name`. `ISteamGameServer` goes 23 -> 32.
   `ServerAddress` exists because Steam's own struct documents the two families differently --
   `m_unIPv4` as "Host order" and `m_rgubIPv6` as "Network order! Same as inaddr_in6"
@@ -2888,6 +2888,29 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Two licence tables became one, and the public-address read became arm-selective**
+  (`src/user/answers.rs`, `src/server/status.rs`). Reviewing the entry above turned up two things
+  worth fixing before either name ships. First, `server::UserLicense` duplicated
+  `user::UserHasLicense`: both interfaces ask the same question, so both now answer it through
+  `license_answer` and return the one type, and the table's tests moved with it
+  (`every_licence_answer_steam_declares_has_a_name` plus its premise pin). Its fallback variant is
+  renamed `Unknown(i32)` -> `Unrecognized(i32)`, the name the rest of the crate gives an
+  out-of-table number, and `UserHasLicense` and `ServerAddress` are now `#[non_exhaustive]` for the
+  same reason `LobbyType` is: a value Steam adds later should not become this wrapper's breaking
+  change. Second, `public_address` copied **both** union arms before consulting the tag. The arms
+  are not the same size -- `uint32 m_unIPv4`, "Host order", against `uint8 m_rgubIPv6[16]`,
+  "Network order! Same as inaddr_in6." (`steamtypes.h:115-116`) -- so every IPv4 answer read twelve
+  bytes nobody had written. The reported address was still the one the tag selects, which is why no
+  test caught it: this was a bad read, not a wrong value. It now reads only the selected arm. That
+  selection needs a live game server, so it is registered as uncovered rather than tested; the pure
+  decode keeps both of its tests. Four claims in documentation were re-anchored in the same pass --
+  the arm widths in `src/networking_types/addresses.rs` now cite `steamnetworkingtypes.h:227-238`,
+  the favorites entry says "the six values Steam fills in", `FakeIpType::Invalid` no longer asserts
+  reachability it has not shown, and two fixture-length messages state what their tables enumerate.
+  Ledgers: 287 header-citation spans with all three debt columns at zero, `module_sizes` re-recorded
+  -- `src/server/status.rs` 450 -> 377 and `src/user/answers.rs` 66 -> 130, which is the table
+  moving rather than growing -- and the lib test floor holding at the measured 271.
 
 - **Breaking, by the same rule as the two state enums: `LobbyType` is `#[non_exhaustive]` and gained
   `PrivateUnique`** (`src/matchmaking/mod.rs`). Steam declares five lobby types

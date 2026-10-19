@@ -92,9 +92,12 @@ fn fake_ip_probe_argument(ip: Ipv4Addr) -> u32 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[non_exhaustive]
 pub enum FakeIpType {
-    /// "Error, argument was not even an IP address, etc." (`steamnetworkingtypes.h:185`). Reachable
-    /// from the entry point this crate wraps, which takes a bare number; the header only promises
-    /// never to return this for the *struct* form ("This function never returns" that value, `:244`).
+    /// "Error, argument was not even an IP address, etc." (`steamnetworkingtypes.h:185`). Steam
+    /// promises only that the *struct* form never returns it ("This function never returns" that
+    /// value, `:244`); for the bare-number entry point this crate wraps the header neither promises
+    /// nor excludes it -- and since every `uint32` is an address, the sentence arguably points the
+    /// other way. Whether Steam ever answers this for a number is registered as unverified: it needs
+    /// a running client.
     Invalid,
     /// "Argument was a valid IP, but was not from the reserved" fake range
     /// (`steamnetworkingtypes.h:186`) -- an ordinary address.
@@ -161,7 +164,11 @@ mod fake_ip_tests {
         for (raw, named) in pairs {
             assert_eq!(fake_ip_type_from_raw(raw), named, "{:?}", raw as i32);
         }
-        assert_eq!(pairs.len(), 4, "the header declares four classifications");
+        // A row count cannot be reddened by Steam changing its list -- the four names are pinned
+        // against the header by the citations on the variants and by
+        // `is_fake_agrees_with_the_comparison_steam_writes`, which recomputes Steam's own rule. This
+        // only stops a row being dropped from the table unnoticed.
+        assert_eq!(pairs.len(), 4, "this table enumerates four classifications");
         // Folding the declared zero into the fallback would keep `is_fake` correct and lose the
         // answer to "was my argument not even an address", which is the pair the header separates.
         assert_ne!(

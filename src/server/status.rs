@@ -19,7 +19,8 @@ use std::net::Ipv6Addr;
 /// "Network order! Same as inaddr_in6" (`:116`) -- so a decode that assumes one rule for both is
 /// wrong for one of them. `address_from_steam_parts` is where that is decided, and it is judged
 /// without a client.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum ServerAddress {
     /// The tag said IPv4, and this is `m_unIPv4` read most-significant octet first.
     Ipv4(Ipv4Addr),
@@ -32,27 +33,6 @@ pub enum ServerAddress {
     /// out of range for the enum rather than a test of this table. So this arm has no test and no
     /// fake input -- the ledger in `scripts/ci/baselines/no_panic_sites.txt` and the count here are
     /// what guard it, which is the same treatment the nine future-reachable arms got.
-    Unrecognized(i32),
-}
-
-/// Whether Steam thinks this user may play this app.
-///
-/// Three answers, each with Steam's own sentence on it -- the last reads "User has not been
-/// authenticated" (`steamclientpublic.h:223`) -- and a fourth for a number the generated layer does
-/// not name. The fourth is not reachable from anything the
-/// bindings declare, so it is tested by nothing -- see [`ServerAddress::Unrecognized`] for why that is
-/// the right handling rather than a fixture that invents an illegal discriminant.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UserLicense {
-    /// "User has a license for specified app" (`steamclientpublic.h:221`).
-    HasLicense,
-    /// "User does not have a license for the specified app" (`:222`).
-    DoesNotHaveLicense,
-    /// "User has not been authenticated" (`:223`).
-    NoAuth,
-    /// A number with no declared name. Kept as a value: `NoAuth` means "nobody checked this user yet",
-    /// while this means "Steam answered with something this build cannot read", and folding the two
-    /// together would tell a caller to authenticate a user who already is.
     Unrecognized(i32),
 }
 
@@ -114,17 +94,6 @@ fn address_from_steam_parts(
     }
 }
 
-/// The licence answer, from Steam's enum.
-fn license_from_raw(raw: sys::EUserHasLicenseForAppResult) -> UserLicense {
-    use sys::EUserHasLicenseForAppResult::*;
-    match raw {
-        k_EUserHasLicenseResultHasLicense => UserLicense::HasLicense,
-        k_EUserHasLicenseResultDoesNotHaveLicense => UserLicense::DoesNotHaveLicense,
-        k_EUserHasLicenseResultNoAuth => UserLicense::NoAuth,
-        other => UserLicense::Unrecognized(other as i32),
-    }
-}
-
 impl Server {
     /// Starts the process of logging this server out of Steam.
     ///
@@ -172,16 +141,21 @@ impl Server {
     /// zero-initialised struct reads as IPv4 `0.0.0.0` because that tag is the value zero.
     pub fn public_address(&self) -> ServerAddress {
         let raw = unsafe { sys::SteamAPI_ISteamGameServer_GetPublicIP(self.server) };
-        // Both arms are copied out before the tag is consulted, because the struct is
-        // `#[repr(C, packed)]`: reading the active arm through a reference would take an unaligned
-        // borrow of bytes whose order depends on which arm Steam wrote.
-        let (ipv4_bits, ipv6_octets) = unsafe {
-            (
-                raw.__bindgen_anon_1.m_unIPv4,
-                raw.__bindgen_anon_1.m_rgubIPv6,
-            )
-        };
-        address_from_steam_parts(raw.m_eType, ipv4_bits, ipv6_octets)
+        // Only the arm the tag selects is copied out: the two declared arms differ in width --
+        // `uint32 m_unIPv4`, "Host order" (`steamtypes.h:115`), against `uint8 m_rgubIPv6[16]`,
+        // "Network order! Same as inaddr_in6." (`:116`) -- so reading both would take twelve bytes
+        // Steam never wrote on every IPv4 answer.
+        match raw.m_eType {
+            sys::ESteamIPType::k_ESteamIPTypeIPv4 => {
+                let bits = unsafe { raw.__bindgen_anon_1.m_unIPv4 };
+                address_from_steam_parts(raw.m_eType, bits, [0; 16])
+            }
+            sys::ESteamIPType::k_ESteamIPTypeIPv6 => {
+                let octets = unsafe { raw.__bindgen_anon_1.m_rgubIPv6 };
+                address_from_steam_parts(raw.m_eType, 0, octets)
+            }
+            other => address_from_steam_parts(other, 0, [0; 16]),
+        }
     }
 
     /// Whether this user holds a licence for `app`.
@@ -191,11 +165,11 @@ impl Server {
     /// the provided AppID" (`:169-170`). Note what that sentence still points at: the header names
     /// `SendUserConnectAndAuthenticate` as the step before it, and that function is under
     /// "These will be removed in a future version of the SDK" (`isteamgameserver.h:259`) -- this crate wraps neither, so the input here is a user authenticated by whatever
-    /// path the server uses today. The three answers stay distinguishable (`UserLicense`), and the
-    /// answer that means the user was never authenticated is not folded into the one that says there is
-    /// no licence.
-    pub fn user_has_license(&self, user: SteamId, app: AppId) -> UserLicense {
-        license_from_raw(unsafe {
+    /// path the server uses today. The three answers Steam declares stay distinguishable
+    /// (`UserHasLicense`), and the answer that means the user was never authenticated is not folded
+    /// into the one that says there is no licence.
+    pub fn user_has_license(&self, user: SteamId, app: AppId) -> UserHasLicense {
+        crate::user::license_answer(unsafe {
             sys::SteamAPI_ISteamGameServer_UserHasLicenseForApp(self.server, user.0, app.0)
         })
     }
@@ -293,12 +267,33 @@ mod status_tests {
     //! registered as unverified: every method in this module needs a logged-on game server.
 
     use super::{
-        address_from_steam_parts, clan_association_answer, clan_compatibility, license_from_raw,
-        ServerAddress as Addr, UserLicense as License,
+        address_from_steam_parts, clan_association_answer, clan_compatibility,
+        ServerAddress as Addr,
     };
     use crate::SteamId;
     use std::net::{Ipv4Addr, Ipv6Addr};
     use steamworks_sys as sys;
+
+    /// Steam's reply struct, filled field by field so a crossed assignment shows up as a wrong
+    /// number in the wrong slot rather than as a plausible answer.
+    fn reply(
+        dont_like_candidate: i32,
+        candidate_doesnt_like: i32,
+        clan_dont_like_candidate: i32,
+        candidate: u64,
+    ) -> sys::ComputeNewPlayerCompatibilityResult_t {
+        sys::ComputeNewPlayerCompatibilityResult_t {
+            m_eResult: sys::EResult::k_EResultOK,
+            m_cPlayersThatDontLikeCandidate: dont_like_candidate,
+            m_cPlayersThatCandidateDoesntLike: candidate_doesnt_like,
+            m_cClanPlayersThatDontLikeCandidate: clan_dont_like_candidate,
+            m_SteamIDCandidate: sys::CSteamID {
+                m_steamid: sys::CSteamID_SteamID_t {
+                    m_unAll64Bits: candidate,
+                },
+            },
+        }
+    }
 
     #[test]
     fn each_address_family_is_read_in_the_order_its_own_field_documents() {
@@ -335,54 +330,6 @@ mod status_tests {
         );
     }
 
-    #[test]
-    fn every_licence_answer_steam_declares_has_a_name() {
-        let pairs = [
-            (
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultHasLicense,
-                License::HasLicense,
-            ),
-            (
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultDoesNotHaveLicense,
-                License::DoesNotHaveLicense,
-            ),
-            (
-                sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultNoAuth,
-                License::NoAuth,
-            ),
-        ];
-        for (raw, named) in pairs {
-            assert_eq!(license_from_raw(raw), named, "{:?}", raw as i32);
-        }
-        assert_eq!(pairs.len(), 3, "the header declares three answers");
-        // "not authenticated" and "has no licence" are different facts and must not collapse.
-        assert_ne!(License::NoAuth, License::DoesNotHaveLicense);
-    }
-
-    /// Steam's reply struct, filled field by field so a crossed assignment shows up as a wrong
-    /// number in the wrong slot rather than as a plausible answer.
-    fn reply(
-        dont_like_candidate: i32,
-        candidate_doesnt_like: i32,
-        clan_dont_like_candidate: i32,
-        candidate: u64,
-    ) -> sys::ComputeNewPlayerCompatibilityResult_t {
-        sys::ComputeNewPlayerCompatibilityResult_t {
-            m_eResult: sys::EResult::k_EResultOK,
-            m_cPlayersThatDontLikeCandidate: dont_like_candidate,
-            m_cPlayersThatCandidateDoesntLike: candidate_doesnt_like,
-            m_cClanPlayersThatDontLikeCandidate: clan_dont_like_candidate,
-            m_SteamIDCandidate: sys::CSteamID {
-                m_steamid: sys::CSteamID_SteamID_t {
-                    m_unAll64Bits: candidate,
-                },
-            },
-        }
-    }
-
-    /// The transport failure has to win over the payload: Steam's own status field still says OK on
-    /// a call whose answer never arrived, so reading the payload first would turn "no answer" into
-    /// "accepted".
     #[test]
     fn a_lost_answer_is_reported_even_though_the_payload_says_ok() {
         assert_eq!(
@@ -426,25 +373,6 @@ mod status_tests {
         assert_eq!(
             clan_compatibility(false, &reply(-1, 0, 0, 1)).players_that_dont_like_candidate,
             -1
-        );
-    }
-
-    /// A premise pin, not a lock on this crate's code: the numbers above are Steam's numbering, and
-    /// if a regeneration ever reorders them the table has to be re-read. Checked by renumbering one
-    /// discriminant in the generated layer, which turns this red -- no change of mine can.
-    #[test]
-    fn the_licence_numbers_are_the_ones_the_header_gives() {
-        assert_eq!(
-            sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultHasLicense as i32,
-            0
-        );
-        assert_eq!(
-            sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultDoesNotHaveLicense as i32,
-            1
-        );
-        assert_eq!(
-            sys::EUserHasLicenseForAppResult::k_EUserHasLicenseResultNoAuth as i32,
-            2
         );
     }
 }
