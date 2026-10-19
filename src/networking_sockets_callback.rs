@@ -15,7 +15,7 @@ pub(crate) fn get_or_create_connection_callback(
     inner: Arc<Inner>,
     sockets: *mut ISteamNetworkingSockets,
 ) -> Arc<CallbackHandle> {
-    let mut network_socket_data = inner.networking_sockets_data.lock().unwrap();
+    let mut network_socket_data = crate::utils::mutex_guard(&inner.networking_sockets_data);
     if let Some(callback) = network_socket_data.connection_callback.upgrade() {
         callback
     } else {
@@ -58,7 +58,7 @@ impl ConnectionCallbackHandler {
         event: NetConnectionStatusChanged,
     ) {
         if let Some(inner) = self.inner.upgrade() {
-            let data = inner.networking_sockets_data.lock().unwrap();
+            let data = crate::utils::mutex_guard(&inner.networking_sockets_data);
             if let Some((socket, sender)) = data
                 .sockets
                 .get(&socket_handle)
@@ -101,7 +101,7 @@ impl ConnectionCallbackHandler {
         let Some(inner) = self.inner.upgrade() else {
             return;
         };
-        let data = inner.networking_sockets_data.lock().unwrap();
+        let data = crate::utils::mutex_guard(&inner.networking_sockets_data);
 
         let Some(sender) = data.independent_connections.get(&status_changed.connection) else {
             // received an event of a connection we did not track... this should basically never happen

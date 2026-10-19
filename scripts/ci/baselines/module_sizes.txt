@@ -1,5 +1,5 @@
-src/lib.rs 836
-src/networking_sockets/connection.rs 683
+src/lib.rs 837
+src/networking_sockets/connection.rs 677
 src/networking_types/config.rs 676
 src/matchmaking_servers.rs 641
 src/http.rs 616
@@ -10,7 +10,7 @@ src/timeline.rs 579
 src/callback.rs 560
 src/ugc/types.rs 559
 src/app.rs 551
-src/networking_sockets/fake_udp.rs 550
+src/networking_sockets/fake_udp.rs 534
 src/networking_utils.rs 510
 src/networking_sockets/fake_ip.rs 506
 src/networking_messages.rs 502
@@ -67,7 +67,7 @@ src/friends/clan_chat.rs 157
 src/utils/strings.rs 153
 src/friends/callbacks.rs 152
 src/user_stats/stat_callback.rs 152
-src/utils/mod.rs 146
+src/utils/mod.rs 148
 src/ugc/read.rs 142
 src/user_stats/achievements.rs 138
 src/inventory/prices.rs 132
@@ -78,9 +78,9 @@ src/server/callbacks.rs 129
 src/networking_sockets_callback.rs 123
 src/video.rs 122
 src/inventory/actions.rs 121
-src/networking_sockets/listen_socket.rs 113
 src/matchmaking/callbacks.rs 111
-src/networking_sockets/poll_group.rs 111
+src/networking_sockets/listen_socket.rs 110
+src/networking_sockets/poll_group.rs 107
 src/server/auth.rs 107
 src/input/actions.rs 105
 src/server/mod.rs 105
@@ -88,6 +88,7 @@ src/utils/filtering.rs 103
 src/inventory/definitions.rs 102
 src/networking_sockets/connect.rs 100
 src/networking_sockets/status.rs 98
+src/utils/locks.rs 98
 src/input/layers.rs 96
 src/friends/followers.rs 91
 src/friends/overlay.rs 88
@@ -111,8 +112,8 @@ src/server/packets.rs 59
 src/input/session.rs 58
 src/remote_storage/changes.rs 58
 src/utils/identity.rs 56
-src/utils/warning.rs 54
 src/input/mod.rs 53
+src/utils/warning.rs 52
 src/friends/flags.rs 50
 src/networking_sockets/auth.rs 49
 src/utils/overlay.rs 47

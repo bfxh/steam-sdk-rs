@@ -202,7 +202,7 @@ macro_rules! gen_server_list_fn {
                 let callbacks = create_serverlist(callbacks);
 
                 let request_arc = ServerListRequest::get(callbacks);
-                let mut request = request_arc.lock().unwrap();
+                let mut request = crate::utils::mutex_guard(&request_arc);
 
                 let handle = sys::$sys_method(
                     self.mms,
@@ -567,7 +567,7 @@ impl MatchmakingServers {
             let callbacks = create_serverlist(callbacks);
 
             let request_arc = ServerListRequest::get(callbacks);
-            let mut request = request_arc.lock().unwrap();
+            let mut request = crate::utils::mutex_guard(&request_arc);
 
             let handle = sys::SteamAPI_ISteamMatchmakingServers_RequestLANServerList(
                 self.mms,

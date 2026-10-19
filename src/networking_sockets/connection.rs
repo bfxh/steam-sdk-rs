@@ -46,10 +46,7 @@ impl NetConnection {
         inner: Arc<Inner>,
     ) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
-        inner
-            .networking_sockets_data
-            .lock()
-            .unwrap()
+        crate::utils::mutex_guard(&inner.networking_sockets_data)
             .independent_connections
             .insert(handle, sender);
         let callback =
@@ -547,10 +544,7 @@ impl Drop for NetConnection {
             };
 
             if self.socket.is_none() {
-                self.inner
-                    .networking_sockets_data
-                    .lock()
-                    .unwrap()
+                crate::utils::mutex_guard(&self.inner.networking_sockets_data)
                     .independent_connections
                     .remove(&self.handle)
                     .expect("internal connection was removed before being dropped");

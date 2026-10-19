@@ -721,12 +721,137 @@ def canary_workflow_inputs():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+LOCK_HOME = (
+    "use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};\n"
+    "pub(crate) fn mutex_guard<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {\n"
+    "    lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
+    "pub(crate) fn read_guard<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {\n"
+    "    lock.read().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
+    "pub(crate) fn write_guard<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {\n"
+    "    lock.write().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
+)
+
+
+def canary_lock_poisons():
+    """A policy gate has to be able to judge both the violation and the disappearance of the policy.
+
+    The tree this rule was written against really was two policies: twelve sites aborted on poison and
+    four recovered inline in `src/networking_sockets/fake_udp.rs`, so an assertion that only counted
+    aborts would have gone green the day someone finished the job badly by inverting it -- inline
+    recovery everywhere and no policy file at all. That shape is asserted red here, along with the
+    policy file being deleted, which is how "0 violations" turns into a verdict rather than a silence.
+    """
+    print("lock_poisons.py -- aborts, duplicate policies, test bodies and a vanished policy file")
+    ruler = ROOT / CI / "lock_poisons.py"
+    tmp, dst = fixture(ruler)
+    # It imports from two siblings, so the fixture carries both -- otherwise the copy crashes at
+    # startup and every assertion below reports a missing module as if it were a judgement.
+    for sibling in ("api_coverage.py", "cstring_unwraps.py"):
+        shutil.copyfile(ROOT / CI / sibling, dst.parent / sibling)
+    try:
+        write(tmp / "src" / "utils" / "locks.rs", LOCK_HOME)
+        write(tmp / "src" / "aborts.rs",
+              "pub fn take(data: &std::sync::Mutex<u32>) -> u32 {\n"
+              "    let guard = data.lock().unwrap();\n    *guard\n}\n")
+        write(tmp / "src" / "expects.rs",
+              "pub fn read(data: &std::sync::RwLock<u32>) -> u32 {\n"
+              "    let guard = data.read().expect(\"poisoned\");\n    *guard\n}\n")
+        write(tmp / "src" / "second_policy.rs",
+              "pub fn recover(data: &std::sync::Mutex<u32>) -> u32 {\n"
+              "    let guard = data.lock().unwrap_or_else(std::sync::PoisonError::into_inner);\n"
+              "    *guard\n}\n")
+        write(tmp / "src" / "clean.rs",
+              "pub fn via_helper(data: &std::sync::Mutex<u32>) -> u32 {\n"
+              "    let guard = crate::utils::mutex_guard(data);\n    *guard\n}\n")
+        # A test body choosing to abort on poison is a claim about its own fixture, not about the
+        # crate's policy -- and both shapes this crate uses must be invisible to the rule.
+        # Named `mod_case.rs`/`bare_case.rs` on purpose: `api_coverage.TEST_MATERIAL` treats anything
+        # ending `_test.rs`/`_tests.rs` as a whole test file, and the first version of this fixture
+        # called itself `bare_test.rs` -- so it was skipped for the wrong reason and the assertion
+        # below could not have failed. These names are not test material, which is what makes the
+        # body-level exclusions the thing actually being judged.
+        write(tmp / "src" / "mod_case.rs",
+              "pub fn fine(data: &std::sync::Mutex<u32>) -> u32 { *data.lock().unwrap() }\n"
+              "#[cfg(test)]\nmod tests {\n"
+              "    #[test]\n    fn in_a_module(x: &std::sync::Mutex<u32>) {\n"
+              "        let g = x.lock().unwrap();\n        assert_eq!(*g, 1);\n    }\n}\n")
+        write(tmp / "src" / "bare_case.rs",
+              "pub fn also_fine(data: &std::sync::Mutex<u32>) -> u32 { *data.lock().unwrap() }\n"
+              "#[test]\nfn at_file_scope(x: &std::sync::Mutex<u32>) {\n"
+              "    let g = x.lock().unwrap();\n    assert_eq!(*g, 1);\n}\n")
+        for i in range(20):  # the ruler's own floor is 20 scanned sources
+            write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        expect("aborting on poison is a site", 0 if "src/aborts.rs 1" in out.stdout else 1, 0)
+        expect("expect(..) on a guard counts like unwrap()",
+               0 if "src/expects.rs 1" in out.stdout else 1, 0)
+        expect("re-implementing the recovery outside the policy file is also a site",
+               0 if "src/second_policy.rs 1" in out.stdout else 1, 0)
+        expect("the helper itself is not a site", 0 if "locks.rs" not in out.stdout else 1, 0)
+        expect("calling the helper is clean", 0 if "clean.rs" not in out.stdout else 1, 0)
+        # Both of those files also contain a production function that aborts, so the assertion is a
+        # count, not an absence: one site means the test body was blanked and the real code was not.
+        # Asserting absence here would have passed for the wrong reason -- a rule that blanked the whole
+        # file would look identical, and would then hide every genuine site in any file with a test.
+        expect("a cfg(test) module body is not policy, but the production fn in that file is",
+               0 if "src/mod_case.rs 1" in out.stdout else 1, 0)
+        expect("a bare #[test] fn body is not policy either, and the file still reports one site",
+               0 if "src/bare_case.rs 1" in out.stdout else 1, 0)
+        expect("the exit code is red for the sites it found", out.returncode, 1)
+
+        measure = write(tmp / "cur.txt", out.stdout)
+        expect("the sites go red against an empty ledger",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), measure]).returncode, 1)
+        # The difference between "the tree is clean" and "the ruler did not look" has to survive being
+        # carried by this ledger too, because a zero-tolerance ledger is exactly where an empty file is
+        # easiest to mistake for a pass.
+        clean = write(tmp / "clean.txt", "#scanned 26\n")
+        expect("an empty measurement that proves it scanned is a pass",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), clean]).returncode, 0)
+        unproven = write(tmp / "unproven.txt", "\n")
+        expect("an empty measurement that cannot is refused, not passed",
+               run_script(ROOT / CI / "compare_baseline.py",
+                          [write(tmp / "base.txt", ""), unproven]).returncode, 2)
+
+        (tmp / "src" / "utils" / "locks.rs").unlink()
+        expect("a deleted policy file is no verdict, not a clean one",
+               run_script(dst, ["src"], cwd=tmp).returncode, 2)
+
+        # Not the whole file -- one guard kind missing from it. The rule is that the file holding the
+        # policy still holds all three kinds of guard plus the recovery it is built on; a partial file
+        # means someone moved a helper out and left the name behind.
+        partial = ("use std::sync::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};\n"
+                   "pub(crate) fn mutex_guard<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {\n"
+                   "    lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
+                   "pub(crate) fn write_guard<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {\n"
+                   "    lock.write().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n")
+        write(tmp / "src" / "utils" / "locks.rs", partial)
+        expect("a policy file that lost a guard kind is refused",
+               run_script(dst, ["src"], cwd=tmp).returncode, 2)
+
+        # The policy file gets no exemption from its own rule: if the helper aborted on poison, that is
+        # the single worst place in the tree to do it, and it is reported as a site rather than treated
+        # as trusted infrastructure.
+        write(tmp / "src" / "utils" / "locks.rs", LOCK_HOME.replace(
+            "lock.read().unwrap_or_else(std::sync::PoisonError::into_inner)", "lock.read().unwrap()"))
+        aborted = run_script(dst, ["src"], cwd=tmp)
+        expect("a policy file that itself aborts on poison is red, by name",
+               0 if aborted.returncode == 1 and "src/utils/locks.rs" in aborted.stdout else 1, 0)
+        write(tmp / "src" / "utils" / "locks.rs", LOCK_HOME)
+        expect("with the policy file restored the tree is judged again",
+               run_script(dst, ["src"], cwd=tmp).returncode, 1)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
             canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
-            canary_shell_hatches, canary_workflow_inputs)
+            canary_shell_hatches, canary_workflow_inputs, canary_lock_poisons)
 
 
 def main():

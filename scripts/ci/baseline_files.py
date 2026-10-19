@@ -42,6 +42,7 @@ READERS = {
     "handle_owners.txt": ".github/workflows/ci.yml",
     "header_citations.txt": ".github/workflows/ci.yml",
     "module_sizes.txt": ".github/workflows/ci.yml",
+    "lock_poisons.txt": ".github/workflows/ci.yml",
     "no_panic_sites.txt": ".github/workflows/ci.yml",
     "package_inventory.txt": ".github/workflows/ci.yml",
     "sdk_vendored.txt": ".github/workflows/ci.yml",
@@ -62,11 +63,15 @@ EXCUSED_EMPTY = {
     "handle_owners.txt": "target is zero (every raw-interface wrapper now holds the client); the "
                          "measurement side must prove it scanned (compare_baseline marker rule)",
     "no_panic_sites.txt": "target is zero; the measurement side must prove it scanned (compare_baseline marker rule)",
+    "lock_poisons.txt": "target is zero since 2026-10-19 (22 guard requests: 18 aborted on poison and 4 "
+                        "had already begun recovering inline; all 22 now route through src/utils/locks.rs); "
+                        "the measurement side must prove it scanned, and the ruler refuses to answer at all "
+                        "if the policy file is missing or incomplete",
 }
 
 # Measured on 2026-10-16: 11 files (the twelfth candidate, `header_citations.txt`, arrived with the
 # SDK-citation gate that day). Below this the scan is not looking at the real inventory.
-MIN_BASELINES = 13
+MIN_BASELINES = 14
 
 
 def tracked():

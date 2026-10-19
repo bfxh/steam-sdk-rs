@@ -294,7 +294,7 @@ pub(crate) unsafe fn register_call_result<C, F>(
 ) where
     F: for<'a> FnOnce(&'a C, bool) + 'static + Send,
 {
-    inner.callbacks.call_results.lock().unwrap().insert(
+    crate::utils::mutex_guard(&inner.callbacks.call_results).insert(
         api_call,
         Box::new(move |param, failed| {
             let value = param.cast::<C>().read_unaligned();

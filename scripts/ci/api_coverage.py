@@ -80,6 +80,53 @@ def strip_test_modules(text):
     return "\n".join(kept)
 
 
+FN_HEAD = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:const\s+)?(?:unsafe\s+)?fn\s+\w+")
+
+
+def strip_test_fns(text):
+    """Blank the bodies of `#[test]` functions written straight in a file, keeping line numbers.
+
+    The scoping this crate already has catches two forms: `is_test_material` drops whole test files
+    (`src/lib_tests.rs`), and `strip_test_modules` drops `#[cfg(test)] mod name { .. }`. A third form is
+    in use here and neither sees it -- a bare `#[test]` fn at file scope, gated by nothing, because rustc
+    only builds it for the test harness. Measured on this tree: **38 of the 79** panic-capable
+    expressions found with the first two rules alone sat in that form -- `src/remote_storage/mod.rs` by
+    itself accounts for 12 (`test_one_shot_cloud_io`, `test_cloud`) -- so a ruler built on those two
+    rules reports a production figure 1.9x its real size and sends the next unit after the wrong number.
+
+    Brace counting rather than indentation, because this is a lexical ruler like the rest here: an
+    attribute line is followed by its `fn`, and the body ends where its own braces balance.
+    """
+    lines = text.splitlines()
+    out = list(lines)
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped.startswith("#[test]") or stripped.startswith("#[ignore"):
+            head = index
+            while head < len(lines) and not FN_HEAD.match(lines[head]):
+                if lines[head].strip() in ("}", "}]"):
+                    break
+                head += 1
+            if head < len(lines) and FN_HEAD.match(lines[head]):
+                depth = 0
+                started = False
+                cursor = head
+                while cursor < len(lines):
+                    depth += lines[cursor].count("{") - lines[cursor].count("}")
+                    started = started or "{" in lines[cursor]
+                    out[cursor] = ""
+                    cursor += 1
+                    if started and depth <= 0:
+                        break
+                for blank in range(index, cursor):
+                    out[blank] = ""
+                index = cursor
+                continue
+        index += 1
+    return "\n".join(out)
+
+
 def code_only(text):
     """Drop comments and the bodies of file-scope `#[cfg(test)]` modules.
 

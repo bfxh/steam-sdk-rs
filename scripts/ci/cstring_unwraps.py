@@ -42,7 +42,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from api_coverage import is_test_material, strip_test_modules  # noqa: E402  (one test-scoping rule, not two)
+from api_coverage import (  # noqa: E402  (one test-scoping rule, not two)
+    is_test_material,
+    strip_test_fns,
+    strip_test_modules,
+)
 
 CALL = re.compile(r"CString::new\s*\(")
 LITERAL = re.compile(r'^(?:&?r?#*"|r"|#")')
@@ -116,7 +120,8 @@ def violations(root):
         if "bindings" in path.name or is_test_material(path):
             continue
         read += 1
-        text = strip_test_modules(blank_comments(path.read_text(encoding="utf-8", errors="replace")))
+        text = strip_test_fns(strip_test_modules(blank_comments(
+            path.read_text(encoding="utf-8", errors="replace"))))
         for line, method, argument in conversions(text):
             total += 1
             infallible = LITERAL.match(argument) and not NUL_ESCAPE.search(argument)

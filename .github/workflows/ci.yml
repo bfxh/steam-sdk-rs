@@ -171,6 +171,18 @@ jobs:
           python3 scripts/ci/cstring_unwraps.py src > "$RUNNER_TEMP/cstring_unwraps.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/cstring_unwraps.txt "$RUNNER_TEMP/cstring_unwraps.txt"
 
+      # 锁中毒在本仓是一个决定，不是一行写法：所有锁都在回调派发里取，用户回调 panic 就会毒掉它，
+      # 而"下一次取锁的人"是另一个调用方、另一段时间。2026-10-19 实测的旧形状：**22 处取锁，18 处直接
+      # 让下一个取锁方 panic**（`utils/warning.rs` 那两处还在 `extern "C"` 边界上，panic 越过 C 不是"红"
+      # 而是 UB），**另外 4 处（`networking_sockets/fake_udp.rs`）已经各自写了
+      # `unwrap_or_else(PoisonError::into_inner)`**——同一棵树两种政策。现在恢复只发生在
+      # `src/utils/locks.rs` 一处，22 个调用点全部走它。尺子双向判红：违规站点必须为 0，
+      # 且政策文件本身不见了/缺了某一类 guard 就退出 2（否则"没人违规"与"规则被删了"同形）。
+      - name: lock poisoning recovers in exactly one place
+        run: |
+          python3 scripts/ci/lock_poisons.py src > "$RUNNER_TEMP/lock_poisons.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/lock_poisons.txt "$RUNNER_TEMP/lock_poisons.txt"
+
       - name: interface handles keep the client alive
         run: |
           python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"

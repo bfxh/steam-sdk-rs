@@ -1852,7 +1852,7 @@ pub fn set_timeline_game_mode(&self, mode: TimelineGameMode) {
 
 这个案例也说明：**先查仓内是否已有同类问题的正确处理方式，能显著降低修复成本**。我最初直接跳到 `Result` 方案，是因为没注意到 `timeline` 已经是另一套做法。
 
-**一个有力的内部对照**：同一文件里的 `timeline` 接口（`src/lib.rs:764-771`，判空那一行是 `:771` 的 `disabled: timeline.is_null()`）用了**运行时**判空：
+**一个有力的内部对照**：同一文件里的 `timeline` 接口（`src/lib.rs:766-775`，判空那一行是 `:772` 的 `disabled: timeline.is_null()`）用了**运行时**判空：
 
 ```rust
 Timeline {

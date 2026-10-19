@@ -9,7 +9,7 @@ static WARNING_CALLBACK: RwLock<Option<Box<dyn Fn(i32, &CStr) + Send + Sync>>> =
 
 /// C function to pass as the real callback, which forwards to the `WARNING_CALLBACK` if any
 unsafe extern "C" fn c_warning_callback(level: i32, msg: *const c_char) {
-    let lock = WARNING_CALLBACK.read().expect("warning func lock poisoned");
+    let lock = crate::utils::read_guard(&WARNING_CALLBACK);
     let cb = match lock.as_ref() {
         Some(cb) => cb,
         None => {
@@ -43,9 +43,7 @@ impl Utils {
     where
         F: Fn(i32, &CStr) + Send + Sync + 'static,
     {
-        let mut lock = WARNING_CALLBACK
-            .write()
-            .expect("warning func lock poisoned");
+        let mut lock = crate::utils::write_guard(&WARNING_CALLBACK);
         *lock = Some(Box::new(cb));
         unsafe {
             sys::SteamAPI_ISteamUtils_SetWarningMessageHook(self.utils, Some(c_warning_callback));

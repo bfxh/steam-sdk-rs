@@ -22,11 +22,7 @@ impl Drop for InnerSocket {
             sys::SteamAPI_ISteamNetworkingSockets_CloseListenSocket(self.sockets, self.handle)
         };
 
-        if let None = self
-            .inner
-            .networking_sockets_data
-            .lock()
-            .unwrap()
+        if let None = crate::utils::mutex_guard(&self.inner.networking_sockets_data)
             .sockets
             .remove(&self.handle)
         {

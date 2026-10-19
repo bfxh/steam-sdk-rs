@@ -113,11 +113,7 @@ impl NetworkingSockets {
     /// type exists to prevent. Ask for the claim first, so two threads racing on one index cannot both
     /// get past it, and hand it back if Steam produced nothing.
     pub fn create_fake_udp_port(&self, idx_fake_server_port: i32) -> Option<FakeUDPPort> {
-        let claimed = self
-            .inner
-            .networking_sockets_data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let claimed = crate::utils::mutex_guard(&self.inner.networking_sockets_data);
         let mut claimed = claimed;
         if !claim_port(&mut claimed.fake_udp_ports, idx_fake_server_port) {
             return None;
@@ -145,11 +141,7 @@ impl NetworkingSockets {
     /// Gives up this socket's claim on one port index, tolerating a poisoned lock because the only
     /// state touched is a set of integers.
     fn release_claim(&self, idx: i32) {
-        let mut data = self
-            .inner
-            .networking_sockets_data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut data = crate::utils::mutex_guard(&self.inner.networking_sockets_data);
         release_port(&mut data.fake_udp_ports, (idx >= 0).then_some(idx));
     }
 }
@@ -259,11 +251,7 @@ impl FakeUDPPort {
         // (`isteamnetworkingsockets.h:906-908`), so such a wrapper would point at freed memory.
         let claim = self.claim.take();
         if let Some(idx) = claim {
-            let mut data = self
-                .inner
-                .networking_sockets_data
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut data = crate::utils::mutex_guard(&self.inner.networking_sockets_data);
             release_port(&mut data.fake_udp_ports, Some(idx));
             drop(data);
         }
@@ -283,11 +271,7 @@ impl Drop for FakeUDPPort {
         let Some(idx) = self.claim.take() else {
             return;
         };
-        let mut data = self
-            .inner
-            .networking_sockets_data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut data = crate::utils::mutex_guard(&self.inner.networking_sockets_data);
         release_port(&mut data.fake_udp_ports, Some(idx));
     }
 }

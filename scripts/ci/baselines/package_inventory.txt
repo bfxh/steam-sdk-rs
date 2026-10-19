@@ -133,6 +133,7 @@ steamworks/src/utils/counts.rs
 steamworks/src/utils/filtering.rs
 steamworks/src/utils/identity.rs
 steamworks/src/utils/ipv6.rs
+steamworks/src/utils/locks.rs
 steamworks/src/utils/mod.rs
 steamworks/src/utils/overlay.rs
 steamworks/src/utils/param_strings.rs

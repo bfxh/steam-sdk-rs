@@ -29,10 +29,7 @@ impl ListenSocket {
             handle,
             inner: inner.clone(),
         });
-        inner
-            .networking_sockets_data
-            .lock()
-            .unwrap()
+        crate::utils::mutex_guard(&inner.networking_sockets_data)
             .sockets
             .insert(handle, (Arc::downgrade(&inner_socket), sender));
         let callback_handle =

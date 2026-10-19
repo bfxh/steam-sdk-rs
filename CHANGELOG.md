@@ -1467,6 +1467,49 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+### Fixed
+
+- **Lock poisoning stopped being re-decided line by line: 22 guard requests, one policy**
+  (`src/utils/locks.rs`, and the call sites in `src/lib.rs`, `src/callback.rs`, `src/matchmaking_servers.rs`,
+  `src/networking_sockets_callback.rs`, `src/utils/warning.rs`, `src/networking_sockets/{connection,
+  listen_socket,poll_group,fake_udp}.rs`). Every lock here is taken inside callback dispatch, which runs
+  user code, so a user callback that panics poisons the lock and the *next* guard request pays for it --
+  in a different caller, much later. Measured on the tree as it was: 22 requests, **18 of them aborted**
+  and **4 already recovering inline** in `src/networking_sockets/fake_udp.rs`, i.e. the repository was
+  running two policies at once. Two of the 18 were the worst-placed of all: `.expect("warning func lock
+  poisoned")` on `RwLock`s reached from an `extern "C"` callback, where a panic does not unwind into Rust
+  at all. The 14 conversions in the first pass were written `x.lock().unwrap()` on one line; the other 4
+  were a chain with `.unwrap()` on its own line, which is why a line-based count reported 12 and was wrong
+  -- the same observation-layer trap as the 81-vs-43 panic figure, met again from the other side.
+  `mutex_guard`, `read_guard` and `write_guard` in `src/utils/locks.rs` now hold the decision, with the
+  trade written where it is taken: `into_inner` hands over a table a panicking thread may have left
+  mid-update, which is acceptable for `handle -> sender` maps and boxed-closure queues and is not
+  presented as free. Recovery is a maintainer's call, made explicitly, not a default I picked.
+  **New gate** `scripts/ci/lock_poisons.py`, zero-tolerance ledger `lock_poisons.txt` (14th ledger,
+  `MIN_BASELINES` 13 -> 14, one CI step, one replay step), judging two halves: no guard request may abort
+  on poison, and nothing outside the policy file may re-implement the recovery -- because a rule that only
+  counts aborts would have gone green on the day someone finished this job by inverting it. It also
+  refuses to answer (rc=2) if `src/utils/locks.rs` is missing or no longer contains all three guard kinds
+  plus the recovery, so "0 violations" can never come from a deleted policy. 15 new canary assertions
+  (98 total), each disproved: neutralising the test-body exclusion moves a fixture file from 1 site to 2,
+  neutralising the second-policy half makes that site disappear, and the first version of one assertion
+  passed for the wrong reason -- I had named the fixture `bare_test.rs`, which `TEST_MATERIAL` already
+  treats as a whole test file, so nothing in it was ever judged.
+  `api_coverage.py` gained `strip_test_fns`, the third scoping rule (bare `#[test]` fns written at file
+  scope, which rustc builds only for the harness and neither existing rule could see); `cstring_unwraps.py`
+  now uses the same three, and its `#scanned` total moved 29 -> 28 occurrences with exactly one site
+  changing -- `src/user_stats/global_stats.rs`, a fixture assertion inside a test fn -- so the shared rule
+  neither hid a production conversion nor invented one.
+  Production panic-capable expressions: **32 -> 14**; the lock gate reports 0 policy breaks across 4 guard
+  requests in 126 hand-written sources. Two side effects of shortening those chains: the shipped `.crate`
+  gains `src/utils/locks.rs` (`package_inventory` 142 -> 143 files, re-recorded), and `src/lib.rs` lost
+  enough lines that a pointer in `docs/SuperSteam-Design.md` moved two lines off its target -- fixed by
+  re-anchoring it to `766-775`/`:772`, and the same drift inside a *published* CHANGELOG sentence was
+  answered by naming the `timeline` accessor rather than by registering a line number nobody can follow
+  any more (`doc_pointers_historical.txt` only exempts paths that no longer exist, and it stays
+  byte-identical here).
+
+
 - **Steam declares nine connection states; this crate had names for six**
   (`src/networking_types/state.rs`, `src/networking_types/events.rs`). The table on
   `NetworkingConnectionState` stopped at `ProblemDetectedLocally`, while the SDK header continues with
@@ -2168,7 +2211,8 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   in `docs/SuperSteam-Design.md` turned out to have been wrong all along, aimed at the region of
   `lib.rs` holding `utils` while claiming to illustrate the `timeline` accessor. The
   7-line addition to `lib.rs` moved that stale span onto a blank line, the gate flagged it, and re-measuring found
-  the accessor at `src/lib.rs:764-771` with the runtime null check it was citing at `:771`.
+  the accessor at the `timeline` method of `src/lib.rs` with the runtime `timeline.is_null()`
+  check it was citing.
   A third thing, also mine and worse: this very entry then went red in CI for the commit that shipped it,
   because it narrated the old bad pointer with a literal `lib.rs:512-518` span and `CHANGELOG.md` is one of the ten
   documents the gate reads -- so the write-up of the fix re-introduced the defect it described. The local
