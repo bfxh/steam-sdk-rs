@@ -141,6 +141,18 @@ macro_rules! matchmaking_servers_callback {
     };
 }
 
+/// The filter-pair length rule, apart from the map walk that applies it.
+///
+/// Steam's pair of fields is fixed-width -- `char m_szKey[ 256 ];` and `char m_szValue[ 256 ];`
+/// (`matchmakingtypes.h:40-41`) -- and its own constructor fills them with
+/// "strncpy( m_szKey, pchKey, sizeof(m_szKey) )" (`:35`) and then writes a terminator into the last
+/// byte (`:36`), which is to say Steam truncates an over-long filter without saying so. This wrapper
+/// refuses instead, so the rule lives here where the boundary can be judged: the bound is `< 256`
+/// because the 256th byte has to be the terminator.
+fn filter_pair_fits(key: &[u8], value: &[u8]) -> bool {
+    key.len() < 256 && value.len() < 256
+}
+
 macro_rules! gen_server_list_fn {
     (
         $name:ident, $sys_method:ident
@@ -172,8 +184,7 @@ macro_rules! gen_server_list_fn {
                     let key_bytes = i.0.as_bytes();
                     let value_bytes = i.1.as_bytes();
 
-                    // Max length is 255, so 256th byte will always be nul-terminator
-                    if key_bytes.len() >= 256 || value_bytes.len() >= 256 {
+                    if !filter_pair_fits(key_bytes, value_bytes) {
                         return Err(());
                     }
 
@@ -471,6 +482,33 @@ impl ServerListRequest {
         }
     }
 
+    /// Stops the query behind this request handle without releasing it.
+    ///
+    /// Steam's own reason for the call is on the declaration: it is what you should do "before
+    /// destructing a callback object that may have been passed" to one of the list requests, because
+    /// "Not doing so may result in a crash when a callback" arrives on the object that is already gone
+    /// (`isteammatchmaking.h:476-477`).
+    ///
+    /// It is *not* a release. The same block says "Canceling a query does not release the allocated
+    /// request handle." and that handle "must be released using ReleaseRequest( hRequest )"
+    /// (`:479-480`), so [`ServerListRequest::release`] still has to run afterwards, and this order is
+    /// the one the header asks for: cancel first, then release, so no callback can reach a destructed
+    /// object in between.
+    ///
+    /// # Errors
+    ///
+    /// Err if called on the released request -- after `release` there is no handle left to cancel, and
+    /// Steam would be handed a request id it has already forgotten.
+    pub fn cancel_query(&self) -> Result<(), ()> {
+        unsafe {
+            self.released()?;
+
+            sys::SteamAPI_ISteamMatchmakingServers_CancelQuery(self.mms, self.h_req);
+
+            Ok(())
+        }
+    }
+
     /// # Errors
     ///
     /// Err if called on the released request
@@ -601,6 +639,15 @@ impl MatchmakingServers {
         friends_server_list,
         SteamAPI_ISteamMatchmakingServers_RequestFriendsServerList
     );
+    // The sixth row of the list Steam introduces as "Request a new list of servers of a particular
+    // type." (`isteammatchmaking.h:386`): like the five beside it it "allocates a new asynchronous
+    // request object" (`:387`) which "must be released by calling ReleaseRequest( hServerListRequest )"
+    // (`:388`). The header names no filter-free variant here, so this one takes the same map the others
+    // do, and the file says nothing more about what a spectator list contains.
+    gen_server_list_fn!(
+        spectator_server_list,
+        SteamAPI_ISteamMatchmakingServers_RequestSpectatorServerList
+    );
 }
 
 #[test]
@@ -637,5 +684,41 @@ fn test_internet_servers() {
     for _ in 0..2000 {
         client.run_callbacks();
         std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[cfg(test)]
+mod filter_tests {
+    //! The length rule on its own, plus the layout it counts against. Which servers a spectator list
+    //! actually returns is registered as unverified: every request here needs a live client.
+
+    use super::{c_char, filter_pair_fits};
+    use steamworks_sys as sys;
+
+    /// The bound is the byte reserved for the terminator, so 255 is the last length that still fits
+    /// and 256 is the first that must be refused. A mutation moving either side lands here: `< 255`
+    /// refuses a filter Steam can hold, `<= 256` copies a filter whose terminator has nowhere to go.
+    #[test]
+    fn a_filter_is_refused_when_it_cannot_keep_its_terminator() {
+        assert!(filter_pair_fits(&[], &[]));
+        assert!(filter_pair_fits(&[b'k'; 255], &[b'v'; 255]));
+        assert!(!filter_pair_fits(&[b'k'; 256], &[b'v'; 0]));
+        assert!(!filter_pair_fits(&[b'k'; 0], &[b'v'; 256]));
+        assert!(!filter_pair_fits(&[b'k'; 256], &[b'v'; 256]));
+        // One long half is enough to refuse the pair, because both are copied into the same call.
+        assert!(!filter_pair_fits(&[b'k'; 300], &[b'v'; 10]));
+        assert!(!filter_pair_fits(&[b'k'; 10], &[b'v'; 300]));
+    }
+
+    /// A premise pin, not a lock on this crate's code: the bound above counts a field Steam declares,
+    /// and if a regeneration ever changes that layout the pin has to be re-read rather than trusted.
+    /// Reddened by shrinking one field in the generated layer -- no change of mine can move it.
+    #[test]
+    fn the_pair_is_exactly_the_two_arrays_the_bound_counts() {
+        assert_eq!(
+            std::mem::size_of::<sys::MatchMakingKeyValuePair_t>(),
+            256 * 2 * std::mem::size_of::<c_char>(),
+            "the filter pair is two 256-byte fields and nothing else"
+        );
     }
 }

@@ -36,12 +36,12 @@ HttpResponse 8
 InventoryResult 8
 AppNetConnectionEnd 7
 NetworkingMessages 7
+ServerListRequest 7
 SteamId 7
 HtmlSurface 6
 InventoryUpdateHandle 6
 LobbyListFilter 6
 ParentalSettings 6
-ServerListRequest 6
 NetConnectionInfo 5
 RelayNetworkStatus 5
 RemotePlaySession 5

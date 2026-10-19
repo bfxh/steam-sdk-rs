@@ -1,1 +1,1 @@
-281  # lib tests reached with --all-features, measured 2026-10-20 with the global-achievement-percentage face (6 tests added)
+283  # lib tests reached with --all-features, measured 2026-10-20 with the server-list cancel and filter rule (2 tests added)
