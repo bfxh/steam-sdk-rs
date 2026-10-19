@@ -977,6 +977,32 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   suite had actually reached 242, so it is re-recorded at the measured 253 instead of being left 77 tests
   looser than reality.
 
+- **The FakeIP family's last lookup** (`src/networking_utils.rs`, with notes in
+  `src/networking_sockets/fake_ip.rs` and `src/networking_sockets/fake_udp.rs`).
+  `ISteamNetworkingUtils::GetRealIdentityForFakeIP` (`isteamnetworkingutils.h:268`) is now
+  `NetworkingUtils::real_identity_for_fake_ip(SocketAddr) -> Result<NetworkingIdentity, SteamError>`,
+  which is also the answer to the sentence `FakeUDPPort::receive_messages` has quoted since it was
+  written -- "SteamNetworkingMessage_t::m_identity in the returned message(s) will always contain a
+  FakeIP.  See ISteamNetworkingUtils::GetRealIdentityForFakeIP." (`steamnetworkingfakeip.h:61-66`).
+  The out parameter is read only after the status answers, because a struct Steam never wrote holds
+  zeros and zero *is* `k_ESteamNetworkingIdentityType_Invalid`: the premise is pinned by
+  `an_untouched_identity_struct_holds_the_type_that_is_nobody`, which was checked by editing the
+  generated binding's discriminant to 7 and watching that test go red (`left: 7 / right: 0`) -- a
+  premise nobody can re-check is how the last wrong sentence in this file got published. The two
+  documented refusals stay tellable apart (`:259-260`: "the IP is not a FakeIP." versus "we don't
+  recognize that FakeIP and don't know the corresponding identity.") and are asserted to differ, not
+  just to exist. Three mutations, three red on an assertion message; the error-table ones also turn
+  red in the two FakeIP refusal tests written yesterday, which is the redundancy this ledger likes.
+  Unverified rather than counted: whether a given address *has* an answer needs a running client and
+  an address Steam actually assigned. This is the last FakeIP entry point in either header that this
+  crate wraps -- `SetGlobalCallback_FakeIPResult` stays deliberately unwrapped, for the reason in
+  `fake_ip.rs`'s module note.
+  Ledgers: `NetworkingUtils` 17 -> 18 inherent methods, `ISteamNetworkingUtils.called` 15 -> 16 with
+  the coverage total 646 -> 647, header citations 222 -> 227 spans (the ruler judged two of the new
+  citations wrong on the first try: both quoted line 258, "On failure, returns:", while the sentences
+  they quote sit at 259 and 260 -- re-anchored, not exempted), lib test floor re-recorded at the
+  measured 255.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

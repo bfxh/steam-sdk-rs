@@ -656,7 +656,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 
 | 接口 | 已调 | 绑定 | 接口 | 已调 | 绑定 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamNetworkingUtils |   15 |  41 | ISteamHTTP |   22 |  25 |
+| ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 646 / 913**（33 个接口；2026-10-19 补 FakeIP 第四个入口与分类器，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→15。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 647 / 913**（33 个接口；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -746,9 +746,19 @@ network byte order」），端口原样交出去（`:239`「Host byte order」�
 `k_ESteamNetworkingFakeIPType__Force32Bit`（`:190`）是绑定里声明过的哨兵，测试直接拿它构造，所以不像
 §6.1c 那九处「要等上游更新才可达」的兜底那样只能登记没有测试。传给分类器的那个 `u32` 也抽成了
 本仓函数 `fake_ip_probe_argument`：写成 `ip.to_bits()` 再断言 `to_bits()` 等于自己，测的是 std 不是我的码。
-**门判不到的部分照旧登记**：`remote_fake_ip` 与 `ipv4_fake_ip_type` 各要一次真 FFI 往返，前者还要一条
-用 FakeIP 建立的连接；CI 判的是它们两侧的纯函数与表，接线本身没有跑过。`fake_udp.rs` 里
+**门判不到的部分照旧登记**：`remote_fake_ip`、`ipv4_fake_ip_type` 与 `real_identity_for_fake_ip`
+各要一次真 FFI 往返，第一条还要一条用 FakeIP 建立的连接、第三条要一个 Steam 真分配过的地址；
+CI 判的是它们两侧的纯函数、表与前提，接线本身没有跑过。`fake_udp.rs` 里
 `create_fake_udp_port` 的文档仍指回这一段——「票从哪来」这条边界要有人看见，而不是被假装跳过。
+同一天再补最后一格：`ISteamNetworkingUtils::GetRealIdentityForFakeIP`（h:268）封成
+`NetworkingUtils::real_identity_for_fake_ip(SocketAddr) -> Result<NetworkingIdentity, SteamError>`，
+它就是 `fake_udp.rs` 里那条「消息里的 m_identity 永远是 FakeIP，去看 GetRealIdentityForFakeIP」的答复。
+两个拒绝码（h:259-260）一个是"你给的地址不是 FakeIP"、一个是"我们认不出这个 FakeIP"，
+`the_two_identity_lookup_refusals_keep_their_names` 要求两者各自可辨且互不相等；出参只在状态回答之后才读，
+因为没被写过的结构体留着 0，而 0 就是 `k_ESteamNetworkingIdentityType_Invalid`——
+这条前提是 `an_untouched_identity_struct_holds_the_type_that_is_nobody` 钉的（把绑定里那个判别式改成 7
+⇒ 该测试断言判红 `left: 7 / right: 0`，所以它不是装饰）。到这一步 `isteamnetworkingsockets.h` 与
+`isteamnetworkingutils.h` 里 FakeIP 一族的入口只剩 `SetGlobalCallback_FakeIPResult` 有意不封，理由不变。
 
 这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
 方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了

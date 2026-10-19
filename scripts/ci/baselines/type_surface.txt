@@ -13,9 +13,9 @@ UserStats 24
 UpdateHandle 22
 Inventory 21
 QueryResults 21
+NetworkingUtils 18
 Timeline 18
 NetConnection 17
-NetworkingUtils 17
 NetworkingSockets 16
 Friend 14
 NetworkingMessage 14

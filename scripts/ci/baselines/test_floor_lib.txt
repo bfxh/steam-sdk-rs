@@ -1,1 +1,1 @@
-253  # lib tests reached with --all-features, measured 2026-10-19 with the FakeIP address unit (11 tests added: 6 decode, 4 classifier, 1 refusals)
+255  # lib tests reached with --all-features, measured 2026-10-19 with the FakeIP identity lookup (2 tests added; floor was 165 while the suite had reached 242)

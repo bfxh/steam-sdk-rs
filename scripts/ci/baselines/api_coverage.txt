@@ -52,7 +52,7 @@ ISteamNetworking.called 6
 ISteamNetworkingFakeUDPPort.called 4
 ISteamNetworkingMessages.called 6
 ISteamNetworkingSockets.called 31
-ISteamNetworkingUtils.called 15
+ISteamNetworkingUtils.called 16
 ISteamParentalSettings.called 6
 ISteamParties.called 12
 ISteamRemotePlay.called 7

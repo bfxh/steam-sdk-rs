@@ -185,6 +185,8 @@ impl FakeUDPPort {
     /// `steamnetworkingfakeip.h:61-66` words it exactly: "SteamNetworkingMessage_t::m_identity in the
     /// returned message(s) will always contain a FakeIP.  See
     /// ISteamNetworkingUtils::GetRealIdentityForFakeIP."
+    /// This crate answers that *see* with
+    /// [`crate::networking_utils::NetworkingUtils::real_identity_for_fake_ip`].
     ///
     /// Steam's return value is clamped by `messages_received` before it is used as a length, so a
     /// negative or over-large answer cannot make this read slots that were never offered.

@@ -11,7 +11,9 @@
 //! Classifying an address -- is this IPv4 one of Steam's fake ones, and which kind -- is
 //! `ISteamNetworkingUtils::GetIPv4FakeIPType`, wrapped as
 //! [`crate::networking_utils::NetworkingUtils::ipv4_fake_ip_type`] and
-//! [`crate::networking_utils::FakeIpType`].
+//! [`crate::networking_utils::FakeIpType`]. Turning one back into the identity behind it is the
+//! lookup beside it, [`crate::networking_utils::NetworkingUtils::real_identity_for_fake_ip`], and
+//! that pair is what `FakeUDPPort::receive_messages`'s note about message identities points at.
 //!
 //! `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` is deliberately not wrapped either. The
 //! same completion payload -- `steamnetworkingfakeip.h:93` opens it as "struct

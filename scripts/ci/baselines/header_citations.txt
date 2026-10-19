@@ -54,6 +54,12 @@
 # spans of `[::]:0` read as a citation of line 0 (the short `:N` form has no way to know a socket
 # literal is not a line number), and one paraphrase of my own sat inside quotation marks. Both were
 # reworded rather than exempted, which is why the three debt columns are still empty.
+# Re-recorded again the same day for the FakeIP identity lookup: 36 files, 227 spans (was 222),
+# still 0/0/0. The five new spans are isteamnetworkingutils.h:259-260 (the two refusals this wrapper
+# keeps tellable apart), :262-263 and :265-266 (how long an answer stays available), which joined the
+# file that already cited :251-252. The ruler judged two of them wrong on the first try -- both quoted
+# line 258 ("On failure, returns:") while the sentence they quote sits at 259 and 260 -- so the off-by-one
+# is fixed in the prose, not exempted here.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0

@@ -1,9 +1,11 @@
-use crate::networking_types::{NetworkingAvailabilityResult, NetworkingMessage};
+use crate::networking_types::{
+    NetworkingAvailabilityResult, NetworkingIdentity, NetworkingMessage, SteamIpAddr,
+};
 use crate::utils::fixed_string;
 use crate::{register_callback, Callback, Inner};
 use std::convert::TryInto;
 use std::ffi::{c_void, CStr};
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use steamworks_sys as sys;
@@ -379,8 +381,9 @@ impl NetworkingUtils {
     /// Steam bills this as a pure test on the number: "This function is fast; it just does some
     /// logical tests on the IP and does not need to do any lookup operations"
     /// (`isteamnetworkingutils.h:251-252`). So it answers for an address Steam has never heard of,
-    /// which is the opposite of `GetRealIdentityForFakeIP` next to it in the same header -- that one
-    /// is a lookup, and this crate does not wrap it.
+    /// which is the opposite of the lookup next to it in the same header,
+    /// [`NetworkingUtils::real_identity_for_fake_ip`] -- that one only answers for a FakeIP Steam
+    /// actually assigned.
     pub fn ipv4_fake_ip_type(&self, ip: Ipv4Addr) -> FakeIpType {
         fake_ip_type_from_raw(unsafe {
             sys::SteamAPI_ISteamNetworkingUtils_GetIPv4FakeIPType(
@@ -388,6 +391,41 @@ impl NetworkingUtils {
                 fake_ip_probe_argument(ip),
             )
         })
+    }
+
+    /// The identity Steam has behind a FakeIP address, when it still knows one.
+    ///
+    /// This is the lookup that [`NetworkingUtils::ipv4_fake_ip_type`] is not: Steam says of the
+    /// classifier "it just does some logical tests on the IP and does not need to do any lookup
+    /// operations" (`isteamnetworkingutils.h:251-252`), while this one consults what it has actually
+    /// assigned. The answer is durable for a live connection -- "FakeIP's used by active connections,
+    /// or the FakeIPs assigned to local identities, will always work" (`:262-263`) -- and not durable
+    /// otherwise: Steam forgets FakeIPs to save space, though "you can read back the real identity
+    /// of a connection very soon after it is destroyed" (`:265-266`).
+    ///
+    /// Both refusals arrive as [`crate::SteamError`] and neither is read as an identity:
+    /// "k_EResultInvalidParam: the IP is not a FakeIP." and "k_EResultNoMatch: we don't recognize that
+    /// FakeIP and don't know the corresponding identity." (`:259-260`). The out parameter is filled
+    /// only on the success path because a struct Steam never wrote holds zeros, and zero is
+    /// `k_ESteamNetworkingIdentityType_Invalid` -- the type that is not anyone's identity. The test
+    /// `the_two_identity_lookup_refusals_keep_their_names` pins that the two refusals stay tellable
+    /// apart; whether a given address has an answer needs a running client and an address Steam has
+    /// actually assigned, so that half is registered as unverified rather than counted as covered.
+    pub fn real_identity_for_fake_ip(
+        &self,
+        fake_ip: SocketAddr,
+    ) -> Result<NetworkingIdentity, crate::SteamError> {
+        let held = SteamIpAddr::from(fake_ip);
+        let mut out = std::mem::MaybeUninit::<sys::SteamNetworkingIdentity>::zeroed();
+        let code = unsafe {
+            sys::SteamAPI_ISteamNetworkingUtils_GetRealIdentityForFakeIP(
+                self.utils,
+                held.as_ptr(),
+                out.as_mut_ptr(),
+            )
+        };
+        crate::to_steam_result(code)?;
+        Ok(NetworkingIdentity::from(unsafe { out.assume_init() }))
     }
 }
 
@@ -688,6 +726,32 @@ mod fake_ip_tests {
             fake_ip_probe_argument(Ipv4Addr::new(1, 2, 3, 4)),
             u32::from_le_bytes(Ipv4Addr::new(1, 2, 3, 4).octets()),
             "the reversed order is the defect, not an alternative reading"
+        );
+    }
+
+    /// The identity lookup names two refusals, "the IP is not a FakeIP" and "we don't recognize that
+    /// FakeIP" (`isteamnetworkingutils.h:259-260`), and they are different facts: one indicts the
+    /// argument, the other Steam's memory. Folding either into `Generic` makes the pair unreadable,
+    /// so each is asserted on its own and then asserted to differ.
+    #[test]
+    fn the_two_identity_lookup_refusals_keep_their_names() {
+        let not_a_fake_ip = crate::to_steam_result(sys::EResult::k_EResultInvalidParam);
+        let forgotten = crate::to_steam_result(sys::EResult::k_EResultNoMatch);
+        assert_eq!(not_a_fake_ip, Err(crate::SteamError::InvalidParameter));
+        assert_eq!(forgotten, Err(crate::SteamError::NoMatch));
+        assert_ne!(not_a_fake_ip, forgotten);
+    }
+
+    /// A premise pin rather than a lock on this crate's code: the wrapper reads the out parameter only
+    /// after the status answers, and the reason that matters is that an untouched struct holds the
+    /// invalid identity. If the generated layer ever stops numbering that as zero, the argument in the
+    /// method's docs has to be re-read -- which is what this test is for.
+    #[test]
+    fn an_untouched_identity_struct_holds_the_type_that_is_nobody() {
+        assert_eq!(
+            sys::ESteamNetworkingIdentityType::k_ESteamNetworkingIdentityType_Invalid as i32,
+            0,
+            "zero is what the refused call leaves behind, so it must be the invalid type"
         );
     }
 }

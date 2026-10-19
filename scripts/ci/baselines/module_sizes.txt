@@ -1,6 +1,6 @@
 src/lib.rs 833
+src/networking_utils.rs 757
 src/networking_sockets/connection.rs 712
-src/networking_utils.rs 693
 src/networking_types/config.rs 676
 src/matchmaking_servers.rs 641
 src/http.rs 616
@@ -11,8 +11,8 @@ src/timeline.rs 579
 src/callback.rs 560
 src/ugc/types.rs 559
 src/app.rs 551
-src/networking_sockets/fake_udp.rs 534
-src/networking_sockets/fake_ip.rs 524
+src/networking_sockets/fake_udp.rs 536
+src/networking_sockets/fake_ip.rs 526
 src/networking_messages.rs 502
 src/matchmaking/mod.rs 495
 src/parties.rs 486
