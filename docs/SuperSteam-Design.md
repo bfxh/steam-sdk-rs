@@ -1205,10 +1205,15 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   A 照着现成的 `ServerListRequest::release` 造一个带 `cancel()` 的 `ServerQuery` 句柄；B 直接回 `i32`
   再加 `cancel_server_query`。风险顺带记一句：`HServerQuery` 是 `typedef int`（`:377`），而
   `HSERVERQUERY_INVALID = 0xffffffff`（`:378`）——按 `i32` 读它就是 -1，裸句柄最容易在这种地方踩空。
-- **门禁自己的一处盲区，实测登记**：`scripts/ci/type_surface.py` 数的是 `pub fn <标识符>`，看不见
+- **门禁自己的一处盲区，2026-10-20 已修**：`scripts/ci/type_surface.py` 数的是 `pub fn <标识符>`，看不见
   `gen_server_list_fn!` 生成的方法 ⇒ 台账里 `MatchmakingServers` 记 **4** 个内在方法，真实 **9** 个
-  （写出来的 4 只：lan/ping/player_details/server_rules；宏生成 5 只，本轮起 6 只）。双向判红仍然成立，
-  但它守的是 9 只里的 4 只；要补得先教尺子认宏体，列在这里待做。
+  （写出来的 4 只：lan/ping/player_details/server_rules；宏生成 5 只）。双向判红当时仍然成立，
+  但它守的是 9 只里的 4 只。修法：**在调用点计数**——先扫出所有"体内写了 `pub fn $`"的 `macro_rules!`
+  名字，再把落在 inherent impl 里的每一次调用算一只方法。这样归属说的是真话：宏声明了但没展开 ⇒ 不增加
+  表面积；要新增一只生成方法，必须写一条新的调用行，而那正是 reviewer 会看到的行。
+  4 条 canary 钉住它（含 `generates_nothing!` 这种"调用了但不生成方法"的负例），并且**反证过**：
+  把尺子改回旧写法，canary 立刻红在 `exit=1 want=4` 上——正是当年那个盲区值。
+  台账现记 `MatchmakingServers 9`，83 型 / **912** 只方法。
 
 **2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
 声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，

@@ -1355,6 +1355,21 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`type_surface.py` now sees methods a macro generates, which closes a blind spot it registered
+  against itself** (`scripts/ci/type_surface.py`). The ruler counted `pub fn <identifier>` and a
+  generated declaration is written `pub fn $name` -- a `$` is not `[A-Za-z_]` -- so `MatchmakingServers`
+  sat in the ledger at **4** while the type really had **9**, and the gate that is supposed to catch a
+  type accreting responsibility was watching 4 of the 9. It is fixed by counting **call sites**: every
+  `macro_rules!` whose body writes a `pub fn $` is collected first, and each of its invocations inside
+  an inherent `impl` adds one method to that type. Attribution stays honest because a macro declared and
+  never expanded adds nothing, and gaining a generated method means writing a new invocation line -- the
+  line a reviewer has to touch.
+  Four canary assertions pin it, including the negative case that matters most: a macro invoked inside
+  an impl whose body generates no method is *not* surface. And the regression was proven able to go
+  red -- restoring the old one-line matcher makes a canary fail with exactly `exit=1 want=4`, the
+  value of the blind spot. Ledger re-recorded to `MatchmakingServers 9`; the measured surface is
+  83 types / 912 methods, up from 907, which is the honest number rather than growth.
+
 - **`Result<T, ()>` is a counted gate now, and it ships at zero, not at a ceiling**
   (`scripts/ci/erased_errors.py`, `scripts/ci/baselines/erased_errors.txt`, one step in
   `.github/workflows/ci.yml`). Three shapes are counted in code the caller can reach -- a public

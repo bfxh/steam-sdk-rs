@@ -27,6 +27,7 @@ GameServerStats 10
 RemoteStorage 10
 SteamFile 10
 SteamIpAddr 10
+MatchmakingServers 9
 Music 9
 Networking 9
 SafeUgcUpdate 9
@@ -49,7 +50,6 @@ ConnectedEvent 4
 ConnectionRequest 4
 FakeUDPPort 4
 ListenSocket 4
-MatchmakingServers 4
 NetConnectionRealTimeLaneStatus 4
 NetworkingConfigEntry 4
 DisconnectedEvent 3

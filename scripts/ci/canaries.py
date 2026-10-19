@@ -27,6 +27,7 @@ was said to need turned out to be one workflow file and a `git add`.
 Usage: `python3 scripts/ci/canaries.py`. Exits 1 if a gate failed to judge as expected, 2 if the
 suite itself could not run (which is not a pass either).
 """
+import ast
 import re
 import shutil
 import subprocess
@@ -938,13 +939,77 @@ def canary_erased_errors():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+TYPE_SURFACE_FIXTURE = """
+macro_rules! generates {
+    ($name:ident) => {
+        pub fn $name(&self) -> u32 { 1 }
+    };
+}
+
+macro_rules! generates_nothing {
+    ($name:ident) => {
+        fn $name(&self) -> u32 { 1 }
+    };
+}
+
+impl Uses {
+    generates!(one);
+    generates!(two);
+    generates!(three);
+    generates_nothing!(not_a_method);
+    pub fn written(&self) -> u32 { 2 }
+}
+
+impl NeverInvoked {
+    pub fn only(&self) -> u32 { 3 }
+}
+
+impl OnlyNoise {
+    generates_nothing!(x);
+}
+"""
+
+
+def canary_type_surface():
+    """The blind spot this ruler had: a macro that writes ``pub fn $name`` was invisible, so
+    MatchmakingServers was registered at 4 methods while the type really had 9.
+
+    Four assertions, all with a distinct way to be wrong: a generated method must be attributed to
+    the impl holding the *invocation* (not to the file holding the macro), a declared-but-never-
+    expanded macro must add nothing, and a macro that does not generate a method must not be
+    counted just because it is invoked inside an impl.
+    """
+    print("type_surface.py -- a generated method is counted where it is invoked")
+    ruler = (ROOT / CI / "type_surface.py").as_posix()
+    tmp = tempfile.mkdtemp(prefix="type-surface-")
+    try:
+        with open(Path(tmp) / "fixture.rs", "w", encoding="utf-8") as handle:
+            handle.write(TYPE_SURFACE_FIXTURE)
+        driver = (
+            "import importlib.util,sys;"
+            "spec=importlib.util.spec_from_file_location('r', sys.argv[1]);"
+            "mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);"
+            "print(mod.measure(sys.argv[2]))"
+        )
+        done = subprocess.run([sys.executable, "-c", driver, ruler, tmp],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        counts = ast.literal_eval(done.stdout.strip())
+        expect("three invocations plus one written method is four", counts.get("Uses"), 4)
+        expect("a macro with no invocation adds no surface", counts.get("NeverInvoked"), 1)
+        expect("invoking a macro that generates no method is not surface",
+               "OnlyNoise" in counts, False)
+        expect("the fixture is read at all", len(counts), 2)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
             canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
             canary_shell_hatches, canary_workflow_inputs, canary_lock_poisons,
-            canary_erased_errors)
+            canary_erased_errors, canary_type_surface)
 
 
 def main():
