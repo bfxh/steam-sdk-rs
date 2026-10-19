@@ -3,6 +3,7 @@
 //! own stats -- that lives in `stats_io`.
 
 use super::*;
+use crate::app::c_string_arg;
 
 impl UserStats {
     /// Asynchronously requests global stats data, which is available for stats marked as "aggregated".
@@ -67,10 +68,11 @@ impl UserStats {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(i64)` with the stat value if successful, or `Err(())` if the stat doesn't exist
+    /// Returns `Ok(i64)` with the stat value if successful, or
+    /// `Err(SteamError::InvalidParameter)` when the stat does not exist
     /// or hasn't been received yet.
-    pub fn get_global_stat_i64(&self, name: &str) -> Result<i64, ()> {
-        let name = CString::new(name).map_err(|_| ())?;
+    pub fn get_global_stat_i64(&self, name: &str) -> SteamResult<i64> {
+        let name = c_string_arg(name)?;
         let mut value: i64 = 0;
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_GetGlobalStatInt64(
@@ -82,7 +84,7 @@ impl UserStats {
         if success {
             Ok(value)
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -99,10 +101,11 @@ impl UserStats {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(f64)` with the stat value if successful, or `Err(())` if the stat doesn't exist
+    /// Returns `Ok(f64)` with the stat value if successful, or
+    /// `Err(SteamError::InvalidParameter)` when the stat does not exist
     /// or hasn't been received yet.
-    pub fn get_global_stat_f64(&self, name: &str) -> Result<f64, ()> {
-        let name = CString::new(name).map_err(|_| ())?;
+    pub fn get_global_stat_f64(&self, name: &str) -> SteamResult<f64> {
+        let name = c_string_arg(name)?;
         let mut value: f64 = 0.0;
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_GetGlobalStatDouble(
@@ -114,7 +117,7 @@ impl UserStats {
         if success {
             Ok(value)
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -138,9 +141,14 @@ impl UserStats {
     /// # Returns
     ///
     /// Returns `Ok(Vec<i64>)` containing the daily values (from today backwards) if successful,
-    /// or `Err(())` if the stat doesn't exist or hasn't been received yet.
-    pub fn get_global_stat_history_i64(&self, name: &str, max_days: usize) -> Result<Vec<i64>, ()> {
-        let name = CString::new(name).map_err(|_| ())?;
+    /// or `Err(SteamError::InvalidParameter)` when the stat does not exist or has not been
+    /// received yet.
+    pub fn get_global_stat_history_i64(
+        &self,
+        name: &str,
+        max_days: usize,
+    ) -> SteamResult<Vec<i64>> {
+        let name = c_string_arg(name)?;
         let mut data = vec![0i64; max_days];
         let count = unsafe {
             sys::SteamAPI_ISteamUserStats_GetGlobalStatHistoryInt64(
@@ -154,7 +162,7 @@ impl UserStats {
             data.truncate(count as usize);
             Ok(data)
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -178,9 +186,14 @@ impl UserStats {
     /// # Returns
     ///
     /// Returns `Ok(Vec<f64>)` containing the daily values (from today backwards) if successful,
-    /// or `Err(())` if the stat doesn't exist or hasn't been received yet.
-    pub fn get_global_stat_history_f64(&self, name: &str, max_days: usize) -> Result<Vec<f64>, ()> {
-        let name = CString::new(name).map_err(|_| ())?;
+    /// or `Err(SteamError::InvalidParameter)` when the stat does not exist or has not been
+    /// received yet.
+    pub fn get_global_stat_history_f64(
+        &self,
+        name: &str,
+        max_days: usize,
+    ) -> SteamResult<Vec<f64>> {
+        let name = c_string_arg(name)?;
         let mut data = vec![0f64; max_days];
         let count = unsafe {
             sys::SteamAPI_ISteamUserStats_GetGlobalStatHistoryDouble(
@@ -194,7 +207,7 @@ impl UserStats {
             data.truncate(count as usize);
             Ok(data)
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 }

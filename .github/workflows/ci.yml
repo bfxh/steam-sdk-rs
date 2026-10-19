@@ -186,6 +186,15 @@ jobs:
           python3 scripts/ci/lock_poisons.py src > "$RUNNER_TEMP/lock_poisons.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/lock_poisons.txt "$RUNNER_TEMP/lock_poisons.txt"
 
+      # `Result<T, ()>` 说得出「会失败」说不出「为什么失败」：调用方没法分支、没法记日志，只能自己编。
+      # 2026-10-20 还清（26 个公开签名 + 30 处 `Err(())`，六个文件；`join_lobby` 另得 JoinLobbyError，
+      # 因为那里的 `()` 把「答案根本没来」和「Steam 点名了原因」压成一个值）。目标 0，不是上限——
+      # 允许 26 的门等于放行下一个。尺子自带正反例（canaries.py），文档里的旧形状不算违规点。
+      - name: no error-erasing Result remaining
+        run: |
+          python3 scripts/ci/erased_errors.py src > "$RUNNER_TEMP/erased_errors.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/erased_errors.txt "$RUNNER_TEMP/erased_errors.txt"
+
       - name: interface handles keep the client alive
         run: |
           python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"

@@ -176,7 +176,7 @@ macro_rules! gen_server_list_fn {
             app_id: ID,
             filters: &HashMap<&str, &str>,
             callbacks: ServerListCallbacks,
-        ) -> Result<Arc<Mutex<ServerListRequest>>, ()> {
+        ) -> SteamResult<Arc<Mutex<ServerListRequest>>> {
             let app_id = app_id.into().0;
             let mut filters = {
                 let mut vec = Vec::with_capacity(filters.len());
@@ -185,7 +185,7 @@ macro_rules! gen_server_list_fn {
                     let value_bytes = i.1.as_bytes();
 
                     if !filter_pair_fits(key_bytes, value_bytes) {
-                        return Err(());
+                        return Err(SteamError::InvalidParameter);
                     }
 
                     let mut key = [0 as c_char; 256];
@@ -432,9 +432,9 @@ impl ServerListRequest {
         }
     }
 
-    fn released(&self) -> Result<(), ()> {
+    fn released(&self) -> SteamResult<()> {
         if self.released {
-            Err(())
+            Err(SteamError::InvalidState)
         } else {
             Ok(())
         }
@@ -443,7 +443,7 @@ impl ServerListRequest {
     /// # Errors
     ///
     /// Err if called on the released request
-    pub fn get_server_count(&self) -> Result<i32, ()> {
+    pub fn get_server_count(&self) -> SteamResult<i32> {
         unsafe {
             self.released()?;
 
@@ -456,7 +456,7 @@ impl ServerListRequest {
     /// # Errors
     ///
     /// Err if called on the released request
-    pub fn get_server_details(&self, server: i32) -> Result<GameServerItem, ()> {
+    pub fn get_server_details(&self, server: i32) -> SteamResult<GameServerItem> {
         unsafe {
             self.released()?;
 
@@ -472,7 +472,7 @@ impl ServerListRequest {
     /// # Errors
     ///
     /// Err if called on the released request
-    pub fn refresh_query(&self) -> Result<(), ()> {
+    pub fn refresh_query(&self) -> SteamResult<()> {
         unsafe {
             self.released()?;
 
@@ -499,7 +499,7 @@ impl ServerListRequest {
     ///
     /// Err if called on the released request -- after `release` there is no handle left to cancel, and
     /// Steam would be handed a request id it has already forgotten.
-    pub fn cancel_query(&self) -> Result<(), ()> {
+    pub fn cancel_query(&self) -> SteamResult<()> {
         unsafe {
             self.released()?;
 
@@ -512,7 +512,7 @@ impl ServerListRequest {
     /// # Errors
     ///
     /// Err if called on the released request
-    pub fn refresh_server(&self, server: i32) -> Result<(), ()> {
+    pub fn refresh_server(&self, server: i32) -> SteamResult<()> {
         unsafe {
             self.released()?;
 
@@ -525,7 +525,7 @@ impl ServerListRequest {
     /// # Errors
     ///
     /// Err if called on the released request
-    pub fn is_refreshing(&self) -> Result<bool, ()> {
+    pub fn is_refreshing(&self) -> SteamResult<bool> {
         unsafe {
             self.released()?;
 

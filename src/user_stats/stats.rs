@@ -1,5 +1,5 @@
 use super::*;
-use crate::utils::try_c_string;
+use crate::app::c_string_arg;
 
 /// Achievement API.
 ///
@@ -15,7 +15,7 @@ use crate::utils::try_c_string;
 /// # let client = steamworks::Client::init().unwrap();
 /// // Unlock the 'WIN_THE_GAME' achievement
 /// client.user_stats().achievement("WIN_THE_GAME").set()?;
-/// # Err(())
+/// # Ok::<(), steamworks::SteamError>(())
 /// ```
 pub struct AchievementHelper<'parent> {
     pub(crate) name: CString,
@@ -31,7 +31,7 @@ impl AchievementHelper<'_> {
     ///
     /// Fails if this achievement's 'API Name' is unknown, or unsuccessful
     /// [`UserStatsReceived`](../struct.UserStatsReceived.html).
-    pub fn get(&self) -> Result<bool, ()> {
+    pub fn get(&self) -> SteamResult<bool> {
         unsafe {
             let mut achieved = false;
             let success = sys::SteamAPI_ISteamUserStats_GetAchievement(
@@ -42,7 +42,7 @@ impl AchievementHelper<'_> {
             if success {
                 Ok(achieved)
             } else {
-                Err(())
+                Err(SteamError::InvalidParameter)
             }
         }
     }
@@ -55,14 +55,14 @@ impl AchievementHelper<'_> {
     ///
     /// Fails if this achievement's 'API Name' is unknown, or unsuccessful
     /// [`UserStatsReceived`](../struct.UserStatsReceived.html).
-    pub fn set(&self) -> Result<(), ()> {
+    pub fn set(&self) -> SteamResult<()> {
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_SetAchievement(self.parent.user_stats, self.name.as_ptr())
         };
         if success {
             Ok(())
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -74,7 +74,7 @@ impl AchievementHelper<'_> {
     ///
     /// Fails if this achievement's 'API Name' is unknown, or unsuccessful
     /// [`UserStatsReceived`](../struct.UserStatsReceived.html).
-    pub fn clear(&self) -> Result<(), ()> {
+    pub fn clear(&self) -> SteamResult<()> {
         let success = unsafe {
             sys::SteamAPI_ISteamUserStats_ClearAchievement(
                 self.parent.user_stats,
@@ -84,7 +84,7 @@ impl AchievementHelper<'_> {
         if success {
             Ok(())
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -113,9 +113,9 @@ impl AchievementHelper<'_> {
     ///         println!("Error requesting global achievement percentages");
     ///     }
     /// });
-    /// # Err(())
+    /// # Ok::<(), steamworks::SteamError>(())
     /// ```
-    pub fn get_achievement_achieved_percent(&self) -> Result<f32, ()> {
+    pub fn get_achievement_achieved_percent(&self) -> SteamResult<f32> {
         unsafe {
             let mut percent = 0.0;
             let success = sys::SteamAPI_ISteamUserStats_GetAchievementAchievedPercent(
@@ -126,7 +126,7 @@ impl AchievementHelper<'_> {
             if success {
                 Ok(percent)
             } else {
-                Err(())
+                Err(SteamError::InvalidParameter)
             }
         }
     }
@@ -139,7 +139,7 @@ impl AchievementHelper<'_> {
     /// If the return value is true but the unlock time is zero, that means it was unlocked before
     /// Steam began tracking achievement unlock times (December 2009). The time is provided in Unix
     /// epoch format, seconds since January 1, 1970 UTC.
-    pub fn get_achievement_and_unlock_time(&self) -> Result<(bool, u32), ()> {
+    pub fn get_achievement_and_unlock_time(&self) -> SteamResult<(bool, u32)> {
         let mut achieved = false;
         let mut unlocktime = 0u32;
 
@@ -155,7 +155,7 @@ impl AchievementHelper<'_> {
         if success {
             Ok((achieved, unlocktime))
         } else {
-            Err(())
+            Err(SteamError::InvalidParameter)
         }
     }
 
@@ -189,13 +189,13 @@ impl AchievementHelper<'_> {
     /// # let client = steamworks::Client::init().unwrap();
     /// // Get the "description" string for the 'WIN_THE_GAME' achievement
     /// client.user_stats().achievement("WIN_THE_GAME").get_achievement_display_attribute("desc").unwrap();
-    /// # Err(())
+    /// # Ok::<(), steamworks::SteamError>(())
     /// ```
-    pub fn get_achievement_display_attribute(&self, key: &str) -> Result<&str, ()> {
+    pub fn get_achievement_display_attribute(&self, key: &str) -> SteamResult<&str> {
         unsafe {
             // A nul in the caller's key is a failure to ask the question at all, which is what
-            // this function's `Err(())` already means.
-            let key_c_str = try_c_string(key).ok_or(())?;
+            // this function's `InvalidParameter` already means.
+            let key_c_str = c_string_arg(key)?;
 
             let str = sys::SteamAPI_ISteamUserStats_GetAchievementDisplayAttribute(
                 self.parent.user_stats,
@@ -207,7 +207,7 @@ impl AchievementHelper<'_> {
 
             match c_str.to_str() {
                 Ok(result) => Ok(result),
-                Err(_) => Err(()),
+                Err(_) => Err(SteamError::InvalidParameter),
             }
         }
     }

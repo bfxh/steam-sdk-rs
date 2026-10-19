@@ -56,7 +56,7 @@ impl UserStats {
     /// Returns 0 if the current App ID has no achievements.
     ///
     /// *Note: Returns an error for AppId `480` (Spacewar)!*
-    pub fn get_num_achievements(&self) -> Result<u32, ()> {
+    pub fn get_num_achievements(&self) -> SteamResult<u32> {
         // SAFETY: the call reads only this handle and returns a plain count; the decision made from
         // that number is not taken here -- it lives in `achievement_count`, where it can be judged.
         let num = unsafe { sys::SteamAPI_ISteamUserStats_GetNumAchievements(self.user_stats) };
@@ -99,11 +99,11 @@ impl UserStats {
 /// distinguishable from the number, and this crate chose to surface both as an error rather than as an
 /// empty list; that choice is the contract here, and it is what makes the arm decidable without a
 /// client.
-fn achievement_count(raw: u32) -> Result<u32, ()> {
+fn achievement_count(raw: u32) -> SteamResult<u32> {
     if raw != 0 {
         Ok(raw)
     } else {
-        Err(())
+        Err(SteamError::InvalidState)
     }
 }
 
@@ -113,6 +113,7 @@ mod achievement_count_tests {
     //! walk. The FFI read needs a running client, the reading of its number does not, so the decision
     //! lives in `achievement_count` and is judged here.
     use super::achievement_count;
+    use crate::SteamError;
 
     #[test]
     fn a_positive_count_is_the_number_of_names_to_walk() {
@@ -125,7 +126,7 @@ mod achievement_count_tests {
     /// with no achievements sits in permanently. Neither may reach the caller as a panic.
     #[test]
     fn zero_is_the_documented_error_case_not_a_panic() {
-        assert_eq!(achievement_count(0), Err(()));
+        assert_eq!(achievement_count(0), Err(SteamError::InvalidState));
     }
 
     /// Anti-vacuity: the caller's `.ok()?` really does have a failure arm to propagate. Without this,

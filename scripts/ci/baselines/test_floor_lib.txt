@@ -1,1 +1,1 @@
-283  # lib tests reached with --all-features, measured 2026-10-20 with the server-list cancel and filter rule (2 tests added)
+285  # lib tests reached with --all-features, measured 2026-10-20 with the error-erasing payout (2 join-answer tests added)

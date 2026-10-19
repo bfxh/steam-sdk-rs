@@ -1228,6 +1228,30 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Added — CI and release automation
 
+- **`Result<T, ()>` is a counted gate now, and it ships at zero, not at a ceiling**
+  (`scripts/ci/erased_errors.py`, `scripts/ci/baselines/erased_errors.txt`, one step in
+  `.github/workflows/ci.yml`). Three shapes are counted in code the caller can reach -- a public
+  signature returning `Result<_, ()>`, an `Err(())` written anywhere, and the combinator forms
+  `.ok_or(())?` / `.map_err(|_| ())?` -- and rows are `<path> <signatures> <erasures>` so a file that
+  only erases reasons and a file that also publishes them are distinguishable in the report. It reuses
+  the crate's one test-scoping rule (`is_test_material`, `strip_test_modules`, `strip_test_fns`) and
+  the one comment-blanking helper, both shared with `cstring_unwraps.py` rather than reimplemented, so
+  a changelog sentence about the old shape is not a violation and a test asserting the failure arm is
+  not debt.
+  The gate ships at zero because the debt it guards was just paid out: a ceiling that allows 26 lets
+  the next one through. Nine canary assertions say what it does and does not see (104 in the suite, now
+  113): the three counted shapes each emitted as a record, prose about the old shape **not** emitted, a
+  `#[cfg(test)]` arm **not** emitted, the ruler red while sites exist, the comparator turning its own
+  output red against an empty baseline, the `#scanned <N>` marker present, and -- the one that makes
+  all the others meaningful -- a tree with none of the shapes passing, so "0 sites" cannot be a ruler
+  that matched nothing. The first run of those assertions caught two bugs of mine: `measure()`
+  substituted the matched text before counting it, so it could only ever report zero, and two of the
+  "not emitted" expectations were written with inverted logic, which is how I know the assertions
+  actually judge something. `scripts/ci/baseline_files.py` registers the ledger's reader and
+  `workflow_inputs.py` requires both new paths to be tracked -- which is the exact failure this
+  repository has been bitten by once (a ledger present only on the machine that wrote it).
+  The local replay is now **29 verdicts** rather than 28 (measured: `steps=29`).
+
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**
   (new `scripts/ci/cstring_unwraps.py`, `scripts/ci/baselines/cstring_unwraps.txt`, a `quality` step, and
   `canary_cstring_unwraps`). Measured, by two independent implementations that agreed before anything was
@@ -2997,6 +3021,37 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Breaking, and it is the whole class: no more `Result<T, ()>` in this crate** (six files:
+  `src/user_stats/stats_io.rs`, `stats.rs`, `global_stats.rs`, `achievements.rs`,
+  `src/matchmaking_servers.rs`, `src/matchmaking/mod.rs`). A `Result<T, ()>` says a call can fail and
+  then refuses to say why: the caller cannot branch on a reason, cannot log one, and cannot map it
+  without inventing the mapping itself. Measured before this change: **26 signature expressions** of
+  that shape and **30 `Err(())` sites** -- and one of those 26 is the shared body of
+  `gen_server_list_fn!`, so five generated list-request methods erase the reason through a single line.
+  Every one now returns `SteamError`:
+  `InvalidParameter` where Steam itself declined, where a name contains an interior nul, or where an
+  index is out of range -- the same answer `src/server_stats.rs` and `user_reads.rs` already gave for
+  that shape -- and `InvalidState` where the failure is about this wrapper's own object rather than a
+  refusal: `ServerListRequest::released` (the handle is gone; there is nothing left to ask) and
+  `achievement_count` (Steam's `GetNumAchievements` returns the failure value `0`, which cannot be
+  distinguished from "this app has no achievements", as that function's own doc says). The three
+  doctests that ended in `# Err(())` end in `# Ok(())` now, because their `?` must convert to
+  `SteamError`.
+  `join_lobby` was the worst case, so it got a type of its own instead of a substitution: its callback
+  took `Result<LobbyId, ()>` and its check was `io_error || response != 1`, which collapsed "the answer
+  never arrived" together with "Steam named a reason" -- and Steam *does* name one, in
+  `m_EChatRoomEnterResponse`, which this crate already translates into `ChatRoomEnterResponse` for the
+  chat path. It now takes `Result<LobbyId, JoinLobbyError>` with
+  `Transport(SteamError)` and `Refused(ChatRoomEnterResponse)`, decided by `join_lobby_answer`, so a
+  caller can tell a full lobby from a disconnected client. **Downstream**: anything that matched on
+  `Err(())`, annotated a `Result<_, ()>`, or passed those to `?` needs updating; nothing in this
+  crate's `src/`, tests, or examples did (`cargo check --locked --workspace --all-targets` is rc=0).
+  Three mutations against the new decision went red on an assertion message (dropping the transport
+  check, treating every reason as success, making the achievement count total). The fourth is recorded
+  as what it is: rewriting `store_stats` to answer `Ok` even when Steam returned `false` **survived**,
+  because that path needs a live client -- so the conversion is verified at the type level and at the
+  decision level, and the FFI bodies remain registered as untested rather than counted as covered.
 
 - **Breaking: the lobby's two number widths now match Steam's `int`, and the 250 abort is gone**
   (`src/matchmaking/queries.rs`, `src/matchmaking/filters.rs`, `src/matchmaking/mod.rs`). This closes

@@ -1,8 +1,8 @@
 src/lib.rs 833
+src/matchmaking/mod.rs 754
 src/matchmaking_servers.rs 724
 src/networking_sockets/connection.rs 712
 src/networking_types/config.rs 676
-src/matchmaking/mod.rs 660
 src/http.rs 616
 src/ugc/mod.rs 604
 src/error.rs 603
@@ -40,9 +40,9 @@ src/screenshots.rs 330
 src/matchmaking/filters.rs 319
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
+src/user_stats/global_stats.rs 293
 src/user_stats/user_reads.rs 283
 src/matchmaking/chat.rs 281
-src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
 src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
@@ -76,7 +76,7 @@ src/friends/callbacks.rs 152
 src/user_stats/stat_callback.rs 152
 src/utils/mod.rs 148
 src/ugc/read.rs 142
-src/user_stats/achievements.rs 138
+src/user_stats/achievements.rs 139
 src/inventory/prices.rs 132
 src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131

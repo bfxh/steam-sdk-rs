@@ -1,0 +1,7 @@
+# Error-erasing `()` in a public signature. Zero tolerance since 2026-10-20: the crate paid out 26
+# `Result<_, ()>` signatures and 30 `Err(())` sites across six files (see CHANGELOG), and `join_lobby`
+# gained `JoinLobbyError` because `()` there collapsed "the answer never arrived" with "Steam named a
+# reason". Rows are `<path> <signatures> <erasures>`; an empty ledger IS the passing state, and the
+# measurement side is protected by compare_baseline.py's `#scanned` marker, so "0 sites" cannot be
+# confused with a ruler that read nothing. Reader: .github/workflows/ci.yml; ruler:
+# scripts/ci/erased_errors.py.

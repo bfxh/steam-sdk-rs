@@ -39,6 +39,7 @@ READERS = {
     "api_coverage.txt": ".github/workflows/ci.yml",
     "doc_pointers_historical.txt": "scripts/ci/doc_pointers.py",
     "cstring_unwraps.txt": ".github/workflows/ci.yml",
+    "erased_errors.txt": ".github/workflows/ci.yml",
     "handle_owners.txt": ".github/workflows/ci.yml",
     "header_citations.txt": ".github/workflows/ci.yml",
     "module_sizes.txt": ".github/workflows/ci.yml",

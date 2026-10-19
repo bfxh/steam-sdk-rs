@@ -885,12 +885,66 @@ def canary_lock_poisons():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+
+def canary_erased_errors():
+    print("erased_errors.py -- which `()` is a caller's dead end, and which is only prose")
+    ruler = ROOT / CI / "erased_errors.py"
+    tmp, dst = fixture(ruler)
+    # It shares the test-scoping rule with `api_coverage.py` and the comment-blanking helper with
+    # `cstring_unwraps.py`; a copy that cannot import them would report a crash as a verdict.
+    shutil.copyfile(ROOT / CI / "api_coverage.py", dst.parent / "api_coverage.py")
+    shutil.copyfile(ROOT / CI / "cstring_unwraps.py", dst.parent / "cstring_unwraps.py")
+    try:
+        # A public signature that hands the caller nothing to match on.
+        write(tmp / "src" / "sig.rs",
+              "pub fn load(name: &str) -> Result<u8, ()> { Ok(1) }\n")
+        # An erasure inside a private helper loses the reason before the caller ever sees it.
+        write(tmp / "src" / "inner.rs",
+              "fn parse(raw: u8) -> Result<u8, String> {\n    if raw == 0 { Err(()) } else { Ok(raw) }\n}\n")
+        # The combinator shape: the reason is dropped on the way in, not at the return.
+        write(tmp / "src" / "comb.rs",
+              "pub fn name(value: &str) -> Result<String, String> {\n"
+              "    let cut = value.map_err(|_| ())?;\n    Ok(String::new())\n}\n")
+        # Prose about the old shape must not become a site: the changelog is full of it.
+        write(tmp / "src" / "prose.rs",
+              "// Before 2026-10-20 this answered `Err(())` and -> Result<u8, ()>.\n"
+              "pub fn clean(v: u8) -> Result<u8, String> { Ok(v) }\n")
+        # A test asserting a failure arm is not something a caller can trigger.
+        write(tmp / "src" / "arm.rs",
+              "pub fn real(v: u8) -> Result<u8, String> { Ok(v) }\n"
+              "#[cfg(test)]\nmod t {\n    #[test]\n    fn checks() {\n"
+              "        assert_eq!(Err(()), Err(()));\n    }\n}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        text = out.stdout
+        expect("a public `Result<_, ()>` is emitted", 0 if "src/sig.rs 1 0" in text else 1, 0)
+        expect("an inner `Err(())` is emitted", 0 if "src/inner.rs 0 1" in text else 1, 0)
+        expect("the `map_err(|_| ())?` shape is emitted", 0 if "src/comb.rs 0 1" in text else 1, 0)
+        expect("prose naming the shape is not emitted", 0 if "prose.rs" not in text else 1, 0)
+        expect("a test module's failure arm is not emitted", 0 if "arm.rs" not in text else 1, 0)
+        expect("the ruler is red while sites exist", out.returncode, 1)
+        expect("the scan marker is emitted",
+               0 if re.search(r"^#scanned \d+$", text, re.M) else 1, 0)
+        measure = write(tmp / "cur.txt", text)
+        baseline = write(tmp / "base.txt", "# empty is the passing state\n")
+        expect("the comparator turns those records red",
+               run_script(ROOT / CI / "compare_baseline.py", [baseline, measure]).returncode, 1)
+        # The positive control: with none of the shapes present the ruler must pass, or "0 sites" is
+        # unfalsifiable and indistinguishable from a ruler that never matched anything.
+        for name in ("sig.rs", "inner.rs", "comb.rs", "prose.rs", "arm.rs"):
+            write(tmp / "src" / name, "pub fn clean(v: u8) -> Result<u8, String> { Ok(v) }\n")
+        clean = run_script(dst, ["src"], cwd=tmp)
+        expect("a clean tree passes, so zero means something", clean.returncode, 0)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
             canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
-            canary_shell_hatches, canary_workflow_inputs, canary_lock_poisons)
+            canary_shell_hatches, canary_workflow_inputs, canary_lock_poisons,
+            canary_erased_errors)
 
 
 def main():

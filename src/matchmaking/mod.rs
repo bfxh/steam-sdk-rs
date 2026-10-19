@@ -59,6 +59,33 @@ pub enum LobbyType {
     PrivateUnique,
 }
 
+/// Why a lobby join did not happen, keeping the two ways it can fail apart.
+///
+/// Steam's join reply carries a *reason* (`m_EChatRoomEnterResponse`), and this crate already
+/// translates that number into [`ChatRoomEnterResponse`]; a transport failure is a different fact --
+/// there is no reason at all, because there is no reply. Collapsing the two into `()` threw away the
+/// half of the answer a caller could act on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum JoinLobbyError {
+    /// The answer never arrived, with whatever Steam's own call-result status says.
+    Transport(SteamError),
+    /// Steam answered, and the room named one of its own refusals.
+    Refused(ChatRoomEnterResponse),
+}
+
+/// The join answer, decided without a client: transport first, then Steam's reason code.
+fn join_lobby_answer(io_error: bool, response: u32, lobby: u64) -> Result<LobbyId, JoinLobbyError> {
+    if io_error {
+        return Err(JoinLobbyError::Transport(SteamError::IOFailure));
+    }
+    let reason = ChatRoomEnterResponse::from(response);
+    if reason == ChatRoomEnterResponse::Success {
+        Ok(LobbyId(lobby))
+    } else {
+        Err(JoinLobbyError::Refused(reason))
+    }
+}
+
 /// How many seats a lobby has, read from Steam's signed answer.
 ///
 /// The header says the getter "returns 0 if no limit is defined" (`isteammatchmaking.h:227`), so 0 is
@@ -165,10 +192,22 @@ impl Matchmaking {
         }
     }
 
-    /// Tries to join the lobby with the given ID
+    /// Tries to join the lobby with the given ID, and reports which of the two things went wrong.
+    ///
+    /// The answer carries a reason, so this wrapper keeps it: Steam's join reply field is a chat-room
+    /// enter response, whose success constant is the number `1`
+    /// (`EChatRoomEnterResponse::k_EChatRoomEnterResponseSuccess`), and a refusal names one of the
+    /// states [`ChatRoomEnterResponse`] already translates. The check before this round was
+    /// `io_error || response != 1`, which folded "the answer never came" together with "Steam said no,
+    /// and here is why" into one unit value. `join_lobby_answer` is where the two are kept apart, and
+    /// it is judged without a client.
+    ///
+    /// # Triggers
+    ///
+    /// * `LobbyEnter`
     pub fn join_lobby<F>(&self, lobby: LobbyId, cb: F)
     where
-        F: FnOnce(Result<LobbyId, ()>) + 'static + Send,
+        F: FnOnce(Result<LobbyId, JoinLobbyError>) + 'static + Send,
     {
         unsafe {
             let api_call = sys::SteamAPI_ISteamMatchmaking_JoinLobby(self.mm, lobby.0);
@@ -176,11 +215,11 @@ impl Matchmaking {
                 &self.inner,
                 api_call,
                 move |v, io_error| {
-                    cb(if io_error || v.m_EChatRoomEnterResponse != 1 {
-                        Err(())
-                    } else {
-                        Ok(LobbyId(v.m_ulSteamIDLobby))
-                    })
+                    cb(join_lobby_answer(
+                        io_error,
+                        v.m_EChatRoomEnterResponse,
+                        v.m_ulSteamIDLobby,
+                    ))
                 },
             );
         }
@@ -604,7 +643,10 @@ mod lobby_type_tests {
     //! (`isteammatchmaking.h:17-28`), and that the numbers under those names are the ones the header
     //! gives.
 
-    use super::{lobby_type_to_raw, member_limit, LobbyType};
+    use super::{
+        join_lobby_answer, lobby_type_to_raw, member_limit, ChatRoomEnterResponse, JoinLobbyError,
+        LobbyId, LobbyType, SteamError,
+    };
     use steamworks_sys as sys;
     use sys::ELobbyType as Raw;
 
@@ -656,5 +698,57 @@ mod lobby_type_tests {
         // The wrap this refuses: -1 read as usize would be the largest number the type holds, and a
         // caller comparing it against a real lobby size would get an answer that looks plausible.
         assert_ne!(member_limit(-1), Some(usize::MAX));
+    }
+
+    /// A join fails either because the answer never came or because the room said no, and the two are
+    /// not interchangeable. The mutations this exists for are each collapse on its own: dropping the
+    /// transport check (so "no answer" is reported as a reason Steam named), and dropping the reason
+    /// (so every refusal becomes a transport failure).
+    #[test]
+    fn a_join_fails_either_from_the_wire_or_from_the_room() {
+        let success = sys::EChatRoomEnterResponse::k_EChatRoomEnterResponseSuccess as u32;
+        assert_eq!(
+            join_lobby_answer(false, success, 76561197960287930),
+            Ok(LobbyId(76561197960287930))
+        );
+        assert_eq!(
+            join_lobby_answer(true, success, 1),
+            Err(JoinLobbyError::Transport(SteamError::IOFailure)),
+            "Steam's success number is not an answer when the answer never arrived"
+        );
+        assert_eq!(
+            join_lobby_answer(
+                false,
+                sys::EChatRoomEnterResponse::k_EChatRoomEnterResponseFull as u32,
+                1
+            ),
+            Err(JoinLobbyError::Refused(ChatRoomEnterResponse::Full))
+        );
+        assert_eq!(
+            join_lobby_answer(
+                false,
+                sys::EChatRoomEnterResponse::k_EChatRoomEnterResponseBanned as u32,
+                1
+            ),
+            Err(JoinLobbyError::Refused(ChatRoomEnterResponse::Banned))
+        );
+        // A number the table has no name for is still a named refusal: the existing translation folds
+        // it into `Error`, and this wrapper reports that rather than pretending it succeeded.
+        assert_eq!(
+            join_lobby_answer(false, 999, 1),
+            Err(JoinLobbyError::Refused(ChatRoomEnterResponse::Error))
+        );
+    }
+
+    /// A premise pin: the reason code is compared through Steam's own constant, and the check this
+    /// replaces was a literal `!= 1`. Renumbering `k_EChatRoomEnterResponseSuccess` in the generated
+    /// layer turns this red; no change of mine can move it.
+    #[test]
+    fn the_success_code_is_the_number_the_join_table_assumes() {
+        assert_eq!(
+            sys::EChatRoomEnterResponse::k_EChatRoomEnterResponseSuccess as u32,
+            1,
+            "the comparison this replaces was against the literal 1, so the number is the contract"
+        );
     }
 }

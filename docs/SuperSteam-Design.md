@@ -1116,6 +1116,24 @@ stats）。
 `src/matchmaking/mod.rs` 1 处 `Err(())`。把 `()` 换成 `SteamError` 是**破坏公开签名**的动作，与本仓已
 立的方向一致（builder 链那批就是这么改的），但一次动 26 个签名要用户点头才开工；未点头前本仓不动它，
 只把数写在这里。
+**→ 2026-10-20 用户回「全部处理」，按 A 全量还清**（`Result<_, ()>` 26 个签名表达式 + `Err(())` 30 处 →
+`SteamError`；其中 1 个签名表达式是 `gen_server_list_fn!` 的共同体，展开成五只方法，所以「26」是源码数
+不是方法数）。口径定死两条：**decline / 内部 nul / 下标越界 = `InvalidParameter`**（与本仓 `server_stats.rs`、
+`user_reads.rs` 早就给的答案同一条），**本仓自己对象的状态 = `InvalidState`**（`released` 之后没句柄可问；
+`GetNumAchievements` 给失败值 0，分不出「这 app 没成就」与「stats 还没请求过」）。`join_lobby` 不是替换而是
+换了形状：回调原来是 `Result<LobbyId, ()>`、判断是 `io_error || response != 1`，把「根本没答案」和
+「Steam 点了名」压成一个 `()`，而它点的名本来就有表（`ChatRoomEnterResponse`），现在走
+`JoinLobbyError{Transport(SteamError), Refused(ChatRoomEnterResponse)}`，判定抽在 `join_lobby_answer` 里测。
+3 处 doctest 尾部从 `# Err(())` 改 `# Ok(())`（`?` 现在要转 `SteamError`）。
+**新门把这笔债钉成 0 容忍**：`scripts/ci/erased_errors.py`（数公开签名、`Err(())`、`.ok_or(())?` 三种形状，
+复用 `api_coverage` 的 test-scoping 与 `cstring_unwraps` 的注释致空，不另写一套）+ 台账
+`erased_errors.txt`（空即通过，测量侧靠 `#scanned` 标记区分「没读到」）+ ci.yml 一步 +
+**9 条 canary（104→113）**：三种形状各出一条记录、散文里的旧形状不算、`#[cfg(test)]` 的失败臂不算、
+有债时尺子红、 comparator 把它的输出判红、`#scanned` 在、**且一棵干净的树必须通过**（否则"0 处"是一把自己
+对不上任何东西的尺子）。那 9 条第一遍就抓到我自己两个 bug：`measure()` 先把命中的文本替换掉再数，
+于是永远只能报 0；两条"不算"的 canary 逻辑写反了。本地门线从 28 条变 **29 条**（实测 `steps=29`、`RED_VERDICTS=0`）。
+变异 4 只：3 只断言消息判红；第 4 只（`store_stats` 就算 Steam 说不也回 `Ok`）**照绿**——那条路要活客户端，
+这里是拿存活结果**证明登记为未覆盖**这句话是真的，不是把它当锁。
 
 **同日再补 `ISteamUserStats` 全局成就百分位读面 37→41**（`src/user_stats/achievement_percents.rs` 新，
 另两只写落 `src/user_stats/stats_io.rs`）：本仓早就在发 `RequestGlobalAchievementPercentages`
