@@ -6,12 +6,14 @@ use super::*;
 #[cfg(test)]
 use serial_test::serial;
 
+mod achievement_percents;
 mod achievements;
 mod global_stats;
 mod leaderboard;
 mod stats_io;
 mod user_reads;
 
+pub use achievement_percents::GlobalAchievementInfo;
 pub use leaderboard::*;
 pub use user_reads::AchievementUnlock;
 

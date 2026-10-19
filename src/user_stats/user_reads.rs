@@ -59,7 +59,9 @@ fn unlock_state(achieved: bool, raw_seconds: u32) -> AchievementUnlock {
 /// On `false` nothing is returned -- not a zero, not the last value the caller put in the
 /// out-parameter -- because the headers describe no value for the out-parameter of a declined call.
 /// Every declined read in this module reports `SteamError::InvalidParameter` from this one place.
-fn read_answer<T>(answered: bool, value: T) -> SteamResult<T> {
+/// Calls that return only a `bool` use the same rule with `()` as the value, so every Steam `bool`
+/// on this interface is decided once.
+pub(crate) fn read_answer<T>(answered: bool, value: T) -> SteamResult<T> {
     if answered {
         Ok(value)
     } else {

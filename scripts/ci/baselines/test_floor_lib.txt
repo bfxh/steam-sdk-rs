@@ -1,1 +1,1 @@
-275  # lib tests reached with --all-features, measured 2026-10-20 with the ISteamUserStats out-param read face (4 tests added)
+281  # lib tests reached with --all-features, measured 2026-10-20 with the global-achievement-percentage face (6 tests added)

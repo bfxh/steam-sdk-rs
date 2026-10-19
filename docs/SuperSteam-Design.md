@@ -667,14 +667,14 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
-| ISteamUserStats |   37 |  44 | ISteamMusic |    9 |   9 |
+| ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
 | ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
 | ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
 | ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 674 / 913**（33 个接口；2026-10-20 补 ISteamUserStats 出参读面 31→37（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 678 / 913**（33 个接口；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1107,6 +1107,32 @@ stats）。
 `src/matchmaking/mod.rs` 1 处 `Err(())`。把 `()` 换成 `SteamError` 是**破坏公开签名**的动作，与本仓已
 立的方向一致（builder 链那批就是这么改的），但一次动 25 个签名要用户点头才开工；未点头前本仓不动它，
 只把数写在这里。
+
+**同日再补 `ISteamUserStats` 全局成就百分位读面 37→41**（`src/user_stats/achievement_percents.rs` 新，
+另两只写落 `src/user_stats/stats_io.rs`）：本仓早就在发 `RequestGlobalAchievementPercentages`
+（`src/user_stats/achievements.rs:24`）却**没有读数口子**，这一格是空转的。三处判定抽成函数，各配一把锁：
+
+- `checked_capacity`——零长度缓冲装不下终止符，问 Steam 之前就先拒（`InvalidParameter`），否则它永远只能报空名。
+- `name_from_buffer`——名字要么整要么**不报**：全缓冲无终止符＝名字放不下，返回 `None` 而不是把前缀当名字
+  （前缀不是任何成就的 token，下游会当成数据问题）；非 UTF-8 也不做 lossy 转换，因为改过的名字没法再对比。
+- `iteration`——**只有负数是停，0 是合法迭代值**。头文件只点名 `-1`（`isteamuserstats.h:260`、`:265-266`），
+  这一格防的正是 `<= 0` 那种 off-by-one：它会在第一行之前就宣布走完。
+
+`-1` 一个值两种含义（"没数据"与"迭代到头"），`next_iterator: None` 只能说停了、说不出是哪种——
+**登记**，不猜。名字缓冲容量是**本仓的决定不是 Steam 的**：头文件对成就名长度没给上界（实测
+`isteamuserstats.h` 无相关常数），所以做成调用方参数并在两处方法文档里写明。
+`read_answer` 转成 `pub(crate)`，两只只返 `bool` 的写（`indicate_achievement_progress`、
+`update_avg_rate_stat`）以 `()` 作值走同一条规则——八条路径共用一把锁，但**八条路径本身仍无测可达**
+（都要活会话），照旧登记为未证。
+
+顺带两处口径按头文件原话写死：`IndicateAchievementProgress` 自己说 "triggers an AchievementProgress
+callback, that is all." 与 "Calling this w/ N out of N progress will NOT set the achievement"
+（`isteamuserstats.h:145-146`）——到上限**不解锁**，解锁仍要走 `AchievementHelper::set` + store；
+`UpdateAvgRateStat` 的 `f32`/`f64` 原样转，头文件没描述定义域，负时长或 NaN 不在本仓被改写成错误。
+
+变异 7 次：6 次按断言消息判红，另一次（lossy 那一刀）**第一次编不过**——编不过不算锁，重写成一版能编的
+才判红；还原逐字节核对通过。引用尺这轮没判红，差别在于行号是用 `awk NR` 从文件里连着号码一起读出来的，
+不再是盯一个 `sed` 窗口自己数（上一轮那两格 off-by-one 就是这么来的）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

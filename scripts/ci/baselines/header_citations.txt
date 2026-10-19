@@ -91,6 +91,12 @@
 # what the `~undeclared` column exists for. One near-miss worth keeping: a prose reference to a line of
 # `src/server_stats.rs` inside a module doc parsed as a line-number pointer into the SDK headers, so an
 # in-crate file:line reference does not belong in the same sentence as a header citation.
+# Re-recorded 2026-10-20 again with the global-achievement-percentage face (`achievement_percents.rs`, 2
+# iterators) and the two local writes in `stats_io.rs`: 43 files cite the SDK, 314 spans, still 0 judged wrong
+# / 0 unjudged / 0 undeclared. The +10 spans are those two files. Nothing was judged red this time -- the
+# difference is that the line numbers were read out of the header with the line number printed (awk NR) before
+# writing them, instead of from an earlier sed window I had counted by eye; the previous re-record's off-by-one
+# came from exactly that.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -196,6 +202,9 @@ src/user/passthrough.rs~undeclared 0
 src/user/voice.rs 0
 src/user/voice.rs~unjudged 0
 src/user/voice.rs~undeclared 0
+src/user_stats/achievement_percents.rs 0
+src/user_stats/achievement_percents.rs~unjudged 0
+src/user_stats/achievement_percents.rs~undeclared 0
 src/user_stats/achievements.rs 0
 src/user_stats/achievements.rs~unjudged 0
 src/user_stats/achievements.rs~undeclared 0
@@ -205,6 +214,9 @@ src/user_stats/leaderboard.rs~undeclared 0
 src/user_stats/stats.rs 0
 src/user_stats/stats.rs~unjudged 0
 src/user_stats/stats.rs~undeclared 0
+src/user_stats/stats_io.rs 0
+src/user_stats/stats_io.rs~unjudged 0
+src/user_stats/stats_io.rs~undeclared 0
 src/user_stats/user_reads.rs 0
 src/user_stats/user_reads.rs~unjudged 0
 src/user_stats/user_reads.rs~undeclared 0

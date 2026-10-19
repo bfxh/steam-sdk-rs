@@ -3,10 +3,10 @@ Friends 48
 Input 45
 Matchmaking 38
 UGC 37
+UserStats 34
 Browser 33
 QueryHandle 33
 User 33
-UserStats 30
 Apps 29
 Client 29
 Utils 28

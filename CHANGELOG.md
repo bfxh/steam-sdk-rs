@@ -1151,6 +1151,38 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   written one line low) and three citation blocks carrying line numbers with no checkable phrase. All
   five were re-anchored, none exempted.
 
+- **The global achievement percentages, which this crate could request but never read**
+  (`src/user_stats/achievement_percents.rs`, new, plus two writes in `src/user_stats/stats_io.rs`).
+  `GetMostAchievedAchievementInfo` (`isteamuserstats.h:262`) and
+  `GetNextMostAchievedAchievementInfo` (`:267`) become `most_achieved_achievement_info(name_capacity)`
+  and `next_most_achieved_achievement_info(previous_iterator, name_capacity)`, returning
+  `Option<GlobalAchievementInfo>`; `IndicateAchievementProgress` (`:147`) and `UpdateAvgRateStat`
+  (`:111`) become `indicate_achievement_progress` and `update_avg_rate_stat`. `ISteamUserStats` goes
+  37 -> 41 of 44, the repository total 674 -> 678 of 913, and only the three `SteamAPICall_t` forms
+  are left unwrapped on that interface. The ask already existed
+  (`UserStats::request_global_achievement_percentages`) with no reader, which is why `-1` matters
+  twice: Steam's header uses the same value for "no data on achievement percentages" (`:260`) and for
+  the end of the iteration (`:265-266`), so `next_iterator: None` says the walk stopped and cannot say
+  which ending it was -- registered rather than guessed. Three decisions are functions, not inline
+  branches: `checked_capacity` refuses a zero-length buffer (it could never hold a terminator),
+  `name_from_buffer` returns a name only if it is whole and valid UTF-8 (a cut-off token is not an
+  achievement's name, and lossy conversion would invent one the caller cannot compare against), and
+  `iteration` treats only the negative side as the stop signal so **zero stays a legal iterator** --
+  the off-by-one this defends against is `<= 0`, which would end the walk before the first row.
+  The buffer capacity is a caller argument because the header states no maximum achievement name;
+  that is this wrapper's choice, and it is documented as such at both methods.
+  `read_answer` became `pub(crate)` so the two writes use the same rule as the six reads: one place
+  decides what a `false` from Steam means, across all eight paths.
+  Six tests. Seven mutation replays, and the count is stated that way on purpose: the first attempt at
+  the lossy-conversion mutant **did not compile**, which proves nothing, so it was rewritten as a
+  compiling mutant and then went red on an assertion message like the other six. Restores verified
+  byte-for-byte. Registered as unverified: all eight FFI bodies -- a row of the global table needs a
+  live session that requested and received it, so no input here can reach them.
+  Ledgers: 314 header-citation spans across a 42nd and 43rd citing file, `UserStats` 30 -> 34 inherent
+  methods, lib test floor raised to the measured 281, package inventory +1 shipped source. This time
+  the ruler judged nothing red, which is the result of reading each header line number out of the file
+  with the number printed rather than counting a window by eye.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

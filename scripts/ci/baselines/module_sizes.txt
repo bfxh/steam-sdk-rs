@@ -40,8 +40,8 @@ src/screenshots.rs 330
 src/matchmaking/filters.rs 314
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
+src/user_stats/user_reads.rs 283
 src/matchmaking/chat.rs 281
-src/user_stats/user_reads.rs 281
 src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
 src/networking_types/connection_info.rs 273
@@ -50,6 +50,7 @@ src/networking_utils/fake_ip.rs 261
 src/networking.rs 257
 src/html_surface/callbacks.rs 247
 src/remote_storage/mod.rs 247
+src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244
 src/matchmaking/queries.rs 228
 src/remote_storage/api.rs 227
@@ -62,6 +63,7 @@ src/inventory/items.rs 204
 src/identity.rs 198
 src/utils/text_input.rs 195
 src/parental.rs 191
+src/user_stats/stats_io.rs 186
 src/server/lifecycle.rs 182
 src/remote_play.rs 180
 src/input/origins.rs 178
@@ -79,7 +81,6 @@ src/inventory/prices.rs 132
 src/networking_sockets/listen.rs 132
 src/server/interfaces.rs 131
 src/user/answers.rs 130
-src/user_stats/stats_io.rs 130
 src/server/callbacks.rs 129
 src/networking_sockets_callback.rs 123
 src/video.rs 122
@@ -130,5 +131,5 @@ src/networking_types/mod.rs 36
 src/utils/battery.rs 34
 src/utils/callbacks.rs 29
 src/remote_storage/platforms.rs 27
-src/user_stats/mod.rs 22
+src/user_stats/mod.rs 24
 src/utils/counts.rs 17
