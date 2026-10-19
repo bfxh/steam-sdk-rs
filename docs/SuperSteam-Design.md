@@ -105,7 +105,7 @@
 
 **真实缺陷是可重入死锁，不是数据竞争。** 机制如下：
 
-- `src/lib.rs:270-272` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 `src/lib.rs:290-292` 同样如此）。
+- `src/lib.rs:266-269` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（当年记录的坐标是 270-272；后续提交挪了行号，旧数字不带路径前缀只作历史保留）。`process_callbacks` 版本当年在 290-292 同样如此，今天它的守卫块是 `src/lib.rs:286-290`，第二个回调 `callback_handler` 已在块外（291-294）——也就是这一条对 `process_callbacks` 已不再成立，对 `run_callbacks` 仍成立。
 - 用户在任何 Steam 回调内部调用 `register_callback`（或 `run_callbacks`）都需要同一把 `callbacks` 锁。
 - `std::sync::Mutex` 不可重入 → 自锁 → 线程永久挂起。
 
@@ -1334,7 +1334,7 @@ struct Callbacks {
 
 ### 补充实测：场景 E（`repro/call_result_chain_deadlock_test.rs`）——四种残余之外的第五种
 
-深挖（见 `defect-02-deadlock-deep-dive.md`）发现上表不完整。`run_callbacks_raw` 的 call_result 分支（`src/lib.rs:180-185`）**在 `call_results` 锁守卫作用域内执行用户闭包**：
+深挖（见 `defect-02-deadlock-deep-dive.md`）发现上表不完整。`run_callbacks_raw` 的 call_result 分支（今天的坐标 `src/lib.rs:336-344`，2026-10-10 记录当时为 180-185）**曾在 `call_results` 锁守卫作用域内执行用户闭包**：
 
 | 场景 | 持有的锁 | 需要的锁 | 结果 |
 |------|---------|---------|------|
@@ -1531,7 +1531,7 @@ client.user_stats().set_stat("kills", 100).await?;   // Result + 零分配 + asy
 
 | 修复项 | 对应缺陷 | 证据脚本 | 状态 |
 |--------|---------|---------|------|
-| 死锁：call_result 处理器内链式调 API（场景 E，守卫作用域收缩） | #2 | `call_result_chain_deadlock_test.rs` + `..._fixed.rs`（A/B） | **已实施**（`src/lib.rs:180-194`，+8 行，零签名破坏；build/test/clippy/fmt 四门禁同尺复测无回归；已拆独立分支 `fix/call-result-handler-self-deadlock` commit `20b800a`，只含本修复） |
+| 死锁：call_result 处理器内链式调 API（场景 E，守卫作用域收缩） | #2 | `call_result_chain_deadlock_test.rs` + `..._fixed.rs`（A/B） | **已实施**（`src/lib.rs:336-344`，当日坐标 180-194；+8 行，零签名破坏；build/test/clippy/fmt 四门禁同尺复测无回归；已拆独立分支 `fix/call-result-handler-self-deadlock` commit `20b800a`，只含本修复） |
 | 死锁残余场景修复（回调内 `register_callback` / 嵌套派发 / 丢弃 `CallbackHandle`，场景 B/C/D） | #2 | `post_fix_deadlock_test.rs` + 在树 `callback_multi_registration_tests` 四个重入测试 | ✅ 2026-10-10：分支 `fix/callback-dispatch-reentrancy` @ `ebd1183`（**基于 #1 分支尖端 `5d2bcc9` 的依赖分支**，未推送——put-back 设计建立在 #1 的 `(seq, Box)` 表上，上游按后续 PR 排序）；派发改为 **put-back + 墓碑**：整桶取出→放锁调用→按 seq 归并回插，`pending_removal` 墓碑集让「回调内丢自己句柄/回调内替换注册」在在途期间依然生效（⭐在树测试抓到「桶被重入注册重建、条目仍在途」的墓碑盲区——判据必须按「seq 表中缺失」而非「桶缺失」）；零公开 API 变更 ⇒ 不再依赖 #253 方向拍板（上游若偏好 `Arc<dyn Fn>` 属实现替换、语义等价）；回调 panic 从毒化锁改为丢弃在途条目（行为变更已记档）；3 文件 +192/−7；门禁同尺（对 base `5d2bcc9`）：fmt 0 / build 0 / clippy kind 多重集逐项同（122/122）/ 串行 **16-11-2** = 12-11-2 + 4 新测（超时包装防挂死：回归变成断言失败而非吊死套件）/ 并行 10×0 异常 |
 | 同类型多回调注册支持（Vec 值，消除静默覆盖） | #1 | `callback_multi_registration_tests`（lib.rs 内 5 测，离线） | ✅ 2026-10-10：分支 `fix/callback-multi-registration` @ `5d2bcc9`（基点 `6e4a2bc`，未推送）；表改 `Vec<(seq, Box)>` + Handle 持 seq 修陈旧误杀 + `register_replacing_callback` 保 3 处文档化替换语义（5 个 mem::forget 站点的句柄泄漏同时消除；sockets get_or_create 走 Weak 缓存零改动）；6 文件 +277/−42；门禁同尺：fmt 0 / build 0 / clippy kind-diff 0/0 / 串行 12-11-2 = 基线 7-11-2 + 5 新测 / 并行 10×0 segv；详见 defect-01 实施记录 |
 | CString panic 零破坏降级（58 处；19 处 builder 归 #6） | #5 | `cstring_nul_degrade_tests`（lib.rs + remote_storage.rs 共 12 测，离线） | ✅ 2026-10-10：分支 `fix/cstring-nul-panic` @ `5bf2336`（基点 `6e4a2bc`，未推送；⭐原 `e7f3775` 因脚本把 `"\x00"` 写成**原始 NUL 字节**→git 判二进制→EOL 清洗停用→python CRLF 入库，diffstat 曾虚胖为 +1637/−1283，规范化+转义后 amend 定稿，**真 diffstat 16 文件 +424/−70**，指纹 19-11-2 与修前逐字同）；`pub(crate) cstring()` helper + 按返回通道降级（bool→false / Option→None / Result→既有 Err / 句柄→0 / 结构体名→空 / 回调→cb(Err(IOFailure))）；门禁同尺：fmt 0 / build 0 / clippy kind-diff 0/0 / 串行 test 19-11-2 同（11 失败全为本机 NoSteamClient 环境性）/ 并行 10×0 segv；详见 defect-05 实施记录 |

@@ -31,7 +31,7 @@
   A' -> 正常返回（不死锁）
 ```
 
-**根因代码**（工作区 `src/lib.rs:180-186`）：
+**根因代码**（今天同一块在 `src/lib.rs:336-344`；2026-10-10 记录当时的坐标是 180-186，后续提交把文件整体挪了位，旧数字不带路径前缀、只作历史保留）：
 
 ```rust
 let mut call_results = self.callbacks.call_results.lock().unwrap();  // :180 获取
@@ -128,7 +128,7 @@ if sys::SteamAPI_ManualDispatch_GetAPICallResult(...) {
 
 ## 实施记录（2026-10-10）：场景 E 已修复（独立分支 `fix/call-result-handler-self-deadlock`，commit `20b800a`）
 
-改动落在 `src/lib.rs:180-194`（独立分支坐标 `173-190`），1 处、+8 行、零公开签名变更。分支**只含本修复 hunk**（master 上先前会话未提交的 callback_stream 接线未捆入）；四门禁同尺复测：HEAD 基线 vs 修复后 build/test/clippy/fmt **逐项相同**（test 7 通过/11 失败/2 忽略，失败项全部止步 `Client::init()`；clippy 121；fmt clean）。
+改动落在 `src/lib.rs:194-200` 的 `Callbacks::run_or_defer`（2026-10-10 当天的坐标是 180-194，独立分支上是 173-190；后续提交把文件整体挪了位，故此处按今天的行号重锚，旧数字只作历史保留，不带路径前缀以免被指针门当成活引用）。改动 1 处、+8 行、零公开签名变更。分支**只含本修复 hunk**（master 上先前会话未提交的 callback_stream 接线未捆入）；四门禁同尺复测：HEAD 基线 vs 修复后 build/test/clippy/fmt **逐项相同**（test 7 通过/11 失败/2 忽略，失败项全部止步 `Client::init()`；clippy 121；fmt clean）。
 
 ```rust
 // 修复前：守卫作用域覆盖闭包执行

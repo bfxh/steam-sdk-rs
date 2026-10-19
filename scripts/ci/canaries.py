@@ -729,6 +729,10 @@ LOCK_HOME = (
     "    lock.read().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
     "pub(crate) fn write_guard<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {\n"
     "    lock.write().unwrap_or_else(std::sync::PoisonError::into_inner)\n}\n"
+    # The fourth helper, and the only one whose body is a `match`: the policy file may inspect the
+    # lock's Result, which is what the drop path needs, and still be the only place that decides it.
+    "pub(crate) fn try_mutex_guard<T>(lock: &Mutex<T>) -> Option<MutexGuard<'_, T>> {\n"
+    "    match lock.lock() {\n        Ok(guard) => Some(guard),\n        Err(_) => None,\n    }\n}\n"
 )
 
 
@@ -763,6 +767,14 @@ def canary_lock_poisons():
         write(tmp / "src" / "clean.rs",
               "pub fn via_helper(data: &std::sync::Mutex<u32>) -> u32 {\n"
               "    let guard = crate::utils::mutex_guard(data);\n    *guard\n}\n")
+        # The two shapes the shipped version of this ruler could not see, one of which was in the real
+        # tree: `Callbacks::remove_handler` decided the policy in a `match` arm while the gate printed 0.
+        write(tmp / "src" / "matchy.rs",
+              "pub fn decides(data: &std::sync::Mutex<u32>) -> Option<u32> {\n"
+              "    match data.lock() {\n        Ok(g) => Some(*g),\n        Err(_) => None,\n    }\n}\n")
+        write(tmp / "src" / "inspects.rs",
+              "pub fn peeks(data: &std::sync::Mutex<u32>) -> bool {\n"
+              "    data.lock().is_ok()\n}\n")
         # A test body choosing to abort on poison is a claim about its own fixture, not about the
         # crate's policy -- and both shapes this crate uses must be invisible to the rule.
         # Named `mod_case.rs`/`bare_case.rs` on purpose: `api_coverage.TEST_MATERIAL` treats anything
@@ -783,12 +795,23 @@ def canary_lock_poisons():
             write(tmp / "src" / f"f{i}.rs", f"pub fn f{i}() {{}}\n")
         out = run_script(dst, ["src"], cwd=tmp)
         expect("aborting on poison is a site", 0 if "src/aborts.rs 1" in out.stdout else 1, 0)
+        expect("and the message names the line, not just the file",
+               0 if "src/aborts.rs:2" in out.stderr else 1, 0)
         expect("expect(..) on a guard counts like unwrap()",
                0 if "src/expects.rs 1" in out.stdout else 1, 0)
         expect("re-implementing the recovery outside the policy file is also a site",
                0 if "src/second_policy.rs 1" in out.stdout else 1, 0)
         expect("the helper itself is not a site", 0 if "locks.rs" not in out.stdout else 1, 0)
         expect("calling the helper is clean", 0 if "clean.rs" not in out.stdout else 1, 0)
+        # Judged, and judged *as themselves*: a message that says "aborts" for a `match` would let a
+        # future edit that only pattern-matched `.unwrap()` pass this canary while still missing the
+        # shape that bit the real tree.
+        # Counts go to stdout (that is what the ledger compares); the *reason* goes to stderr, so a
+        # message that named a match as an abort would be caught here rather than at review time.
+        expect("a match over the lock's Result is a policy decision, named as one",
+               0 if "src/matchy.rs 1" in out.stdout and "match arm" in out.stderr else 1, 0)
+        expect("inspecting the lock's own Result is a policy decision, named as one",
+               0 if "src/inspects.rs 1" in out.stdout and "inspects the lock" in out.stderr else 1, 0)
         # Both of those files also contain a production function that aborts, so the assertion is a
         # count, not an absence: one site means the test body was blanked and the real code was not.
         # Asserting absence here would have passed for the wrong reason -- a rule that blanked the whole
@@ -814,6 +837,22 @@ def canary_lock_poisons():
         expect("an empty measurement that cannot is refused, not passed",
                run_script(ROOT / CI / "compare_baseline.py",
                           [write(tmp / "base.txt", ""), unproven]).returncode, 2)
+
+        # The ruler's own blind spot, made a verdict. A guard request outside the policy file whose
+        # Result goes somewhere none of the patterns describes must stop the whole answer -- otherwise
+        # "0 violations" silently includes "and one request I could not read", which is the exact
+        # failure mode this gate was rewritten for. The tree currently has zero such requests, so the
+        # arm can only be proved here, with a fixture.
+        write(tmp / "src" / "handed_off.rs",
+              "pub fn passes(data: &std::sync::Mutex<u32>) {\n"
+              "    let guard = data.lock();\n    note(guard);\n}\n")
+        blind = run_script(dst, ["src"], cwd=tmp)
+        expect("an unclassifiable guard request refuses rather than passes", blind.returncode, 2)
+        expect("and it names the file it could not read",
+               0 if "src/handed_off.rs" in blind.stderr else 1, 0)
+        (tmp / "src" / "handed_off.rs").unlink()
+        expect("removing the unreadable request restores a verdict",
+               run_script(dst, ["src"], cwd=tmp).returncode, 1)
 
         (tmp / "src" / "utils" / "locks.rs").unlink()
         expect("a deleted policy file is no verdict, not a clean one",

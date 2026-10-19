@@ -1469,6 +1469,46 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
 
 ### Fixed
 
+- **Retracted, one commit later: the lock policy was not 22 requests and one rule, and the gate that
+  said so was blind to the difference** (`src/lib.rs`, `src/utils/locks.rs`, `scripts/ci/lock_poisons.py`).
+  `a5ac8ed` recorded "22 guard requests, 18 aborted, 4 recovered inline -- one policy" and shipped a gate
+  that judged exactly those two shapes. Checking the sentence with `grep` rather than trusting the gate
+  found a **23rd**: `Callbacks::remove_handler` did `match self.callbacks.lock() { Ok(..) => ..,
+  Err(..) => eprintln!(..) }`. That is neither of the two policies the changelog named -- it is a third
+  (report, then skip), it was taken outside the policy file, and the gate printed 0 the whole time it
+  was in the tree. Two sentences from that same commit also need correcting: I wrote that the two
+  remaining `expect()` calls in Drop paths panicked on any reading, and measured now, one of them is
+  `CString::new("Handle was dropped").unwrap()` -- a literal with no nul, so it cannot fail -- and the
+  other, `receive_event`, is not a `Drop` at all. The third one I left alone
+  (`.expect("internal connection was removed before being dropped")` in `NetConnection::drop`) is a real
+  hazard *shape* -- panicking in a drop can abort the process mid-unwind -- but I have not shown it
+  reachable: the entry is inserted when the independent connection is created and no other code removes
+  it, so today it is an undocumented-unreachable arm and it is registered as such rather than given a
+  test it could not pass honestly.
+  What changed: `try_mutex_guard` in `src/utils/locks.rs` is now where "recover, report, never abort in a
+  drop" is decided, and `remove_handler` calls it (same behaviour it had -- the registry is skipped and a
+  line is printed -- but the decision lives in the one file). And the gate judges five things instead of
+  two: an abort, an inspection of the lock's own `Result`, a `match` that decides, a re-implemented
+  recovery, and -- the new part -- **a guard request outside the policy file that none of those explains
+  stops the verdict entirely (exit 2)**. That last arm is the self-correction generalised: the tree has
+  zero requests in it today, so the arm cannot be proved by the real corpus, only by a fixture, which is
+  what a canary is for.
+  104 canary assertions, up from 98. Three of the new ones are the lock shapes (match, inspect,
+  unclassifiable); each was disproved by disabling its pattern in a throwaway copy -- the canary goes red
+  either by losing the named message or by falling through to the refusal, so none of the three is
+  carried by an assertion that would pass anyway. Two more report honestly rather than flattering: the
+  dedup rule "one violation per site" was caught by its own assertion double-counting
+  the `second_policy.rs` canary fixture (it exists only in the ruler's temp tree, hence no `src/` prefix here), and the ordering of this canary was wrong in the first draft -- the
+  unclassifiable fixture was written *before* the site assertions, so with the whole tree refusing to
+  answer, nine assertions compared against an empty stdout and failed for a reason unrelated to what
+  they tested.
+  Numbers, re-measured after the change: 23 guard requests, **0 outside the policy file**; the ledger is
+  still 0 sites; production panic-capable expressions are unchanged at **13** (this unit moved a
+  decision, not a panic).
+
+
+### Fixed
+
 - **Asking for a network resource's status no longer aborts on a number that is not a status**
   (`src/networking_types/state.rs`). `TryFrom<ESteamNetworkingAvailability> for NetworkingAvailability`
   ended in `panic!("invalid networking availability {:?}", value)`. Reading the header against the table:

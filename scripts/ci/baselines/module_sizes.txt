@@ -1,4 +1,4 @@
-src/lib.rs 837
+src/lib.rs 833
 src/networking_sockets/connection.rs 677
 src/networking_types/config.rs 676
 src/matchmaking_servers.rs 641
@@ -78,6 +78,7 @@ src/server/callbacks.rs 129
 src/networking_sockets_callback.rs 123
 src/video.rs 122
 src/inventory/actions.rs 121
+src/utils/locks.rs 117
 src/matchmaking/callbacks.rs 111
 src/networking_sockets/listen_socket.rs 110
 src/networking_sockets/poll_group.rs 107
@@ -88,7 +89,6 @@ src/utils/filtering.rs 103
 src/inventory/definitions.rs 102
 src/networking_sockets/connect.rs 100
 src/networking_sockets/status.rs 98
-src/utils/locks.rs 98
 src/input/layers.rs 96
 src/friends/followers.rs 91
 src/friends/overlay.rs 88

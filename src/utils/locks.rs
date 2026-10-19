@@ -33,6 +33,25 @@ pub(crate) fn write_guard<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// The guard for a lock taken while something is being dropped: recover, and say so, but never panic.
+///
+/// `mutex_guard` above recovers quietly, which is right when the caller has nowhere to report to.
+/// A drop path is different: the registry it is repairing may genuinely be inconsistent, and swallowing
+/// that silently would hide the only trace of it -- while panicking here would be worse still, because
+/// a panic raised in `Drop` while another panic is unwinding aborts the process. So this variant
+/// trades the guard for a printed complaint and returns `None`, which the caller skips over. It lives
+/// here rather than at the call site so that the *choice* between recovering, reporting and aborting
+/// is made in exactly one file.
+pub(crate) fn try_mutex_guard<T>(lock: &Mutex<T>) -> Option<MutexGuard<'_, T>> {
+    match lock.lock() {
+        Ok(guard) => Some(guard),
+        Err(err) => {
+            eprintln!("a callback panicked while holding this lock; skipping that step: {err:?}");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod poison_tests {
     //! Poison is reachable without a Steam client: it only takes a thread that panics while holding the

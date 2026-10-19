@@ -171,14 +171,10 @@ impl Callbacks {
     fn remove_handler(&self, id: i32) {
         // A poisoned lock here is reported rather than panicked on, because
         // this runs from `CallbackHandle::drop`: panicking inside a Drop would
-        // turn a recoverable registry problem into an abort during unwinding.
-        match self.callbacks.lock() {
-            Ok(mut cb) => {
-                cb.remove(&id);
-            }
-            Err(err) => {
-                eprintln!("error while dropping callback: {:?}", err);
-            }
+        // turn a recoverable registry problem into an abort during unwinding. The decision itself --
+        // recover, report, or abort -- is made in `src/utils/locks.rs`, not at the call site.
+        if let Some(mut cb) = crate::utils::try_mutex_guard(&self.callbacks) {
+            cb.remove(&id);
         }
     }
 
