@@ -78,6 +78,7 @@ src/friends/callbacks.rs 152
 src/user_stats/stat_callback.rs 152
 src/utils/mod.rs 148
 src/ugc/read.rs 142
+src/friends/overlay.rs 140
 src/user_stats/achievements.rs 139
 src/friends/sources.rs 135
 src/inventory/prices.rs 132
@@ -102,7 +103,6 @@ src/networking_sockets/status.rs 98
 src/input/layers.rs 96
 src/friends/history.rs 95
 src/friends/followers.rs 91
-src/friends/overlay.rs 88
 src/input/effects.rs 88
 src/friends/list.rs 85
 src/friends/rich_presence.rs 85

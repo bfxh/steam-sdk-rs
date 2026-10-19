@@ -12,6 +12,24 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **Overlay protocol registration (`src/friends/overlay.rs`)**: `register_protocol_in_overlay_browser`,
+  the last synchronous entry `ISteamFriends` had left unwrapped -- 75 -> 76 of 78, project total 694 of
+  913. Steam's line above the declaration is "Call this before calling ActivateGameOverlayToWebPage()
+  to have the Steam Overlay Browser block navigations" (`isteamfriends.h:419`), and the next says what
+  arrives instead of a navigation (`:420`), with the declaration itself at `:422`.
+  The choice worth recording is the string. The four void overlay setters beside this one cut a value
+  at its first nul, because nothing past a nul could ever reach a `const char *` and there is no
+  return channel to report anything. This call returns `bool`, so it has a channel, and the two
+  refusals are kept apart: `Err(InvalidParameter)` is this wrapper saying the scheme could not be
+  expressed, `Ok(false)` is Steam declining a scheme it could have taken. Truncating here would
+  register a *different* scheme than the caller named and still report having done it -- the failure
+  the CString debt work spent this year eliminating.
+  1 test, 1 mutation, red on the assertion message that says so ("an interior nul is this crate's
+  refusal, not a truncation and not a panic"). A second test written first was deleted before
+  committing: its two assertions restated the first one's, so it could not have judged anything new.
+  Registered unverified: whether a running client accepts a given scheme, and the ordering the header
+  insists on, which needs the overlay browser to actually exist.
+
 - **The older persona names (`src/friends/history.rs`)**: `persona_name_history`, over the
   declaration Steam introduces as "accesses old friends names - returns an empty string when their are
   no more items in the history" (`isteamfriends.h:219-220`). `ISteamFriends` moves 74 -> 75 of 78 and
