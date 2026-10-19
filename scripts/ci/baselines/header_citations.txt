@@ -60,6 +60,10 @@
 # file that already cited :251-252. The ruler judged two of them wrong on the first try -- both quoted
 # line 258 ("On failure, returns:") while the sentence they quote sits at 259 and 260 -- so the off-by-one
 # is fixed in the prose, not exempted here.
+# Re-recorded again the same day for the `networking_utils` split: 37 files cite the SDK (was 36) and
+# the same 227 spans. `src/networking_utils.rs` left the ledger and `src/networking_utils/{fake_ip,
+# ping,relay}.rs` joined it -- the spans moved with the text, none were added, which is what the
+# `split_witness.py` reading of that commit is for.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -69,9 +73,6 @@ src/matchmaking_servers.rs~undeclared 0
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
 src/networking_messages.rs~undeclared 0
-src/networking_utils.rs 0
-src/networking_utils.rs~unjudged 0
-src/networking_utils.rs~undeclared 0
 src/friends/callbacks.rs 0
 src/friends/callbacks.rs~unjudged 0
 src/friends/callbacks.rs~undeclared 0
@@ -126,6 +127,12 @@ src/networking_types/message.rs~undeclared 0
 src/networking_types/state.rs 0
 src/networking_types/state.rs~unjudged 0
 src/networking_types/state.rs~undeclared 0
+src/networking_utils/fake_ip.rs 0
+src/networking_utils/fake_ip.rs~unjudged 0
+src/networking_utils/fake_ip.rs~undeclared 0
+src/networking_utils/ping.rs 0
+src/networking_utils/ping.rs~unjudged 0
+src/networking_utils/ping.rs~undeclared 0
 src/remote_storage/api.rs 0
 src/remote_storage/api.rs~unjudged 0
 src/remote_storage/api.rs~undeclared 0

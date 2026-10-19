@@ -33,3 +33,5 @@ docs/ci-local-evidence-2026-10-13.md src/ugc.rs:1028
 docs/defect-04-null-guard-deep-dive.md src/friends.rs
 docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs
 docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs:927-1128
+CHANGELOG.md src/networking_utils.rs
+docs/SuperSteam-Design.md src/networking_utils.rs
