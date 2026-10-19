@@ -138,6 +138,28 @@ impl Matchmaking {
         self
     }
 
+    /// Adds a filter that keeps only lobbies whose members this lobby's members could join.
+    ///
+    /// Steam's declaration takes one lobby id and returns nothing
+    /// (`ISteamMatchmaking::AddRequestLobbyListCompatibleMembersFilter`); the header carries no
+    /// comment for it, so this wrapper states only what the call is for and adds no promise about how
+    /// Steam ranks the results. Pair it with
+    /// [`Matchmaking::set_linked_lobby`](crate::Matchmaking::set_linked_lobby), which is the write side
+    /// of the same compatibility link.
+    ///
+    /// # Arguments
+    ///
+    /// * `lobby`: The lobby whose member compatibility the search should respect.
+    ///
+    pub fn set_request_lobby_list_compatible_members_filter(&self, lobby: LobbyId) -> &Self {
+        unsafe {
+            sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListCompatibleMembersFilter(
+                self.mm, lobby.0,
+            );
+        }
+        self
+    }
+
     /// Sets filters for the lobbies to be returned from [`request_lobby_list`].
     ///
     /// This method is used to apply various filters to the lobby list retrieval process.

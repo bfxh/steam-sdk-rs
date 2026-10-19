@@ -41,7 +41,7 @@ ISteamHTMLSurface.called 37
 ISteamHTTP.called 22
 ISteamInput.called 44
 ISteamInventory.called 34
-ISteamMatchmaking.called 32
+ISteamMatchmaking.called 38
 ISteamMatchmakingPingResponse.called 0
 ISteamMatchmakingPlayersResponse.called 0
 ISteamMatchmakingRulesResponse.called 0

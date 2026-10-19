@@ -668,13 +668,13 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   31 |  44 | ISteamMusic |    9 |   9 |
-| ISteamMatchmaking |   32 |  38 | ISteamParentalSettings |    6 |   6 |
+| ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
 | ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
 | ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 651 / 913**（33 个接口；同日再补 ISteamMatchmaking 的收藏服务器面 28→32（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 657 / 913**（33 个接口；同日 ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -989,6 +989,33 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 | `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11770-11772` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
 | `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11773-11774`）——裸 C 函数指针回调，头文件 h:872-873 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
 | `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+
+**同日再补 lobby 控制面 32→38（该接口到满）并修掉一张缺号的表**（`src/matchmaking/mod.rs`、
+`queries.rs`）：
+
+- `LobbyType` 原来只有 4 个变体，而 `isteammatchmaking.h:18-28` 声明 5 个——
+  `k_ELobbyTypePrivateUnique`（`:26`，"private, unique and does not delete when empty"，并注
+  "can only create from webapi"）在本仓**根本没有名字**，于是 `set_lobby_type` 连封都封不完整。
+  补上该变体，并给枚举加 `#[non_exhaustive]`（与前两处同类改动一致：宁可让下游不带兜底的 `match`
+  当轮编译失败，也不要让它把第五个答案当成不存在）。原先写在 `create_lobby` 里的内联 `match`
+  抽成 `lobby_type_to_raw`，测试逐档对表并把五个判别式（0..4）单独钉成"前提断言"——
+  那种断言不可能被我方改动打红，所以文档里明说它是前提检查而不是判决（把绑定的
+  `k_ELobbyTypePrivate = 0` 临时改成 5 ⇒ 该断言判红，证明它不是装饰）。
+- 新封 5 个 bool  setter 与 1 个查询过滤器，每条文档只引它自己那一档的头文件原文：
+  `set_lobby_type`（:230-231 只有 public/invisible 且 joinable 的 lobby 会被搜索返回）、
+  `set_lobby_owner`（:244-246 两条前置与"完成后本用户不再是房主"）、`set_linked_lobby`
+  （:249-250 两个 lobby 都得是自己的）、`invite_user_to_lobby`（:153-154 "true" 只代表发出去了、
+  false 是本地未连 Steam；顺带登记 `LobbyInvite_t` 本仓不投递），`set_lobby_member_limit`
+  （:225-227，参数保持 `i32` 因为 Steam 就收签名整数——不接受一个交不出去的数字）。
+- `lobby_member_limit` 的读法改掉了：原来 `match count { 0 => None, _ => Some(count as usize) }`，
+  负数会被 cast 成 18446744073709551615；现在走 `member_limit`（`usize::try_from` + 只收 >0），
+  三条变异（max(0) 版、留 0 版、unsigned_abs 版）各自被同一条测试按断言消息判红。
+- **登记两条量出来的可疑，不在本轮动**：① `set_request_lobby_list_result_count_filter(count: u64)`
+  里是 `count as i32`（`src/matchmaking/queries.rs`），4294967296 会静默变成 0——这是"接受一个交不出去的
+  数字"的另一面，改法要么把参数换成 `i32`（破坏公开签名，与本轮 `set_lobby_member_limit` 同口径），
+  要么返回 `Result` 打断 builder 链；② `create_lobby` 的 `assert!(max_members <= 250)` 在
+  `isteammatchmaking.h:138` 里**找不到出处**（grep 该头无 250），250 这条上限来自 Steamworks 文档而不是随仓
+  头文件，而它现在是调用方喂参数就能触发的一次 abort。两处都要单独拍板，先记数字不动行为。
 
 **2026-10-19 补 `ISteamMatchmaking` 收藏服务器面 28→32**（`src/matchmaking/favorites.rs`，四个入口在
 `isteammatchmaking.h:60-77`、两个列表位在 `:525-527`）。两处判断不属于头文件，记在这里：

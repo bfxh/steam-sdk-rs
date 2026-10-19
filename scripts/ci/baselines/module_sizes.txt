@@ -1,6 +1,7 @@
 src/lib.rs 833
 src/networking_sockets/connection.rs 712
 src/networking_types/config.rs 676
+src/matchmaking/mod.rs 655
 src/matchmaking_servers.rs 641
 src/http.rs 616
 src/ugc/mod.rs 604
@@ -13,7 +14,6 @@ src/app.rs 551
 src/networking_sockets/fake_udp.rs 536
 src/networking_sockets/fake_ip.rs 526
 src/networking_messages.rs 502
-src/matchmaking/mod.rs 498
 src/parties.rs 486
 src/networking_types/end.rs 480
 src/ugc/results.rs 473
@@ -49,13 +49,13 @@ src/networking_utils/fake_ip.rs 254
 src/html_surface/callbacks.rs 247
 src/remote_storage/mod.rs 247
 src/user/auth.rs 244
+src/matchmaking/queries.rs 228
 src/remote_storage/api.rs 227
 src/networking_types/events.rs 224
 src/friends/chat.rs 216
 src/html_surface/mod.rs 215
 src/user/buffers.rs 210
 src/networking_utils/relay.rs 207
-src/matchmaking/queries.rs 206
 src/inventory/items.rs 204
 src/identity.rs 198
 src/utils/text_input.rs 195

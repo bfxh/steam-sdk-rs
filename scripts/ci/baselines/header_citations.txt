@@ -68,6 +68,12 @@
 # src/matchmaking/favorites.rs joins with four blocks; the spans came with the header sentences this
 # module had to quote to say what its own readings are, and the ruler judged none of them wrong --
 # the first time in three attempts, which is not evidence the ruler got weaker: its canary still bites.
+# Re-recorded once more the same day for the lobby-control unit: 39 files cite the SDK (was 38) and
+# 256 spans (was 239). `src/matchmaking/mod.rs` grew the citations behind the lobby-type table and the
+# five lobby setters. Debt columns still 0 -- but only after the ruler judged one citation wrong
+# ('no limit is defined' quoted in a block that cited :225-226 while the sentence is at :227) and
+# flagged one of my own sentences inside quotation marks, which is the second time this week the gate
+# caught the author wording rather than Steam's.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -101,6 +107,9 @@ src/matchmaking/chat.rs~undeclared 0
 src/matchmaking/favorites.rs 0
 src/matchmaking/favorites.rs~unjudged 0
 src/matchmaking/favorites.rs~undeclared 0
+src/matchmaking/mod.rs 0
+src/matchmaking/mod.rs~unjudged 0
+src/matchmaking/mod.rs~undeclared 0
 src/networking_sockets/connect.rs 0
 src/networking_sockets/connect.rs~unjudged 0
 src/networking_sockets/connect.rs~undeclared 0

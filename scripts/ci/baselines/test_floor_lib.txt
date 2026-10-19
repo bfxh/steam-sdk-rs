@@ -1,1 +1,1 @@
-262  # lib tests reached with --all-features, measured 2026-10-19 with the matchmaking favorites unit (7 tests added)
+265  # lib tests reached with --all-features, measured 2026-10-19 with the lobby-control unit (3 tests added)

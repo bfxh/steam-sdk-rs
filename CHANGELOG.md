@@ -1033,6 +1033,32 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   28 -> 32 inherent methods, `src/matchmaking/favorites.rs` 310 lines with `mod.rs` 490 -> 498, header
   citations 227 -> 239 spans across a 38th citing file, lib test floor re-recorded at the measured 262.
 
+- **The lobby control face, which also closed a table with a missing number**
+  (`src/matchmaking/mod.rs`, `src/matchmaking/queries.rs`). `ISteamMatchmaking` reaches **38/38**:
+  `SetLobbyType`, `SetLobbyMemberLimit`, `SetLobbyOwner`, `SetLinkedLobby` and `InviteUserToLobby`
+  (`isteammatchmaking.h:226-251`) plus `AddRequestLobbyListCompatibleMembersFilter` (`:123`) are now
+  `set_lobby_type`, `set_lobby_member_limit`, `set_lobby_owner`, `set_linked_lobby`,
+  `invite_user_to_lobby` and `set_request_lobby_list_compatible_members_filter`. Getting there exposed
+  the reason one of them had never been wrapped: `LobbyType` had four variants while the header
+  declares five -- `k_ELobbyTypePrivateUnique` (`:26`) had no name anywhere in this crate, so the call
+  that changes a lobby's type could not express every type. See **Changed** for that enum.
+  The mapping that `create_lobby` used to spell inline is now `lobby_type_to_raw`, tested arm by arm
+  against the header's own numbering, and `lobby_member_limit` stopped casting: it used to read
+  `match count { 0 => None, _ => Some(count as usize) }`, so a negative answer -- a value the header
+  declares no meaning for -- became a lobby of 18446744073709551615 seats. It now goes through
+  `member_limit`, which refuses both zero and anything negative. Three tests, six mutations, six red
+  on an assertion message (three of them against the different ways that cast could come back).
+  Registered rather than changed, because each needs a decision of its own:
+  `set_request_lobby_list_result_count_filter(count: u64)` hands Steam `count as i32`, so
+  4294967296 arrives as 0 -- the mirror image of the limit this unit adopted for
+  `set_lobby_member_limit` (take the signed type Steam takes, refuse nothing silently); and
+  `create_lobby`'s `assert!(max_members <= 250)` aborts on a caller argument for a ceiling the vendored
+  header never states (measured: no `250` anywhere in `isteammatchmaking.h`), so the bound is this
+  crate's own claim and its failure mode is an abort in the caller's frame.
+  Docs for the five setters cite only their own header lines, and `invite_user_to_lobby` says plainly
+  that Steam's promise -- the target "will receive a LobbyInvite_t callback" (`:152`) -- is not
+  delivered by this crate today, rather than implying it is.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**
@@ -2804,6 +2830,16 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Breaking, by the same rule as the two state enums: `LobbyType` is `#[non_exhaustive]` and gained
+  `PrivateUnique`** (`src/matchmaking/mod.rs`). Steam declares five lobby types
+  (`isteammatchmaking.h:18-28`) and this enum named four; the fifth, `k_ELobbyTypePrivateUnique`
+  ("private, unique and does not delete when empty", `:26`, with the note that one "can only create
+  from webapi", `:27`), could not be asked for at all -- which is also why `SetLobbyType` had gone
+  unwrapped. A downstream `match` that lists the four old variants without a wildcard stops compiling;
+  that is the point. Nothing in this repository does one (measured: `LobbyType` appears in `src/` and
+  in the two examples only as a value passed to `create_lobby`, never as a scrutinee), and each variant
+  now carries the header sentence that names it.
 
 - **`NetworkingAvailabilityError` is `#[non_exhaustive]` and gained `Unrecognized(i32)`**
   (`src/networking_types/state.rs`). Same category as the connection-state change in `836222f`: a match
