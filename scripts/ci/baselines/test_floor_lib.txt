@@ -1,1 +1,1 @@
-165  # lib tests reached with --all-features, measured 2026-10-16 with the FakeUDP header-citation ruler (2 tests added)
+253  # lib tests reached with --all-features, measured 2026-10-19 with the FakeIP address unit (11 tests added: 6 decode, 4 classifier, 1 refusals)

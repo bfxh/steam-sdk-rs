@@ -928,6 +928,55 @@ the drift-artifact entry under **Added -- CI and release automation**.
 Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80), `src/input.rs`
 636 -> 725, `src/callback.rs` 539 -> 543, lib test floor 130 -> 133.
 
+- **The fourth FakeIP entry point, and the public shape it had been waiting on**
+  (`src/networking_sockets/connection.rs`, `src/networking_types/addresses.rs`,
+  `src/networking_utils.rs`, `src/networking_sockets/fake_ip.rs`).
+  `GetRemoteFakeIPForConnection` (`isteamnetworkingsockets.h:895`) is now
+  `NetConnection::remote_fake_ip() -> SteamResult<SocketAddr>`, and
+  `ISteamNetworkingUtils::GetIPv4FakeIPType` (`isteamnetworkingutils.h:254`) is now
+  `NetworkingUtils::ipv4_fake_ip_type(Ipv4Addr) -> FakeIpType`. What had kept the first one out was not the
+  generated layer but a public-type question -- every address-shaped answer in this crate is a
+  `std::net::SocketAddr` while `SteamIpAddr` stays crate-internal -- and the answer chosen is to keep that
+  shape and wrap Steam's own classifier at the same time. `FakeIpType` is `#[non_exhaustive]`, with
+  `Invalid`, `NotFake`, `GlobalIpv4`, `LocalIpv4` and `Unrecognized(i32)`. Unlike the nine fallback arms
+  registered in the design doc -- reachable only if Steam ships a value its vendored header never declared
+  -- this one has a declared-but-unnamed input today: `k_ESteamNetworkingFakeIPType__Force32Bit`
+  (`steamnetworkingtypes.h:190`) is the width sentinel, and
+  `the_width_sentinel_lands_on_the_fallback_and_keeps_its_number` builds exactly that, so the arm has a test
+  instead of a register entry. The method sits on `NetConnection` rather than beside the other three FakeIP
+  calls because `sockets` and `handle` are private to `connection.rs`: a sibling module cannot read them,
+  and that is a visibility fact rather than a style preference.
+  The address decode is a pure function -- `socket_addr_from_octets` -- because that is the rule this
+  repository follows for any decision taken from a Steam value: if CI cannot judge it, it does not belong in
+  the FFI edge. It classifies by the mapped prefix (ten zero bytes then `ff ff`, the layout
+  "RFC4038, section 4.2" names, `steamnetworkingtypes.h:226-231`), reads the four octets in writing order
+  ("As bytes, i.e. network byte order", `:231`), hands the port over as the number it already is
+  ("Host byte order", `:239`), and keeps a cleared struct as the IPv6 any-address rather than as
+  `0.0.0.0` (`:200`) -- the last of those is the one a shorter prefix test silently gets wrong, and it is why
+  the all-zero case has its own test. Eleven new tests, and fourteen mutations against them: every one of
+  the fourteen went red on an assertion message, not on a crash or a compile error. The replay also corrected
+  two of my own attributions -- a byte-swap at the *boundary* read (`to_socket_addr`) is killed by the
+  struct-level round trip, not by the pure port test, so a second mutation at the pure function was added to
+  lock that path separately; and the classifier's argument went from `ip.to_bits()` written inline at the FFI
+  edge to `fake_ip_probe_argument`, because an assertion that `to_bits()` equals itself tests `std`, not this
+  crate. Two refusals in `src/error.rs` were folded into `k_EResultFail` one at a time to check that
+  `remote_fake_ip`'s documented distinction between a bad handle and a non-FakeIP connection is real; both
+  went red. Everything was restored byte-for-byte, checked against a copy and not by re-running the edit
+  backwards.
+  What CI still cannot judge is stated rather than counted: `remote_fake_ip` and `ipv4_fake_ip_type` each
+  need a live interface, and the first needs a connection actually made through the FakeIP system, so the
+  wiring is registered as unverified and only the decode, the table and the argument are locked.
+  Ledgers for this commit: `NetConnection` 16 -> 17 and `NetworkingUtils` 16 -> 17 inherent methods with
+  `FakeIpType 1` registered new; `src/networking_types/addresses.rs` 246 -> 415, `src/networking_utils.rs`
+  510 -> 693, `src/networking_sockets/connection.rs` 677 -> 712, `src/networking_sockets/fake_ip.rs`
+  506 -> 524; `ISteamNetworkingSockets.called` 30 -> 31 and `ISteamNetworkingUtils.called` 14 -> 15, so the
+  coverage total moves 644 -> 646 of 913; header citations 35 files / 194 spans -> 36 / 222 with all three
+  debt columns still at 0 (the citation ruler judged three of my new citations wrong on the first try -- two
+  `[::]:0` socket literals it read as a citation of line 0, and one paraphrase of mine wearing quotation
+  marks -- and both were reworded rather than exempted). The lib test floor was registered at 165 while the
+  suite had actually reached 242, so it is re-recorded at the measured 253 instead of being left 77 tests
+  looser than reality.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

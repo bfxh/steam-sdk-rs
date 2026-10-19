@@ -14,9 +14,9 @@ UpdateHandle 22
 Inventory 21
 QueryResults 21
 Timeline 18
-NetConnection 16
+NetConnection 17
+NetworkingUtils 17
 NetworkingSockets 16
-NetworkingUtils 16
 Friend 14
 NetworkingMessage 14
 NetConnectionRealTimeInfo 13
@@ -71,6 +71,7 @@ LobbyKey 2
 RemotePlay 2
 RemotePlaySessionId 2
 TimelineEventHandle 2
+FakeIpType 1
 FileDetails 1
 Leaderboard 1
 NetPollGroup 1

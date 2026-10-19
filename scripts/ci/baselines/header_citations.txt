@@ -46,6 +46,14 @@
 # isteamremotestorage.h:206 joiner fix. The ruler judged two of my new citations wrong on the
 # first try -- a quote that sits at line 228 while the span said 229, and four cited spans in a
 # block carrying no phrase at all -- which is the only reason the 179 is worth anything.
+# Re-recorded 2026-10-19 for the FakeIP address unit: 36 files cite the SDK (was 35) and 222 spans
+# (was 194), still 0/0/0. The new rows are src/networking_types/addresses.rs, which took its first
+# header citations with the mapped-address decode, and the citations in networking_utils.rs and
+# networking_sockets/connection.rs for the classifier enum and `GetRemoteFakeIPForConnection`. The
+# ruler judged three of my new citations wrong on the first try and the gate caught all three: two
+# spans of `[::]:0` read as a citation of line 0 (the short `:N` form has no way to know a socket
+# literal is not a line number), and one paraphrase of my own sat inside quotation marks. Both were
+# reworded rather than exempted, which is why the three debt columns are still empty.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -97,6 +105,9 @@ src/networking_sockets/listen.rs~undeclared 0
 src/networking_sockets/mod.rs 0
 src/networking_sockets/mod.rs~unjudged 0
 src/networking_sockets/mod.rs~undeclared 0
+src/networking_types/addresses.rs 0
+src/networking_types/addresses.rs~unjudged 0
+src/networking_types/addresses.rs~undeclared 0
 src/networking_types/config.rs 0
 src/networking_types/config.rs~unjudged 0
 src/networking_types/config.rs~undeclared 0

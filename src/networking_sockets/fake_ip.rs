@@ -1,14 +1,17 @@
-//! The FakeIP allocation surface: ask Steam for a block of fake ports, read the assignment back,
-//! open a listen socket on one of them *by index*, and take the completion message off the callback
-//! pipe.
+//! The four FakeIP entry points in `isteamnetworkingsockets.h`: ask Steam for a block of fake
+//! ports, read the assignment back, open a listen socket on one of them *by index*, and take the
+//! completion message off the callback pipe.
 //!
-//! Three of the four FakeIP entry points in `isteamnetworkingsockets.h` are here (h:862, h:867,
-//! h:878). The fourth, `GetRemoteFakeIPForConnection` (h:895), is not blocked by the generated layer
-//! any more than these three were: `SteamNetworkingIPAddr` binds with a real layout and already
-//! converts at `src/networking_types/addresses.rs:183-187`. What blocks it is a public-type decision
-//! -- every address-facing API in this crate speaks `std::net::SocketAddr` and keeps `SteamIpAddr`
-//! private -- so it is registered as a design question rather than guessed. See the FakeIP paragraph
-//! of `docs/SuperSteam-Design.md`.
+//! Three of them are here (h:862, h:867, h:878). The fourth, `GetRemoteFakeIPForConnection` (h:895),
+//! asks about a connection rather than about this sockets object, so it lives beside the handle it
+//! takes, as `NetConnection::remote_fake_ip`. Every address-facing API in this crate speaks
+//! `std::net::SocketAddr` and keeps Steam's own address struct private, and that is the shape the
+//! fourth one answers with too.
+//!
+//! Classifying an address -- is this IPv4 one of Steam's fake ones, and which kind -- is
+//! `ISteamNetworkingUtils::GetIPv4FakeIPType`, wrapped as
+//! [`crate::networking_utils::NetworkingUtils::ipv4_fake_ip_type`] and
+//! [`crate::networking_utils::FakeIpType`].
 //!
 //! `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` is deliberately not wrapped either. The
 //! same completion payload -- `steamnetworkingfakeip.h:93` opens it as "struct
@@ -374,6 +377,21 @@ mod fake_ip_tests {
         assert_eq!(
             to_steam_result(sys::EResult::k_EResultNoMatch),
             Err(SteamError::NoMatch)
+        );
+    }
+
+    /// The two refusals `NetConnection::remote_fake_ip` can get, kept apart for the same reason. A
+    /// bad handle and "this peer never had a FakeIP" are different facts, and the wrapper documents
+    /// that a caller can tell them -- which only holds while neither one decodes to `Generic`.
+    #[test]
+    fn the_two_remote_fake_ip_refusals_keep_their_names() {
+        let bad_handle = to_steam_result(sys::EResult::k_EResultInvalidParam);
+        let no_fake_ip = to_steam_result(sys::EResult::k_EResultIPNotFound);
+        assert_eq!(bad_handle, Err(SteamError::InvalidParameter));
+        assert_eq!(no_fake_ip, Err(SteamError::IPNotFound));
+        assert_ne!(
+            bad_handle, no_fake_ip,
+            "folding either into `Generic` makes a closed connection read as a non-FakeIP one"
         );
     }
 

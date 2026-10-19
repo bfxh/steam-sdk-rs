@@ -101,6 +101,41 @@ impl NetConnection {
         }
     }
 
+    /// The FakeIP address Steam knows this connection's peer by.
+    ///
+    /// Only a connection made through the FakeIP system has an answer, and which of the two kinds
+    /// Steam reports is its own choice: if the peer "had a global FakeIP at the time the connection
+    /// was established" that is the one returned, and otherwise Steam allocates one "unique locally"
+    /// from its own address space (`isteamnetworkingsockets.h:880-885`). The second kind is why two
+    /// connections to the same host can differ: "since the namespace is limited, this cannot be
+    /// guaranteed" (`:890`), Steam only tries to be consistent (`:887-889`).
+    ///
+    /// The answer is a [`std::net::SocketAddr`] because that is the shape every address in this
+    /// crate speaks; Steam's out parameter is the general `SteamNetworkingIPAddr`, which carries
+    /// IPv4 in its mapped form, and the decode is `crate::networking_types`' own.
+    ///
+    /// Both refusals come back as [`SteamError`] instead of as an empty address, and this is the one
+    /// handle-taking query here that does not answer [`InvalidHandle`]: Steam reports a bad handle as
+    /// a status -- "k_EResultInvalidParam: invalid connection handle" -- while the ordinary case of a
+    /// connection that was never made through the FakeIP system is its own code,
+    /// "k_EResultIPNotFound: This connection wasn't made using FakeIP system" (`:892-894`). A caller
+    /// that treats the two alike will read a closed connection as merely a non-FakeIP one.
+    pub fn remote_fake_ip(&self) -> SteamResult<SocketAddr> {
+        // Zero-filled before the call so the struct is initialised bytes whatever Steam does with
+        // it: on the error paths below nothing is read out of it, and on the success path every byte
+        // this wrapper reads is a byte Steam wrote.
+        let mut raw = std::mem::MaybeUninit::<sys::SteamNetworkingIPAddr>::zeroed();
+        let code = unsafe {
+            sys::SteamAPI_ISteamNetworkingSockets_GetRemoteFakeIPForConnection(
+                self.sockets,
+                self.handle,
+                raw.as_mut_ptr(),
+            )
+        };
+        crate::to_steam_result(code)?;
+        Ok(SteamIpAddr::from(unsafe { raw.assume_init() }).to_socket_addr())
+    }
+
     /// Clear the poll group for a connection.
     ///
     /// Returns `Err(InvalidHandle)` when `connection` is invalid.
