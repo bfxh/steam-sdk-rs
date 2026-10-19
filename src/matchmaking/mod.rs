@@ -129,25 +129,28 @@ impl Matchmaking {
         }
     }
 
-    /// Attempts to create a new matchmaking lobby
+    /// Creates a lobby on Steam's servers, and reports what Steam decided through `cb`.
     ///
-    /// The lobby with have the visibility of the of the passed
-    /// `LobbyType` and a limit of `max_members` inside it.
-    /// The `max_members` may not be higher than 250.
+    /// Steam's own block says it will "Create a lobby on the Steam servers.", that for a private type
+    /// "the lobby will not be returned by any RequestLobbyList() call" (`isteammatchmaking.h:131-133`),
+    /// that "this is an asynchronous request" and its "results will be returned by LobbyCreated_t
+    /// callback and call result" (`:134-135`), and that a `LobbyEnter_t` also arrives "since the local
+    /// user is joining their own lobby" (`:136`).
     ///
-    /// # Triggers
-    ///
-    /// * `LobbyEnter`
-    /// * `LobbyCreated`
-    pub fn create_lobby<F>(&self, ty: LobbyType, max_members: u32, cb: F)
+    /// `max_members` is Steam's `int` (`:138`) rather than a wider number narrowed on the way in. The
+    /// `max_members <= 250` assertion this method used to run before asking is **gone**: 250 appears
+    /// nowhere in the vendored header (measured: no `250` anywhere in `isteammatchmaking.h`), so the
+    /// ceiling was this crate's own claim, and its failure mode was an abort in the caller's frame --
+    /// while the answer Steam actually gives is `LobbyCreated_t`'s `m_eResult`, mapped through
+    /// `to_steam_result` just below. An over-large limit now arrives as `Err` in `cb` like any other
+    /// refusal, and a caller that wants a local bound can check one before calling.
+    pub fn create_lobby<F>(&self, ty: LobbyType, max_members: i32, cb: F)
     where
         F: FnOnce(SteamResult<LobbyId>) + 'static + Send,
     {
-        assert!(max_members <= 250); // Steam API limits
         unsafe {
             let ty = lobby_type_to_raw(ty);
-            let api_call =
-                sys::SteamAPI_ISteamMatchmaking_CreateLobby(self.mm, ty, max_members as _);
+            let api_call = sys::SteamAPI_ISteamMatchmaking_CreateLobby(self.mm, ty, max_members);
             register_call_result::<sys::LobbyCreated_t, _>(
                 &self.inner,
                 api_call,

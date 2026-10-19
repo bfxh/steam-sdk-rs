@@ -97,6 +97,12 @@
 # difference is that the line numbers were read out of the header with the line number printed (awk NR) before
 # writing them, instead of from an earlier sed window I had counted by eye; the previous re-record's off-by-one
 # came from exactly that.
+# Re-recorded 2026-10-20 with the lobby width decisions (`#31`): 45 files cite the SDK, 329 spans,
+# 0/0/0. The +2 files are `src/matchmaking/filters.rs` and `src/matchmaking/queries.rs`, which cited no
+# header before this round; `queries.rs` entered with its first own sentence ("sets how many results to
+# return, the lower the count the faster...", `isteammatchmaking.h:120`). One near-miss repeated and was
+# fixed the same way as before: a Steam declaration put inside backticks is NOT a citation to this ruler
+# (it needs double quotes), which is the second time that exact mistake cost a `~undeclared` span.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -130,9 +136,15 @@ src/matchmaking/chat.rs~undeclared 0
 src/matchmaking/favorites.rs 0
 src/matchmaking/favorites.rs~unjudged 0
 src/matchmaking/favorites.rs~undeclared 0
+src/matchmaking/filters.rs 0
+src/matchmaking/filters.rs~unjudged 0
+src/matchmaking/filters.rs~undeclared 0
 src/matchmaking/mod.rs 0
 src/matchmaking/mod.rs~unjudged 0
 src/matchmaking/mod.rs~undeclared 0
+src/matchmaking/queries.rs 0
+src/matchmaking/queries.rs~unjudged 0
+src/matchmaking/queries.rs~undeclared 0
 src/networking_sockets/connect.rs 0
 src/networking_sockets/connect.rs~unjudged 0
 src/networking_sockets/connect.rs~undeclared 0

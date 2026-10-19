@@ -34,8 +34,13 @@ pub struct LobbyListFilter<'a> {
     pub open_slots: Option<u8>,
     /// Filters lobbies based on a distance criterion
     pub distance: Option<DistanceFilter>,
-    /// Specifies the maximum number of lobby results to be returned
-    pub count: Option<u64>,
+    /// Specifies the maximum number of lobby results to be returned.
+    ///
+    /// `i32` because that is what Steam takes, declared as
+    /// "AddRequestLobbyListResultCountFilter( int cMaxResults )" (`isteammatchmaking.h:121`). A wider
+    /// type here used to be narrowed by a cast at the call, so `4294967296` arrived as `0` -- a filter
+    /// for no results that nobody asked for.
+    pub count: Option<i32>,
 }
 
 /// A wrapper for a lobby key string.
@@ -255,9 +260,9 @@ impl<'a> LobbyListFilter<'a> {
     ///
     /// # Arguments
     ///
-    /// * `count`: The maximum number of lobby results to retrieve.
+    /// * `count`: The maximum number of lobby results to retrieve, in the `i32` Steam takes.
     ///
-    pub fn set_count(mut self, count: Option<u64>) -> Self {
+    pub fn set_count(mut self, count: Option<i32>) -> Self {
         self.count = count;
         self
     }

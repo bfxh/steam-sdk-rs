@@ -122,18 +122,19 @@ impl Matchmaking {
 
     /// Adds a result count filter to the lobby list request.
     ///
-    /// This method adds a filter to limit the number of lobby results returned by the request.
+    /// Steam's own sentence for it is "sets how many results to return, the lower the count the faster
+    /// it is to download the lobby results & details to the client" (`isteammatchmaking.h:120`), on the
+    /// declaration `AddRequestLobbyListResultCountFilter( int cMaxResults )` (`:121`).
     ///
     /// # Arguments
     ///
-    /// * `count`: The maximum number of lobby results to include in the response.
+    /// * `count`: The maximum number of lobby results to include in the response, in Steam's `int`.
+    ///   This used to be a `u64` narrowed by `count as i32` at the call, which turned `4294967296` into
+    ///   `0` -- a filter for no results that nobody asked for.
     ///
-    pub fn set_request_lobby_list_result_count_filter(&self, count: u64) -> &Self {
+    pub fn set_request_lobby_list_result_count_filter(&self, count: i32) -> &Self {
         unsafe {
-            sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListResultCountFilter(
-                self.mm,
-                count as i32,
-            );
+            sys::SteamAPI_ISteamMatchmaking_AddRequestLobbyListResultCountFilter(self.mm, count);
         }
         self
     }

@@ -1089,13 +1089,15 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   declares no meaning for -- became a lobby of 18446744073709551615 seats. It now goes through
   `member_limit`, which refuses both zero and anything negative. Three tests, six mutations, six red
   on an assertion message (three of them against the different ways that cast could come back).
-  Registered rather than changed, because each needs a decision of its own:
+  Registered rather than changed at the time, because each needs a decision of its own:
   `set_request_lobby_list_result_count_filter(count: u64)` hands Steam `count as i32`, so
   4294967296 arrives as 0 -- the mirror image of the limit this unit adopted for
   `set_lobby_member_limit` (take the signed type Steam takes, refuse nothing silently); and
   `create_lobby`'s `assert!(max_members <= 250)` aborts on a caller argument for a ceiling the vendored
   header never states (measured: no `250` anywhere in `isteammatchmaking.h`), so the bound is this
   crate's own claim and its failure mode is an abort in the caller's frame.
+  **Both were decided and landed on 2026-10-20** -- see the two `### Changed` entries for them; nothing
+  in this paragraph is retracted, it records what was measured then.
   Docs for the five setters cite only their own header lines, and `invite_user_to_lobby` says plainly
   that Steam's promise -- the target "will receive a LobbyInvite_t callback" (`:152`) -- is not
   delivered by this crate today, rather than implying it is.
@@ -2995,6 +2997,32 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Breaking: the lobby's two number widths now match Steam's `int`, and the 250 abort is gone**
+  (`src/matchmaking/queries.rs`, `src/matchmaking/filters.rs`, `src/matchmaking/mod.rs`). This closes
+  the two decisions the lobby-control entry registered without acting on.
+  `set_request_lobby_list_result_count_filter(count: u64)` takes `i32`, and `LobbyListFilter::count`
+  with its `set_count` builder moves `Option<u64>` -> `Option<i32>`, because the call is declared
+  "AddRequestLobbyListResultCountFilter( int cMaxResults )" (`isteammatchmaking.h:121`) and the wrapper
+  reached it through `count as i32` -- so `4294967296` became `0`, a filter for no results that nobody
+  asked for and that no test could see. `create_lobby` takes `max_members: i32` (Steam:
+  `CreateLobby( ELobbyType eLobbyType, int cMaxMembers )`, `:138`) and the
+  `assert!(max_members <= 250)` that used to run before the call is **removed**: 250 is nowhere in the
+  vendored header (re-measured this round: no `250` in `isteammatchmaking.h`), the ceiling was the
+  crate's own claim, and its failure mode was an abort in the caller's frame -- while
+  `LobbyCreated_t`'s `m_eResult`, already mapped through `to_steam_result` in the same function, is the
+  channel Steam uses to say no. An over-large limit now arrives as `Err` in the caller's callback like
+  any other refusal; a game that wants a local bound checks one before calling.
+  There is deliberately no test for either: the fix is at the type level, so an out-of-`i32` value no
+  longer has a type to arrive in, and a test would only assert that Rust's integers are Rust's
+  integers. What the change cannot be tested for is also registered: whether Steam really refuses an
+  over-large `cMaxMembers` needs a live client, so the *answer* is unverified while the *silent
+  narrowing* is gone. Verified instead: `cargo check --locked --workspace --all-targets` with the
+  futures feature is rc=0, i.e. no call site in `src/`, the tests, or `examples/` needed a compatibility
+  shim -- the breakage is for downstream callers only, which is why this is a `Changed` entry and not a
+  quiet edit. `module_sizes` and `header_citations` re-recorded (329 spans, 0/0/0, across two more
+  citing files); the same backticks-instead-of-double-quotes mistake the ruler has caught before was
+  caught again here and fixed by quoting Steam's declaration properly.
 
 - **Two licence tables became one, and the public-address read became arm-selective**
   (`src/user/answers.rs`, `src/server/status.rs`). Reviewing the entry above turned up two things

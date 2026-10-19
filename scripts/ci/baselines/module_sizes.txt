@@ -2,7 +2,7 @@ src/lib.rs 833
 src/matchmaking_servers.rs 724
 src/networking_sockets/connection.rs 712
 src/networking_types/config.rs 676
-src/matchmaking/mod.rs 657
+src/matchmaking/mod.rs 660
 src/http.rs 616
 src/ugc/mod.rs 604
 src/error.rs 603
@@ -37,7 +37,7 @@ src/user_stats/stats.rs 333
 src/remote_storage/files.rs 331
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 330
-src/matchmaking/filters.rs 314
+src/matchmaking/filters.rs 319
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
 src/user_stats/user_reads.rs 283
@@ -52,7 +52,7 @@ src/html_surface/callbacks.rs 247
 src/remote_storage/mod.rs 247
 src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244
-src/matchmaking/queries.rs 228
+src/matchmaking/queries.rs 229
 src/remote_storage/api.rs 227
 src/networking_types/events.rs 224
 src/friends/chat.rs 216

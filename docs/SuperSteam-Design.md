@@ -1060,6 +1060,14 @@ GSUserGroupStatus_t"（:173），可是这个结构体在随仓 SDK 里**根本�
   要么返回 `Result` 打断 builder 链；② `create_lobby` 的 `assert!(max_members <= 250)` 在
   `isteammatchmaking.h:138` 里**找不到出处**（grep 该头无 250），250 这条上限来自 Steamworks 文档而不是随仓
   头文件，而它现在是调用方喂参数就能触发的一次 abort。两处都要单独拍板，先记数字不动行为。
+  **→ 2026-10-20 两处都按方案「收 Steam 的那个宽度」落地**：①参数与 `LobbyListFilter::count`/`set_count`
+  一律 `i32`（头文件原句 "AddRequestLobbyListResultCountFilter( int cMaxResults )"，`:121`），`as i32`
+  那步没了＝截断**在类型层不再可表达**；②`create_lobby` 参数改 `i32`，250 那条断言删掉，超限走
+  `LobbyCreated_t.m_eResult` → 调用方回调里拿到 `Err`（本仓早就把 `m_eResult` 过 `to_steam_result`，
+  所以这不是新通道，是终于把已有通道让调用方看得见）。两处都**没配测试**，理由是诚实的：类型层的修复
+  只能测出"Rust 的整数是 Rust 的整数"；而"Steam 到底会不会拒一个过大的 cMaxMembers"要活客户端，
+  照旧登记为未证。可复算的是 `cargo check --locked --workspace --all-targets` rc=0——`src/`、测试、
+  `examples/` 没有一个调用点需要兼容垫片，破坏面只在下游。
 
 **2026-10-19 补 `ISteamMatchmaking` 收藏服务器面 28→32**（`src/matchmaking/favorites.rs`，四个入口在
 `isteammatchmaking.h:60-77`、两个列表位在 `:525-527`）。两处判断不属于头文件，记在这里：
