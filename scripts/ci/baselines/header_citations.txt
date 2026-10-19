@@ -82,6 +82,15 @@
 # Two of the new citations were judged wrong on the first try by the same ruler -- a phrase from
 # :380 cited at 381-387, and one of my own sentences inside quotation marks -- and both were fixed in
 # the prose rather than exempted.
+# Re-recorded 2026-10-20 with the ISteamUserStats out-parameter read face (`src/user_stats/user_reads.rs`,
+# 6 wrappers): 41 files cite the SDK, 304 spans, still 0 judged wrong / 0 unjudged / 0 undeclared. The +17
+# spans are that module's own citations. The ruler judged five of them red on the first pass and all five were
+# re-anchored instead of exempted: two quoted phrases sat outside the spans cited (the two progress-limit
+# sentences are at `isteamuserstats.h:297` and `:298`, not `:298` and `:299` -- an off-by-one inherited from
+# counting a blank line), and three citation blocks carried line numbers with no checkable phrase, which is
+# what the `~undeclared` column exists for. One near-miss worth keeping: a prose reference to a line of
+# `src/server_stats.rs` inside a module doc parsed as a line-number pointer into the SDK headers, so an
+# in-crate file:line reference does not belong in the same sentence as a header citation.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -196,6 +205,9 @@ src/user_stats/leaderboard.rs~undeclared 0
 src/user_stats/stats.rs 0
 src/user_stats/stats.rs~unjudged 0
 src/user_stats/stats.rs~undeclared 0
+src/user_stats/user_reads.rs 0
+src/user_stats/user_reads.rs~unjudged 0
+src/user_stats/user_reads.rs~undeclared 0
 src/utils/strings.rs 0
 src/utils/strings.rs~unjudged 0
 src/utils/strings.rs~undeclared 0

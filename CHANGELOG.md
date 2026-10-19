@@ -1117,6 +1117,40 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   and the call would be a question with no way to read an answer. Wrapping the `bool` alone would look
   like coverage and deliver a stub.
 
+- **The out-parameter read face of `ISteamUserStats`: six getters, and the two tables behind them**
+  (`src/user_stats/user_reads.rs`, new). `GetUserStatInt32` (`isteamuserstats.h:165-166`),
+  `GetUserStatFloat` (`:168-169`), `GetUserAchievement` (`:171`), `GetUserAchievementAndUnlockTime`
+  (`:173`), `GetAchievementProgressLimitsInt32` (`:300-301`) and `GetAchievementProgressLimitsFloat`
+  (`:303-304`) become `user_stat_i32`, `user_stat_f32`, `user_achievement`,
+  `user_achievement_and_unlock_time`, `achievement_progress_limits_i32` and
+  `achievement_progress_limits_f32`. `ISteamUserStats` goes 31 -> 37 of 44, and the repository total
+  668 -> 674 of 913. All six share one shape -- Steam returns a `bool` and writes an out-parameter --
+  so the two decisions in that shape became functions instead of six copies of an `if`:
+  `read_answer` refuses to return a value on `false` (the headers describe no value for the
+  out-parameter of a declined call, so neither does this crate), and `unlock_state` names all four
+  cells of (achieved, time). `AchievementUnlock` exists because Steam's own note changes what a
+  *number* means: "If the return value is true, but the unlock time is zero, that means it was
+  unlocked before Steam" began tracking (`:119`), so a `0` there is not 1970-01-01, and the fourth
+  cell -- a time with an unachieved flag -- is the combination the note does not describe and is
+  forwarded as a number rather than folded into `NotAchieved`. The seconds stay Steam's `uint32`:
+  converting them into a `SystemTime` would be this wrapper choosing a calendar reading the header
+  does not ask for, and a caller can add that reading back in one line.
+  The declined answer is `SteamError::InvalidParameter`, which is what the sibling interface
+  (`src/server_stats.rs`) already answers for the identical shape, chosen to keep two interfaces that
+  decline for the same reasons from reporting different errors.
+  Progress bounds are forwarded as `(min, max)` with no `min <= max` check, because the header states
+  no such constraint (`:297-299`) and enforcing one would report this wrapper's opinion about Steam's
+  data as an error.
+  Four tests, four mutations, all four red on an assertion message: trusting the value when Steam
+  declined, losing the undocumented cell, reading the zero time as a date, and crossing two of the
+  four cells. Registered as unverified: the six FFI bodies -- every one needs stats that were actually
+  requested for a user, so no input here can reach them. Ledgers: header citations 287 -> 304 spans
+  across a 41st citing file, `UserStats` 24 -> 30 inherent methods, lib test floor raised to the
+  measured 275, and the citation ruler judged five of my new citations red before it was clean -- two
+  quoted phrases sitting outside the spans they cited (`isteamuserstats.h:297`/`:298`, which I had
+  written one line low) and three citation blocks carrying line numbers with no checkable phrase. All
+  five were re-anchored, none exempted.
+
 ### Added — CI and release automation
 
 - **`CString::new(x).unwrap()` is a counted debt ledger now, and the classification is the whole gate**

@@ -6,10 +6,10 @@ UGC 37
 Browser 33
 QueryHandle 33
 User 33
+UserStats 30
 Apps 29
 Client 29
 Utils 28
-UserStats 24
 UpdateHandle 22
 Inventory 21
 QueryResults 21

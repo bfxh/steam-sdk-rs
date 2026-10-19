@@ -41,6 +41,7 @@ src/matchmaking/filters.rs 314
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
 src/matchmaking/chat.rs 281
+src/user_stats/user_reads.rs 281
 src/user_stats/global_stats.rs 280
 src/networking_utils/ping.rs 279
 src/networking_types/connection_info.rs 273
@@ -129,5 +130,5 @@ src/networking_types/mod.rs 36
 src/utils/battery.rs 34
 src/utils/callbacks.rs 29
 src/remote_storage/platforms.rs 27
-src/user_stats/mod.rs 20
+src/user_stats/mod.rs 22
 src/utils/counts.rs 17

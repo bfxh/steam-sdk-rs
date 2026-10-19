@@ -10,8 +10,10 @@ mod achievements;
 mod global_stats;
 mod leaderboard;
 mod stats_io;
+mod user_reads;
 
 pub use leaderboard::*;
+pub use user_reads::AchievementUnlock;
 
 /// Access to the steam user stats interface
 pub struct UserStats {
