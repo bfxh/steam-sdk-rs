@@ -77,6 +77,7 @@ Leaderboard 1
 NetPollGroup 1
 NetworkingConfigValue 1
 PingEstimate 1
+ServerQuery 1
 SessionRequestBuilder 1
 SteamAPIInitError 1
 UpdateWatchHandle 1

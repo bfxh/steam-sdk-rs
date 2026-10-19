@@ -660,7 +660,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
 | ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
-| ISteamInput |   44 |  48 | ISteamMatchmakingServers |   16 |  17 |
+| ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 680 / 913**（33 个接口；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 681 / 913**（33 个接口；同日 `ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -957,7 +957,7 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 - `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
   of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
-  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:546-557`），
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:616-633`），
   入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
   （`src/matchmaking_servers.rs:279`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
   即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
@@ -1135,6 +1135,26 @@ stats）。
 变异 4 只：3 只断言消息判红；第 4 只（`store_stats` 就算 Steam 说不也回 `Ok`）**照绿**——那条路要活客户端，
 这里是拿存活结果**证明登记为未覆盖**这句话是真的，不是把它当锁。
 
+**同日 `ISteamMatchmakingServers` 17/17 首次到满**（`src/matchmaking_servers.rs`：新类型 `ServerQuery` +
+`CancelServerQuery`）：最后一只封不上，不是因为没写，而是因为它要的那个句柄被本仓扔了——
+`ping_server` / `player_details` / `server_rules` 原来返回 `()`，Steam 给的 `HServerQuery` 落地即丢，于是
+`CancelServerQuery` 没有任何可传的参数。头文件把为什么要取消写得很直白："before destructing a callback
+object that may have been passed"、"to avoid crashing when callbacks occur"（`isteammatchmaking.h:514-515`）
+——回调对象比这次调用活得久，所以取消是**义务**，不是可选卫生。
+
+- 形状选了 A（带 `cancel()` 的具名句柄），不是 B（裸 `i32` 再加一个 `cancel_server_query`）：`HServerQuery`
+  是 `typedef int`（`:377`），而 `HSERVERQUERY_INVALID = 0xffffffff` 存进 `c_int` 就是 **-1**（`:378`，
+  生成层实测 `pub const HSERVERQUERY_INVALID: c_int = -1`）——裸句柄最容易在这种「看起来是编号、其实是
+  哨兵」的地方踩空。`ServerQuery` 只暴露 `cancel()`，别的什么都做不了，这正是要的接口面。
+- 两条判定抽成纯函数各配一把锁：`query_id`（Steam 的「没有查询」标记**不包装成可取消的句柄**——那个号
+  可能已经发给别人的查询了）、`cancel_guard`（第二次 `cancel` 报 `InvalidState`，与 `ServerListRequest::release`
+  早已有的双释放护栏同一条形状）。另有 1 条 premise pin 钉住「INVALID 到 `c_int` 就是 -1」这个事实本身。
+- 3 只变异全按断言消息判红（放过标记、把标记判反、允许第二次取消）；`ServerQuery` 的 FFI 本体照旧登记
+  未验证（要真服务器）。公开形状变了：三只方法从 `()` 变 `SteamResult<ServerQuery>`；`Result` 是
+  `#[must_use]`，所以「调用完把返回值丢掉」这一种写法现在会出警告——这是刻意的：**丢掉查询是一个决定，
+  不是默认**。本仓 `src/`/测试/examples 里没有任何调用点需要改（`cargo check --locked --workspace
+  --all-targets` rc=0、无警告）。
+
 **同日再补 `ISteamUserStats` 全局成就百分位读面 37→41**（`src/user_stats/achievement_percents.rs` 新，
 另两只写落 `src/user_stats/stats_io.rs`）：本仓早就在发 `RequestGlobalAchievementPercentages`
 （`src/user_stats/achievements.rs:24`）却**没有读数口子**，这一格是空转的。三处判定抽成函数，各配一把锁：
@@ -1178,7 +1198,7 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   真去缩生成层那一格会先撞**编译不过**——本仓的请求构造器往那字段里写的是 256 元素数组——而编译红不算
   锁；所以它的真实触发条件是"布局以另一种方式变了"（补白、字段次序、元素宽度），不是字段宽度本身。
 - **`CancelServerQuery`（`:516`）不封，登记成缺陷**：`ping_server` / `player_details` / `server_rules`
-  （`src/matchmaking_servers.rs:546`、`:559`、`:577`）现在返回 `()`，把 Steam 给的 `HServerQuery`
+  （落地前：`src/matchmaking_servers.rs:616`、`:639`、`:664`）当时返回 `()`，把 Steam 给的 `HServerQuery`
   **丢了**，调用方手里没有可取消的东西。探针实测（改完立刻逐字节还原，基线 `cargo check` 回 rc=0）：
   把其中一只改成返回句柄，本仓只有**一处**编译错——FFI 调用末尾那个 `;`（`expected 'i32', found '()'`）——
   `--all-targets` 里没有任何别的调用点或 example 受影响。差的不是工作量，是**公开形状谁来定**：

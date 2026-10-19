@@ -12,6 +12,29 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **`ISteamMatchmakingServers` is closed at 17 of 17, because the last call needed a handle to exist**
+  (`src/matchmaking_servers.rs`). `CancelServerQuery` (`isteammatchmaking.h:516`) was the only
+  interface function still unwrapped, and it could not honestly be wrapped as a bare method: the three
+  queries it cancels are issued by `ping_server` / `player_details` / `server_rules` (`:504`, `:507`,
+  `:510`), and this crate threw the `HServerQuery` they return away -- there was nothing to pass in. So
+  those three now return `ServerQuery`, which owns the handle, keeps the client alive beside it
+  (the same `Arc<Inner>` the interface wrappers carry), and exposes `cancel()`. Steam's reason for
+  insisting on the cancel is on the declaration: you should do it "before destructing a callback object
+  that may have been passed" to the query, "to avoid crashing when callbacks occur" (`:514-515`).
+  Two decisions are functions and are judged without a client: `query_id` refuses Steam's own
+  no-query marker (`HSERVERQUERY_INVALID`, which the generated layer stores as the `c_int` `-1`; a
+  premise pin asserts that number, because `0xffffffff` reaching `c_int` is the whole basis of the
+  test), and `cancel_guard` refuses a second cancel as `InvalidState`, the same shape
+  `ServerListRequest::release` already enforces -- a cancelled query's number may have been handed to
+  somebody else by then, so the second call is not a no-op.
+  Three tests, three mutations, all three red on an assertion message (letting the marker through, and
+  inverting that comparison, and allowing a second cancel). The FFI bodies remain registered as
+  unverified: a query needs a real server to talk to.
+  Ledgers: `ISteamMatchmakingServers` 16 -> **17 of 17**, repository total 680 -> 681 of 913,
+  `ServerQuery` registered at 1 inherent method, lib test floor at the measured 288, 334 header
+  citations with all three debt columns at zero.
+
+
 - **Cancelling a server-list query, the sixth list type, and the filter length rule that was only a
   comment** (`src/matchmaking_servers.rs`). `CancelQuery` (`isteammatchmaking.h:481`) becomes
   `ServerListRequest::cancel_query` and `RequestSpectatorServerList` (`:394`) becomes
@@ -37,7 +60,7 @@ still declares version `0.13.1`.
   makes this crate fail to **compile** first, because the request builder writes a 256-element array
   into it, so compile-red there would not have been a lock either.
   Two things are registered rather than fixed. `CancelServerQuery` (`:516`) stays unwrapped because
-  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:546`, `:559`, `:577`)
+  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:616`, `:639`, `:664`)
   return `()` and **discard the `HServerQuery`** Steam hands back, so there is nothing to cancel with;
   measured by probe, changing one of them to return the handle costs one line in this crate and breaks
   no in-repo or example call site (`cargo check --locked --all-targets` reported exactly
@@ -437,7 +460,7 @@ plus the callbacks the wrapper can deliver.
   "the IP address of the game server" and then says *nothing* about byte order
   (`isteamuser.h:156-158`). Rather than invent a rule, the wrapper takes the one this crate already
   uses at both ends and can be checked against itself: `MatchmakingServers::ping_server` sends
-  `ip.into()` outward (`src/matchmaking_servers.rs:546-557`) and the server-list reader turns an
+  `ip.into()` outward (`src/matchmaking_servers.rs:616-633`) and the server-list reader turns an
   address Steam reported back with `Ipv4Addr::from(raw.m_NetAdr.m_unIP)` (`:213`). Those round-trip,
   and measured on this host `u32::from(addr) == addr.to_bits()` -- first octet most significant, so
   `192.168.1.1` is `0xC0A80101`, the shape Steam itself hands back. The doc says all of that,
@@ -3021,6 +3044,18 @@ Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80),
   true when written and stopped being true in this batch.
 
 ### Changed
+
+- **Breaking: `ping_server` / `player_details` / `server_rules` return `SteamResult<ServerQuery>`
+  instead of `()`.** They were already able to fail in two ways a caller could not see -- Steam returns a
+  query handle, and it can return its "no query" marker -- and both were discarded with the handle, which
+  is what left `CancelServerQuery` unwrappable. `ServerQuery` is opaque: the only thing to do with it is
+  `cancel()`, and that is the operation the header asks for before a callback object goes away
+  (`isteammatchmaking.h:514-515`). **Downstream**: a call written as a statement still compiles unchanged
+  (the returned value is simply ignored); one that bound the result to `let ... : ()` needs updating. No
+  call site inside this crate's `src/`, tests or examples did (`cargo check --locked --workspace
+  --all-targets` rc=0, no warnings). A caller that ignores the handle outright now gets an
+  `unused_must_use` warning, because `Result` is `#[must_use]` -- which is the point of returning one
+  rather than the bare handle: dropping the query is a decision, not a default.
 
 - **Breaking, and it is the whole class: no more `Result<T, ()>` in this crate** (six files:
   `src/user_stats/stats_io.rs`, `stats.rs`, `global_stats.rs`, `achievements.rs`,

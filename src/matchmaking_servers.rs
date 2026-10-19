@@ -542,48 +542,141 @@ pub struct MatchmakingServers {
     pub(crate) _inner: Arc<Inner>,
 }
 
+/// A query to one server by address, which Steam answers through the callbacks given to it.
+///
+/// This is held as a handle instead of being forgotten on the floor because the callback objects
+/// outlive the call: Steam's instruction is to cancel "before destructing a callback object that may
+/// have been passed" to the query, "to avoid crashing when callbacks occur"
+/// (`isteammatchmaking.h:514-515`).
+pub struct ServerQuery {
+    q: sys::HServerQuery,
+    cancelled: bool,
+    mms: *mut sys::ISteamMatchmakingServers,
+    _inner: Arc<Inner>,
+}
+
+/// Steam's marker for "there is no query" (`HSERVERQUERY_INVALID`, which the generated layer types as
+/// `c_int`), refused at construction instead of handed out as something to cancel: `CancelServerQuery`
+/// aimed at that id would be aimed at whatever query Steam has since given the number to.
+fn query_id(raw: sys::HServerQuery) -> SteamResult<sys::HServerQuery> {
+    if raw == sys::HSERVERQUERY_INVALID {
+        return Err(SteamError::InvalidParameter);
+    }
+    Ok(raw)
+}
+
+/// Whether this handle still owns a query. The rule is the one `ServerListRequest` already enforces
+/// for `release`: the second call is a caller bug, and this wrapper's own state is what it failed on.
+fn cancel_guard(cancelled: bool) -> SteamResult<()> {
+    if cancelled {
+        return Err(SteamError::InvalidState);
+    }
+    Ok(())
+}
+
+impl ServerQuery {
+    unsafe fn new(
+        raw: sys::HServerQuery,
+        mms: *mut sys::ISteamMatchmakingServers,
+        inner: &Arc<Inner>,
+    ) -> SteamResult<Self> {
+        Ok(Self {
+            q: query_id(raw)?,
+            cancelled: false,
+            mms,
+            _inner: Arc::clone(inner),
+        })
+    }
+
+    /// Stops the query, so no callback reaches the objects that were handed to it.
+    ///
+    /// Cancelling is not optional hygiene at the end of a game's life: it is the difference between
+    /// Steam writing into memory this crate still owns and writing into memory it no longer does.
+    ///
+    /// # Errors
+    ///
+    /// `InvalidState` if this handle has already been cancelled.
+    pub fn cancel(&mut self) -> SteamResult<()> {
+        cancel_guard(self.cancelled)?;
+        unsafe {
+            sys::SteamAPI_ISteamMatchmakingServers_CancelServerQuery(self.mms, self.q);
+        }
+        self.cancelled = true;
+        Ok(())
+    }
+}
+
 impl MatchmakingServers {
-    pub fn ping_server(&self, ip: std::net::Ipv4Addr, port: u16, callbacks: PingCallbacks) {
+    /// Asks one server for its ping and details, and hands back the handle to cancel it with.
+    ///
+    /// Steam's line for the call is "Request updated ping time and other details from a single server"
+    /// (`isteammatchmaking.h:504`). The handle used to be dropped on the floor here, which left
+    /// [`ServerQuery::cancel`] unwrappable: Steam's own instruction for the callback object is to cancel
+    /// "before destructing" it, "to avoid crashing when callbacks occur" (`:513-515`).
+    pub fn ping_server(
+        &self,
+        ip: std::net::Ipv4Addr,
+        port: u16,
+        callbacks: PingCallbacks,
+    ) -> SteamResult<ServerQuery> {
         unsafe {
             let callbacks = create_ping(callbacks);
 
-            sys::SteamAPI_ISteamMatchmakingServers_PingServer(
+            let raw = sys::SteamAPI_ISteamMatchmakingServers_PingServer(
                 self.mms,
                 ip.into(),
                 port,
                 callbacks.cast(),
             );
+            ServerQuery::new(raw, self.mms, &self._inner)
         }
     }
 
+    /// Asks one server who is on it, and hands back the handle to cancel the query with.
+    ///
+    /// "Request the list of players currently playing on a server" (`isteammatchmaking.h:507`); see
+    /// [`MatchmakingServers::ping_server`] for why the handle is returned rather than discarded.
     pub fn player_details(
         &self,
         ip: std::net::Ipv4Addr,
         port: u16,
         callbacks: PlayerDetailsCallbacks,
-    ) {
+    ) -> SteamResult<ServerQuery> {
         unsafe {
             let callbacks = create_playerdetails(callbacks);
 
-            sys::SteamAPI_ISteamMatchmakingServers_PlayerDetails(
+            let raw = sys::SteamAPI_ISteamMatchmakingServers_PlayerDetails(
                 self.mms,
                 ip.into(),
                 port,
                 callbacks.cast(),
             );
+            ServerQuery::new(raw, self.mms, &self._inner)
         }
     }
 
-    pub fn server_rules(&self, ip: std::net::Ipv4Addr, port: u16, callbacks: ServerRulesCallbacks) {
+    /// Asks one server which rules it runs, and hands back the handle to cancel the query with.
+    ///
+    /// Steam's line is "Request the list of rules that the server is running"
+    /// (`isteammatchmaking.h:510`, where the rest of the sentence points at
+    /// `ISteamGameServer::SetKeyValue()` as the way those values get set); see
+    /// [`MatchmakingServers::ping_server`] for the handle's purpose.
+    pub fn server_rules(
+        &self,
+        ip: std::net::Ipv4Addr,
+        port: u16,
+        callbacks: ServerRulesCallbacks,
+    ) -> SteamResult<ServerQuery> {
         unsafe {
             let callbacks = create_serverrules(callbacks);
 
-            sys::SteamAPI_ISteamMatchmakingServers_ServerRules(
+            let raw = sys::SteamAPI_ISteamMatchmakingServers_ServerRules(
                 self.mms,
                 ip.into(),
                 port,
                 callbacks.cast(),
             );
+            ServerQuery::new(raw, self.mms, &self._inner)
         }
     }
 
@@ -684,6 +777,50 @@ fn test_internet_servers() {
     for _ in 0..2000 {
         client.run_callbacks();
         std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[cfg(test)]
+mod query_tests {
+    //! Which returned handle is a query, and which state may still be cancelled. The FFI calls
+    //! themselves need a running client and are registered as unverified.
+
+    use super::{cancel_guard, query_id, SteamError};
+    use steamworks_sys as sys;
+
+    /// Steam's own "no query" marker is refused; every other number is a query Steam said it started.
+    /// The mutation this exists for is the comparison dropping out, which would hand back a handle
+    /// whose `cancel` points at an id Steam never gave this caller.
+    #[test]
+    fn the_no_query_marker_is_not_turned_into_a_cancellable_handle() {
+        assert_eq!(
+            query_id(sys::HSERVERQUERY_INVALID),
+            Err(SteamError::InvalidParameter)
+        );
+        assert_eq!(query_id(0), Ok(0));
+        assert_eq!(query_id(1), Ok(1));
+        assert_eq!(query_id(i32::MAX), Ok(i32::MAX));
+        assert_eq!(query_id(-2), Ok(-2));
+    }
+
+    /// A premise pin: the header writes `0xffffffff` into a `const int`, so the marker is `-1` once the
+    /// generated layer's `c_int` has taken it. If a regeneration ever moves that number, this goes red
+    /// and `query_id` has to be re-read rather than trusted.
+    #[test]
+    fn steam_s_no_query_marker_is_the_number_the_header_says_it_is() {
+        assert_eq!(
+            sys::HSERVERQUERY_INVALID,
+            -1,
+            "the header's `0xffffffff` stored as `int`"
+        );
+    }
+
+    /// Cancelling twice fails on the second one, and the failure names the reason: this wrapper's own
+    /// state, not something Steam declined.
+    #[test]
+    fn a_second_cancel_is_refused_as_a_wrong_state_not_a_wrong_argument() {
+        assert_eq!(cancel_guard(false), Ok(()));
+        assert_eq!(cancel_guard(true), Err(SteamError::InvalidState));
     }
 }
 
