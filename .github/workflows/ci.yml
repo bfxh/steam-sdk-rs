@@ -200,7 +200,7 @@ jobs:
       # 计数在 Steam 回调泵线程上 clone、在持有请求的线程上 drop（同一值两处非原子写）。
       # 现在改成 `Arc<dyn Fn + Send + Sync>`，并在同文件放 `assert_send::<T>` 让编译器裁决。
       # 第二列目标 0；第一列是**只许变短的债账**（建门时实测 11 文件 13 处承诺无判定）。
-      - name: every Send promise has a compile-time claim
+      - name: every Send promise states its evidence
         run: |
           python3 scripts/ci/callback_threads.py src > "$RUNNER_TEMP/callback_threads.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/callback_threads.txt "$RUNNER_TEMP/callback_threads.txt"

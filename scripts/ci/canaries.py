@@ -1039,23 +1039,24 @@ def canary_callback_threads():
               "#[cfg(test)]\nmod t {\n    use super::Fixed;\n"
               "    fn assert_send<T: Send>() {}\n"
               "    #[test]\n    fn c() { assert_send::<Fixed>(); }\n}\n")
-        # The two columns judge different things: a `// SAFETY:` line clears `unexplained` but not
-        # `unclaimed`, and an `assert_send` clears `unclaimed` but not `unexplained`.
+        # `promises` is the surface, `unexplained` the judgement: a promise with a SAFETY line reads
+        # 0 there, one without it reads 1, and neither is punished for lacking an `assert_send`.
         write(tmp / "src" / "halfclear.rs",
               "pub struct Said { p: *mut u8 }\n"
               "// SAFETY: named here, but never asked of rustc.\n"
               "unsafe impl Send for Said {}\n")
         out = run_script(dst, ["src"], cwd=tmp)
         text = out.stdout
-        expect("an unverified promise is unclaimed AND unexplained",
+        expect("a promise with no SAFETY line is counted unexplained",
                0 if "src/promise.rs 1 0 1" in text else 1, 0)
-        expect("a SAFETY line does not masquerade as a compile-time claim",
+        expect("a SAFETY line is what clears the column, not the claim",
                0 if "src/halfclear.rs 1 0 0" in text else 1, 0)
         # Two `Rc` tokens in that file (the `use` and the field type), both beside the promise.
         expect("every Rc token beside a promise is counted", 0 if "src/rc.rs 1 2 1" in text else 1, 0)
-        expect("a compile-time claim satisfies the promise", 0 if "claimed.rs" not in text else 1, 0)
+        expect("a promised type is listed even without an assert_send (column retired)",
+               0 if "src/claimed.rs 1 0 0" in text else 1, 0)
         expect("an Rc with no promise is nobody's business", 0 if "rc_only.rs" not in text else 1, 0)
-        expect("a comment mentioning Rc is not a refcount", 0 if "prose.rs" not in text else 1, 0)
+        expect("a comment mentioning Rc is not a refcount", 0 if "src/prose.rs 1 0 0" in text else 1, 0)
         expect("the scan marker is emitted",
                0 if re.search(r"^#scanned \d+$", text, re.M) else 1, 0)
         measure = write(tmp / "cur.txt", text)

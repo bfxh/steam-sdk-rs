@@ -1,11 +1,7 @@
-# Columns: <path> <promises-without-assert_send> <Rc-tokens-next-to-a-promise>
-#         <promises-without-a-SAFETY-line>. Columns 2 and 3 ship at ZERO tolerance (the ruler
-#         exits 1 on either); column 1 is a DEBT REGISTER that may only shrink.
 # 2026-10-20 #44-B: every one of the 15 promises in `src/` now carries a `// SAFETY:` line,
 # each naming what was measured about it -- 7 are required by a use site (deleting the impl
 # makes `cargo check --all-targets` fail with a named `cannot be sent` complaint), 8 are not
 # required by anything in this tree and say so. Column 1 stays 14 because `assert_send` cannot
-# audit a type whose Send the impl itself grants; that is recorded in the ruler's docstring.
 src/html_surface/browser.rs 1 0 0
 src/http.rs 1 0 0
 src/networking_messages.rs 3 0 0
@@ -17,3 +13,30 @@ src/networking_sockets_callback.rs 1 0 0
 src/networking_utils/mod.rs 1 0 0
 src/server/mod.rs 1 0 0
 src/ugc/update.rs 1 0 0
+# Columns: <path> <promises> <hazard-tokens> <promises-without-a-SAFETY-line>.
+# Columns 2 and 3 ship at ZERO tolerance (the ruler exits 1 on either); column 1 is the
+# surface a reviewer reads, so the ledger records it and any change re-records here.
+# 2026-10-20: the earlier `unclaimed` column was RETIRED, not paid. It required
+# `assert_send::<T>` beside each promise, but the types it flagged are exactly those whose
+# `Send` the `unsafe impl` itself grants -- measured: all 14 names were promises in their own
+# file -- so the assertion it demanded is proven by the thing it audits and can never fail.
+# Keeping it would have invited paying debt with a test that cannot go red.
+# 2026-10-20 hazard class widened from `Rc` alone to the non-atomic-refcount and unlocked-mutation
+# family (measured 0 across all 12 promise files, so it ships at zero tolerance). `Mutex` and
+# `RwLock` are excluded on purpose: they are what makes sharing sound, not the hazard. An earlier
+# draft searched for `Mutex` with a word-boundary pattern that matched nothing at all -- a trailing
+# boundary cannot hold before a closing angle bracket -- so a silent zero nearly read as a clean
+# bill. Re-measured with direct substring counts before this column was trusted.
+src/html_surface/browser.rs 1 0 0
+src/http.rs 1 0 0
+src/matchmaking_servers.rs 1 0 0
+src/networking_messages.rs 3 0 0
+src/networking_sockets/connection.rs 1 0 0
+src/networking_sockets/fake_udp.rs 1 0 0
+src/networking_sockets/mod.rs 1 0 0
+src/networking_sockets/poll_group.rs 2 0 0
+src/networking_sockets_callback.rs 1 0 0
+src/networking_utils/mod.rs 1 0 0
+src/server/mod.rs 1 0 0
+src/ugc/update.rs 1 0 0
+#scanned 140

@@ -25,8 +25,18 @@ still declares version `0.13.1`.
   needs would be the narrower public surface, but it is a breaking change for a downstream caller who
   moves the handle, so the promises stay and the reason is now written down where a reviewer can
   disagree with it.
-  Column 1 (`unclaimed`) is unchanged and still reads 14: `assert_send::<T>` cannot audit a type whose
-  `Send` the impl itself grants, and the ledger does not pretend otherwise.
+  **The `unclaimed` column has since been retired, not paid** (same day, `scripts/ci/callback_threads.py`).
+  It demanded an `assert_send::<T>` beside each promise, but measured, the 14 types it flagged are
+  exactly the ones whose `Send` the `unsafe impl` in their own file grants -- so the assertion it
+  asked for is proven by the thing it audits and can never go red. Leaving a column that can only
+  be satisfied by fake evidence is how a gate teaches people to forge its green. The ledger is now
+  `<promises> <hazards> <unexplained>`: the hazard class widened from `Rc` to
+  `Rc|RefCell|Cell|UnsafeCell` (measured 0 across all 12 promise files, so it ships at zero), while
+  `Mutex`/`RwLock` stay out because they are what makes sharing sound. One near-miss is recorded in
+  the ledger header: an early pattern for `Mutex<...>` matched nothing at all -- a trailing word
+  boundary cannot hold before a closing angle bracket -- so a silent zero nearly passed as a clean
+  bill; it was checked with a direct substring count before the column was trusted. Canary 128 ->
+  **127** (the assertions that judged the retired column were deleted rather than rewritten to pass).
 
 - **`ServerListRequest` was `Send` while the object it pointed at was not** (`src/matchmaking_servers.rs`,
   task #21-B). The four `*Callbacks` types stored their closures in `Rc`, and that count was touched by
