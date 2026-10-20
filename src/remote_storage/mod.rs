@@ -3,11 +3,13 @@ use super::*;
 use serial_test::serial;
 
 mod api;
+mod cached_ugc;
 mod changes;
 mod files;
 mod platforms;
 mod visibility;
 
+pub use cached_ugc::*;
 pub use changes::*;
 pub use files::*;
 pub use platforms::*;

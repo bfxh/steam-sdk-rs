@@ -12,6 +12,34 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+- **The cached-UGC face (`src/remote_storage/cached_ugc.rs`)**: `cached_ugc_count`,
+  `cached_ugc_handle`, `ugc_download_progress` and `ugc_read`, over
+  "Functions to iterate through UGC that has finished downloading but has not yet been read via
+  UGCRead()" (`isteamremotestorage.h:260-262`) and the read Steam introduces as "After download,
+  gets the content of the file." (`:252`). `ISteamRemoteStorage` moves 26 -> 30 of 59 and the project
+  total to 698 of 913.
+  Five widths and one division are decided by pure functions: `cached_count` and `signed_bytes`
+  clamp a signed `int32` instead of wrapping it into a loop bound or a byte count of four billion,
+  `cached_index` refuses an entry Steam's `iCachedContent` cannot hold, `bytes_read` keeps "delivered
+  nothing" (`Some(0)`) distinct from "a number that is not a count" (`None`), and
+  `progress_fraction` refuses to divide when Steam never said how much to expect -- which is exactly
+  what the header warns about: "so be careful to check for that before dividing to get a percentage"
+  (`:245-246`). The buffer for a read is always the caller's, because the header makes chunking
+  mandatory for large files ("For especially large files (anything over 100MB) it is a requirement
+  that the file is read in chunks", `:257`) and a wrapper that sized its own buffer from a number
+  Steam returned would be sizing memory from the thing it is supposed to be guarding.
+  🔴 **A wrong claim this unit caught before shipping**: the first draft said the vendored SDK
+  declares no invalid `UGCHandle_t` (grepped for `INVALID_UGCFILE`, which belongs to other SDK
+  versions) and therefore forwarded whatever number arrived. The same page says otherwise --
+  `const UGCHandle_t k_UGCHandleInvalid = 0xffffffffffffffffull;` (`:45`) -- and the generated layer
+  carries it (`steamworks-sys/src/windows_bindings.rs:6587`). So `handle_or_none` now translates
+  Steam's marker, and the trap is the opposite of the usual one: treating `0` as the sentinel, the
+  neighbouring `k_PublishedFileIdInvalid`'s shape (`:44`), would discard real handles while keeping
+  the fake one. A premise pin asserts the marker is `u64::MAX`, and the mutant that swaps the
+  comparison to `0` is killed by that test.
+  7 tests, 7 mutations, each killed by its own assertion message. Registered unverified: which
+  content is cached, how far it has got, and what a past-the-end index answers.
+
 - **Overlay protocol registration (`src/friends/overlay.rs`)**: `register_protocol_in_overlay_browser`,
   the last synchronous entry `ISteamFriends` had left unwrapped -- 75 -> 76 of 78, project total 694 of
   913. Steam's line above the declaration is "Call this before calling ActivateGameOverlayToWebPage()

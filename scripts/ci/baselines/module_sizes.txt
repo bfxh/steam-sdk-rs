@@ -38,6 +38,7 @@ src/remote_storage/files.rs 331
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 330
 src/matchmaking/filters.rs 319
+src/remote_storage/cached_ugc.rs 315
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
 src/friends/profile_items.rs 302
@@ -49,8 +50,8 @@ src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking_utils/fake_ip.rs 261
 src/networking.rs 257
+src/remote_storage/mod.rs 249
 src/html_surface/callbacks.rs 247
-src/remote_storage/mod.rs 247
 src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244
 src/matchmaking/queries.rs 229

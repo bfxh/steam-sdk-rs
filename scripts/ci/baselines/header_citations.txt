@@ -120,6 +120,7 @@
 # 2026-10-20 persona-history face (src/friends/history.rs): 49 files / 376 spans, debt 0-0-0;
 # two blocks first landed in ~undeclared and were anchored with the header's own sentence.
 # 2026-10-20 overlay protocol face (src/friends/overlay.rs): 50 files / 379 spans, debt 0-0-0.
+# 2026-10-20 cached-UGC face (src/remote_storage/cached_ugc.rs): 51 files / 408 spans, debt 0-0-0.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -219,6 +220,9 @@ src/networking_utils/ping.rs~undeclared 0
 src/remote_storage/api.rs 0
 src/remote_storage/api.rs~unjudged 0
 src/remote_storage/api.rs~undeclared 0
+src/remote_storage/cached_ugc.rs 0
+src/remote_storage/cached_ugc.rs~unjudged 0
+src/remote_storage/cached_ugc.rs~undeclared 0
 src/remote_storage/files.rs 0
 src/remote_storage/files.rs~unjudged 0
 src/remote_storage/files.rs~undeclared 0

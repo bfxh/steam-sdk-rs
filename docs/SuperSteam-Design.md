@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   30 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 694 / 913**（33 个接口；同日 ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 698 / 913**（33 个接口；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1206,6 +1206,7 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   再加 `cancel_server_query`。风险顺带记一句：`HServerQuery` 是 `typedef int`（`:377`），而
   `HSERVERQUERY_INVALID = 0xffffffff`（`:378`）——按 `i32` 读它就是 -1，裸句柄最容易在这种地方踩空。
 - **门禁自己的一处盲区，2026-10-20 已修**：`scripts/ci/type_surface.py` 数的是 `pub fn <标识符>`，看不见
+
   `gen_server_list_fn!` 生成的方法 ⇒ 台账里 `MatchmakingServers` 记 **4** 个内在方法，真实 **9** 个
   （写出来的 4 只：lan/ping/player_details/server_rules；宏生成 5 只）。双向判红当时仍然成立，
   但它守的是 9 只里的 4 只。修法：**在调用点计数**——先扫出所有"体内写了 `pub fn $`"的 `macro_rules!`
@@ -1214,6 +1215,24 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   4 条 canary 钉住它（含 `generates_nothing!` 这种"调用了但不生成方法"的负例），并且**反证过**：
   把尺子改回旧写法，canary 立刻红在 `exit=1 want=4` 上——正是当年那个盲区值。
   台账现记 `MatchmakingServers 9`，83 型 / **912** 只方法。
+
+**2026-10-20 补 `ISteamRemoteStorage` 缓存 UGC 面 26→30（4 只，`src/remote_storage/cached_ugc.rs`）**：
+`isteamremotestorage.h:260-262` 的迭代对 + `:247` 的进度 + `:252-258` 的分块读。
+五个宽度与一次除法都做成纯函数（`cached_count`/`signed_bytes`/`cached_index`/`bytes_read`/
+`progress_fraction`），其中除法那条是**头文件自己警告的**："so be careful to check for that before
+dividing to get a percentage"（`:245-246`）——`expected==0` 时 `fraction()` 回 `None`，不回 `0.0`，
+因为 0.0 与"刚开始还没送东西"这两种状态必须能分开。`ugc_read` 的缓冲区**永远由调用方给**：
+头文件对大文件明文要求分块（"For especially large files (anything over 100MB) it is a requirement
+that the file is read in chunks"，`:257`），而拿 Steam 返回的数去给自己 alloc 缓冲，
+正是本仓这一年一直在消掉的那类"用被守护的东西来定守护规模"。
+🔴 **本轮最重要的一个是自纠**：初稿断言"随仓 SDK 没声明无效 `UGCHandle_t`"，因为我按
+`INVALID_UGCFILE` 去 grep（那是别的 SDK 版本的名字）。同一页其实写了
+`const UGCHandle_t k_UGCHandleInvalid = 0xffffffffffffffffull;`（`:45`），而且生成层带着它
+（`steamworks-sys/src/windows_bindings.rs:6587`）。⇒ 现由 `handle_or_none` 译 Steam 自己的标记。
+**坑的方向和平时相反**：把 `0` 当哨兵（照旁边 `k_PublishedFileIdInvalid = 0`，`:44` 的形状抄）会
+**丢掉真句柄、留下假的那个**；测试里既钉了"标记是 `u64::MAX`"这个前提，也把"比较式换成 `== 0`"
+这只变异打红。7 测试 / 7 变异各红在自己的断言上。
+登记未证：哪些内容真在缓存里、进度到多少、越界下标 Steam 答什么（本机无客户端）。
 
 **2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
 声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，

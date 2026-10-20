@@ -1,4 +1,4 @@
-# counts: {'steamworks': 154, 'steamworks-sys': 74}
+# counts: {'steamworks': 155, 'steamworks-sys': 74}
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -96,6 +96,7 @@ steamworks/src/parental.rs
 steamworks/src/parties.rs
 steamworks/src/remote_play.rs
 steamworks/src/remote_storage/api.rs
+steamworks/src/remote_storage/cached_ugc.rs
 steamworks/src/remote_storage/changes.rs
 steamworks/src/remote_storage/files.rs
 steamworks/src/remote_storage/mod.rs
