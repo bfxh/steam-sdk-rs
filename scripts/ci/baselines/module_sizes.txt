@@ -20,6 +20,7 @@ src/ugc/results.rs 473
 src/ugc/query.rs 464
 src/user_stats/leaderboard.rs 459
 src/networking_types/state.rs 458
+src/remote_storage/files.rs 438
 src/user/voice.rs 436
 src/networking_types/addresses.rs 417
 src/ugc/update.rs 412
@@ -34,7 +35,6 @@ src/inventory/result.rs 346
 src/networking_types/message.rs 342
 src/networking_types/identity.rs 337
 src/user_stats/stats.rs 333
-src/remote_storage/files.rs 331
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 330
 src/matchmaking/filters.rs 319

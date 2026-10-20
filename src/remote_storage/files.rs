@@ -4,6 +4,41 @@
 
 use super::*;
 use crate::utils::written_bytes;
+use std::cmp::min;
+use std::os::raw::c_int;
+
+/// How many bytes one chunk call may name.
+///
+/// Steam's own heading over these is "file operations that cause network IO"
+/// (`isteamremotestorage.h:214`), and the chunk call takes `int32 cubData` (`:216`), while
+/// `std::io::Write` is allowed to write fewer bytes than it was asked for. So the honest answer to a
+/// buffer wider than Steam's `int32` is a short write that the caller repeats -- not the silent
+/// `as i32` that used to turn such a length into a negative one at Steam's end.
+fn chunk_fit(len: usize) -> usize {
+    min(len, c_int::MAX as usize)
+}
+
+/// The size Steam reports for a cloud file, under its heading "file information"
+/// (`isteamremotestorage.h:220`), from an `int32` return (`:223`).
+///
+/// Measured: the vendored SDK declares no sentinel for that value -- no `INVALID_FILE_SIZE` anywhere in
+/// `steamworks-sys/lib/steam/public/steam` -- so a negative is not a number this crate may read as a
+/// size, and `as usize` on an `int32` sign-extends: a missing file used to hand a reader a size near
+/// 1.8e18, one it would never walk to the end. `FileExists` (`:221`) is the predicate that answers
+/// whether the file is there at all; zero here records only that no size came back.
+fn reader_size(raw: c_int) -> usize {
+    usize::try_from(raw).unwrap_or(0)
+}
+
+/// Whether dropping a writer should still close the Steam stream.
+///
+/// Both sit under Steam's heading "file operations that cause network IO"
+/// (`isteamremotestorage.h:214`) and are two separate calls -- `FileWriteStreamClose` at `:217`,
+/// `FileWriteStreamCancel` at `:218`. Doing both to one handle asks Steam about a stream it has
+/// already been told to throw away; doing neither leaks it.
+fn closes_on_drop(cancelled: bool) -> bool {
+    !cancelled
+}
 
 /// Ends the Steam write batch on drop.
 pub struct FileWriteBatch {
@@ -84,7 +119,11 @@ impl SteamFile {
         unsafe {
             let handle =
                 sys::SteamAPI_ISteamRemoteStorage_FileWriteStreamOpen(self.rs, self.name.as_ptr());
-            SteamFileWriter { file: self, handle }
+            SteamFileWriter {
+                file: self,
+                handle,
+                cancelled: false,
+            }
         }
     }
 
@@ -92,8 +131,10 @@ impl SteamFile {
         unsafe {
             SteamFileReader {
                 offset: 0,
-                size: sys::SteamAPI_ISteamRemoteStorage_GetFileSize(self.rs, self.name.as_ptr())
-                    as usize,
+                size: reader_size(sys::SteamAPI_ISteamRemoteStorage_GetFileSize(
+                    self.rs,
+                    self.name.as_ptr(),
+                )),
                 file: self,
             }
         }
@@ -123,18 +164,24 @@ impl SteamFile {
 pub struct SteamFileWriter {
     file: SteamFile,
     handle: sys::UGCFileWriteStreamHandle_t,
+    // Set only when Steam itself says the cancel went through; see [`closes_on_drop`].
+    cancelled: bool,
 }
 
 impl std::io::Write for SteamFileWriter {
+    /// Writes up to `c_int::MAX` bytes of `buf` and says how many, so a caller that handed over a
+    /// buffer Steam cannot size in one chunk simply writes it again; `chunk_fit` is the rule.
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let wanted = chunk_fit(buf.len());
+        let named = i32::try_from(wanted).unwrap_or(c_int::MAX);
         unsafe {
             if sys::SteamAPI_ISteamRemoteStorage_FileWriteStreamWriteChunk(
                 self.file.rs,
                 self.handle,
                 buf.as_ptr().cast(),
-                buf.len() as _,
+                named,
             ) {
-                Ok(buf.len())
+                Ok(wanted)
             } else {
                 Err(std::io::ErrorKind::Other.into())
             }
@@ -146,8 +193,29 @@ impl std::io::Write for SteamFileWriter {
     }
 }
 
+impl SteamFileWriter {
+    /// Throws the stream away without committing what was buffered.
+    ///
+    /// Steam keeps this and closing apart, both under "file operations that cause network IO"
+    /// (`isteamremotestorage.h:214`): `FileWriteStreamClose` at `:217`, then
+    /// `FileWriteStreamCancel` at `:218`. What differs is what reaches the cloud: a close
+    /// commits the bytes, a cancel discards them. `true` is Steam having accepted the discard, and
+    /// only then does this wrapper stop the drop from also closing; a `false` means Steam still holds
+    /// a live stream, and leaving it unclosed is the leak.
+    pub fn cancel(&mut self) -> bool {
+        let ok = unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_FileWriteStreamCancel(self.file.rs, self.handle)
+        };
+        self.cancelled = ok;
+        ok
+    }
+}
+
 impl Drop for SteamFileWriter {
     fn drop(&mut self) {
+        if !closes_on_drop(self.cancelled) {
+            return;
+        }
         unsafe {
             sys::SteamAPI_ISteamRemoteStorage_FileWriteStreamClose(self.file.rs, self.handle);
         }
@@ -170,7 +238,6 @@ impl std::io::Read for SteamFileReader {
     /// `written_bytes` before either the copy or the offset uses it. The bound is the number of bytes
     /// this side asked for, which is all the buffer can hold.
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        use std::cmp::min;
         if buf.is_empty() || self.offset >= self.size {
             return Ok(0);
         }
@@ -327,5 +394,45 @@ mod files_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod stream_tests {
+    //! The three numbers the stream writer and reader hand to or take from Steam, and the one
+    //! lifecycle decision that drops a call. The FFI itself needs a client: whether Steam accepts a
+    //! cancel, and what it does to a stream afterwards, is registered as unverified.
+
+    use super::{chunk_fit, closes_on_drop, reader_size};
+    use std::os::raw::c_int;
+
+    /// A buffer Steam cannot size in one `int32` is written in part, which `std::io::Write` allows,
+    /// rather than through a cast that would name a negative length.
+    #[test]
+    fn a_chunk_steam_cannot_size_is_cut_to_what_it_can() {
+        assert_eq!(chunk_fit(0), 0);
+        assert_eq!(chunk_fit(4096), 4096);
+        assert_eq!(chunk_fit(c_int::MAX as usize), c_int::MAX as usize);
+        assert_eq!(chunk_fit(c_int::MAX as usize + 1), c_int::MAX as usize);
+        assert_ne!(chunk_fit(usize::MAX), usize::MAX);
+    }
+
+    /// Steam's `int32` size arrives without a declared sentinel, so a negative reads as "no size",
+    /// never as the 1.8e18 that a bare `as usize` would have produced.
+    #[test]
+    fn a_negative_size_is_zero_and_not_an_enormous_file() {
+        assert_eq!(reader_size(0), 0);
+        assert_eq!(reader_size(1024), 1024);
+        assert_eq!(reader_size(-1), 0);
+        assert_eq!(reader_size(c_int::MIN), 0);
+        assert_ne!(reader_size(-1), usize::MAX);
+    }
+
+    /// Closing after a successful cancel would ask Steam about a stream it already threw away;
+    /// skipping the close after a refused one would leak the stream. The direction matters.
+    #[test]
+    fn only_a_cancelled_stream_skips_its_close() {
+        assert!(!closes_on_drop(true));
+        assert!(closes_on_drop(false));
     }
 }

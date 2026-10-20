@@ -1,4 +1,4 @@
-# 33 interfaces, 913 declared, 698 called
+# 33 interfaces, 913 declared, 699 called
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -57,7 +57,7 @@ ISteamNetworkingUtils.called 16
 ISteamParentalSettings.called 6
 ISteamParties.called 12
 ISteamRemotePlay.called 7
-ISteamRemoteStorage.called 30
+ISteamRemoteStorage.called 31
 ISteamScreenshots.called 9
 ISteamTimeline.called 18
 ISteamUGC.called 97

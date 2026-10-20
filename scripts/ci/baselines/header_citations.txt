@@ -124,11 +124,17 @@
 # 2026-10-20 #21-B callback ownership (src/matchmaking_servers.rs): Rc -> Arc<dyn Fn + Send + Sync>;
 # the file's Send promise now carries a compile-time claim, and the span count moves with its doc.
 # 2026-10-20 #44-B: SAFETY lines added above all 15 Send promises (files grew by those lines).
+# 2026-10-20 stream cancel + two silent casts fixed in src/remote_storage/files.rs: 51 files /
+# 420 spans, debt 0-0-0. The file grew a cancel(), a chunk_fit, a reader_size and a test
+# module; three doc sentences were re-anchored onto Steam's own header wording instead of my
+# paraphrase. (The previous version of this note lost those names to shell command
+# substitution -- backticks inside a double-quoted argument -- which is why they are written
+# out here without them.)
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
 src/matchmaking_servers.rs 0
-src/matchmaking_servers.rs~unjudged 1
+src/matchmaking_servers.rs~unjudged 0
 src/matchmaking_servers.rs~undeclared 0
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0

@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   30 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   31 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 698 / 913**（33 个接口；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 699 / 913**（33 个接口；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1273,10 +1273,24 @@ Steam 自己那条警告说的就是这个窗口："crashing when callbacks occu
 （它们是让共享变合法的手段，不是危险）。一处险些被骗过去记在台账头里：早期为 `Mutex<...>` 写的
 词边界模式**一条都没匹配到**（结尾的 `\b` 在 `>` 前不成立），静默的 0 差点被当成清白，改用直接
 子串计数复核后才信这一列。canary **128→127**——判退役那一列的断言是删掉的，不是改写成能过的。
-canary 加两条独立性判定（总 **128**）：`// SAFETY:` 清第三列不清第一列（`halfclear.rs 1 0 0`）、
-`assert_send` 清第一列不清第三列；正向控制要 6 个夹具全干净才不出行。
-🔴 **观察层又红给自己看**：生成注释的脚本把共享段首行的 `// ` 前缀漏了 ⇒ 12 个文件里出现**裸文本行**
-（编译不过），是 `cargo check` 先抓住的；补完前缀才看见第三列真的归零。
+改判后的夹具：`halfclear.rs 1 0 0`（有说明、无 `assert_send` ⇒ 两列各归位），正向控制要 6 个夹具全干净才不出行。
+🔴 **观察层又红给自己看**：生成注释的脚本把共享段首行的 `// ` 前缀漏了 ⇒ 12 个文件里出现
+**裸文本行**（编译不过），是 `cargo check` 先抓住的；补完前缀才看见说明列真的归零。
+
+**2026-10-20 再补云文件流的两处静默截断 + 缺的 cancel（`src/remote_storage/files.rs`，30→31/59）**。
+① `read()` 原先 `GetFileSize(...) as usize`：头文件给的是**有符号** `int32`（`isteamremotestorage.h:223`），
+而随仓 SDK **没声明任何哨兵**（实测整个 public 目录里没有 `INVALID_FILE_SIZE`）⇒ 负号被符号扩展成
+1.8e18 的"文件大小"，reader 永远走不到自己的结尾。`reader_size` 夹到 0，语义只写"没报回尺寸"，
+"文件在不在"仍由 `FileExists`（`:221`）回答。② `write()` 把 `buf.len() as _` 交给 Steam 的
+`int32 cubData`（`:216`）⇒ `chunk_fit` 改成在 `c_int::MAX` 处**写短一点并回报写了多少**
+（`std::io::Write` 明许少写，调用方循环即可），而不是在对端报出一个负长度。
+③ `FileWriteStreamCancel` 一直没封：以前半途而废的唯一出路是让 writer 落地，而 Drop 是 **close=提交**。
+现在 `cancel()` 回 Steam 的 bool，且**只有成功取消**才让 Drop 不再 close（`closes_on_drop` 是纯函数那半）；
+取消被拒时仍 close——留着一条活流不关才是漏。3 测试 / 4 变异各红在自己的断言上；
+登记未证：Steam 是否接受 cancel、以及 cancel 之后再 write 的行为。
+🔴 引用尺这一轮又抓到我两次：注释里写 extern 加 C 的两个直引号会让尺子按引号成对取短语，
+于是把我自己的散文配成一句"Steam 的原话"（unjudged）；另有三处我把自己的话加了引号。
+四条全部改成引头文件原句（"file operations that cause network IO"、"file information"）。
 
 **2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
 声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，

@@ -394,7 +394,7 @@ pub struct ServerListRequest {
 /// A request is reached from two threads by Steam's own design, and the ownership graph it sits in
 /// is therefore refcounted atomically -- `Arc<dyn Fn(..) + Send>`, never `Rc`.
 ///
-/// The thread that pumps callbacks runs the generated `extern "C"` trampolines, which clone a
+/// The thread that pumps callbacks runs the generated C-ABI trampolines, which clone a
 /// callback to survive the callee dropping it (`Arc::clone` in the macro above); the thread that
 /// owns the `ServerListRequest` releases it, and releasing is what drops the closure that clone was
 /// taken from. With a non-atomic counter those two are unsynchronised mutation of one value -- the
@@ -403,7 +403,7 @@ pub struct ServerListRequest {
 /// "crashing when callbacks occur" (`isteammatchmaking.h:514-515`).
 // SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
 // this line, which makes `cargo check --all-targets` fail with
-// `*mut ISteamMatchmakingServers and the callback object it points at` cannot be sent between threads safely.
+// rustc reports it as not sendable, naming *mut ISteamMatchmakingServers and the callback object it points at.
 // The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
 // it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
 // see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
@@ -571,8 +571,8 @@ pub struct ServerQuery {
     _inner: Arc<Inner>,
 }
 
-/// Steam's marker for "there is no query" (`HSERVERQUERY_INVALID`, which the generated layer types as
-/// `c_int`), refused at construction instead of handed out as something to cancel: `CancelServerQuery`
+/// Steam's own no-query marker (`HSERVERQUERY_INVALID`, which the generated layer types as `c_int`),
+/// refused at construction instead of handed out as something to cancel: `CancelServerQuery`
 /// aimed at that id would be aimed at whatever query Steam has since given the number to.
 fn query_id(raw: sys::HServerQuery) -> SteamResult<sys::HServerQuery> {
     if raw == sys::HSERVERQUERY_INVALID {

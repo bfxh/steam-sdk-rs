@@ -76,6 +76,33 @@ still declares version `0.13.1`.
 
 ### Added — interface wrappers that upstream never bound
 
+### Fixed — two silent casts in the cloud-file stream, and the cancel that was missing
+
+- **`SteamFile::read()` sized the reader from `GetFileSize(...) as usize` (`src/remote_storage/files.rs`).**
+  Steam returns a signed `int32` there (`isteamremotestorage.h:223`), and the vendored SDK declares no
+  sentinel for it (measured: no `INVALID_FILE_SIZE` anywhere under the public headers), so a negative
+  sign-extended into a size near 1.8e18 -- a reader that would never reach its own end. `reader_size`
+  clamps to zero, which means only "no size came back"; `FileExists` (`:221`) stays the predicate for
+  whether the file is there.
+- **`SteamFileWriter::write` passed `buf.len() as _` into the call Steam sizes with `int32 cubData`**
+  (`:216`). `chunk_fit` now cuts the chunk at `c_int::MAX` and returns that count, which
+  `std::io::Write` explicitly allows a caller to loop over -- instead of naming a negative length at
+  Steam's end.
+- **`FileWriteStreamCancel` was never wrapped**, so the only way out of a half-written stream was
+  letting the writer drop, which closes (commits) it. `SteamFileWriter::cancel()` answers Steam's
+  `bool`, and -- the part that is a decision, not a call -- a *successful* cancel stops `Drop` from
+  also calling `FileWriteStreamClose`: Steam keeps the two apart (`:217-218`), and asking about a
+  stream it already discarded is not a cleanup. A refused cancel still closes on drop, because leaving
+  a live stream unclosed is the leak. `closes_on_drop` is the pure half and is judged offline; whether
+  Steam accepts a cancel needs a client and is registered unverified, along with `write()` after a
+  cancel. 3 tests, 4 mutations (uncut length, sign-extending size, cancel flag ignored, close
+  decision inverted), each killed by its own assertion message. `ISteamRemoteStorage` 30 -> 31 of 59,
+  repo total 699 of 913.
+- Two citation traps paid off on the way: writing `extern "C"` inside a doc comment made the ruler pair
+  an unrelated quote and report my own prose as Steam's words, and three of my sentences were back in
+  quotation marks. All four are now quoted from the header's own wording ("file operations that cause
+  network IO", "file information"), which is the only way that column stays at zero.
+
 - **The cached-UGC face (`src/remote_storage/cached_ugc.rs`)**: `cached_ugc_count`,
   `cached_ugc_handle`, `ugc_download_progress` and `ugc_read`, over
   "Functions to iterate through UGC that has finished downloading but has not yet been read via
