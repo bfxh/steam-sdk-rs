@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   44 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   51 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 712 / 913**（33 个接口；2026-10-21 再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 719 / 913**（33 个接口；2026-10-21 第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1410,6 +1410,30 @@ ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFol
   `CString::new(v).ok()` 把含 nul 的变更说明**静默变成 null**，等于"发一份没有变更说明的更新并报告成功"，
   正是本仓在 overlay 协议注册与 `ugc_download_to_location` 里拒绝的那类失败。修它要动公开签名（改返
   `Result`），属破坏性，登记待用户点头，不偷偷改。
+
+**2026-10-21 第三片：Workshop 里"答复只点名物品"的 7 只（`ISteamRemoteStorage` 44→51，仓总 712→719）**
+
+- 这一组的共同形状是 `EResult` + 一个物品 id（`isteamremotestorage.h:378-379`、`:402-403`、`:434-435`、
+  `:562-563`），`SetUserPublishedFileAction` 多带一项"the action that was attempted"（`:592`）。
+  七只各用自己的结果类型，所以 FFI 读取按结构体各写一份（`item_and_status*` 四个 `fn` 指针），
+  **没有**合并成一个"它们都一样"的通用类型——那等于替 Steam 担保四个结构体今后一直同步。
+- 三条判定各是纯函数，4 变异 4 红在各自断言消息（`D:\tmp\a7\mut49.py`）：
+  `action_from_code` 认 Steam 的两个具名码（`"k_EWorkshopFileActionPlayed = 0,"` `:122`、
+  `"k_EWorkshopFileActionCompleted = 1,"` `:123`），第三个码留作 `Unrecognized(i32)`；
+  `action_to_sys` 在**发出去之前**拒 `Unrecognized`——生成层给这个枚举没有越界名（实测变体恰为 0、1），
+  所以没有合法值可造， substitute 成 `Played` 就是记录一件调用方没要求的事；
+  `vote_count` 把三个 `int32` 计数夹到非负（`:517-519` **整段没有注释**，"负数不是计数"是本仓的判定，
+  不是 Steam 的话）；`vote_details` 把 `m_unPublishedFileId`（`:516`）认回物品，答案里那个 id 是 Steam 的，
+  不是本仓还握着的那个入参。
+- 🔴 **两条如实的不好听**：① `GetPublishedItemVoteDetails`（`:294`）与 `UserPublishedItemVoteDetails`
+  （`:298`）被 `:293` 与 `:297` **标成同一个结果结构体**，而该结构体（`:512-520`）里没有"我这一票"的字段
+  ⇒ 后一只的名字比它能答的内容大，方法doc 明写这一点，不假装能读出用户的投票方向。
+  ② 每只调用配哪个结果结构体，是**照头文件的 `STEAM_CALL_RESULT` 注解抄的**，静态尺判不出来（编译期
+  `T` 由读函数指针定住，运行时才与 Steam 的答复对上）⇒ 记在未证栏，不编假测试。
+- 本块仍余 8 只未包：publish 2（`PublishWorkshopFile` `:266`、`PublishVideo` `:302`——注意它们的注解
+  是 `RemoteStoragePublishFileProgress_t`（`:265`、`:301`，字段只有 `double m_dPercentFile;` + `bool m_bPreview;`
+  `:613-614`），而头文件另有 `RemoteStoragePublishFileResult_t`（`:360`）**却没被任何调用注解**，这个矛盾归下一片判）、
+  enumerate 5、`GetPublishedFileDetails` 1（`:280`）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

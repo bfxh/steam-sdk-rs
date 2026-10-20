@@ -9,6 +9,7 @@ mod download;
 mod files;
 mod platforms;
 mod visibility;
+mod workshop_answers;
 mod workshop_update;
 
 pub use cached_ugc::*;
@@ -17,6 +18,7 @@ pub use download::*;
 pub use files::*;
 pub use platforms::*;
 pub use visibility::*;
+pub use workshop_answers::*;
 pub use workshop_update::*;
 
 /// Access to the steam remote storage interface

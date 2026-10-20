@@ -10,6 +10,37 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — the seven Workshop answers that name the item back
+
+- **`ISteamRemoteStorage` 44 -> 51 of 59** (`src/remote_storage/workshop_answers.rs`, new): delete,
+  subscribe and unsubscribe (`isteamremotestorage.h:282`, `:287`, `:291`), the two vote-detail reads
+  (`:294`, `:298`), the user's own vote (`:296`) and `SetUserPublishedFileAction` (`:304`). Each
+  answers through the call-result map with "EResult m_eResult;" plus the item Steam acted on
+  (`:378-379`, `:402-403`, `:434-435`, `:562-563`), and the action call adds "the action that was
+  attempted" (`:592`) -- the echo of what got recorded, not a copy of the argument.
+- **The action table is read and written with two refusals.** Steam names exactly two codes
+  ("k_EWorkshopFileActionPlayed = 0," `:122`, "k_EWorkshopFileActionCompleted = 1," `:123`) and the
+  generated enum has no out-of-range member (measured: variants are 0 and 1), so `action_from_code`
+  keeps any third code as `WorkshopFileAction::Unrecognized(i32)` and `action_to_sys` refuses to send
+  it -- substituting `Played` would record something the caller never asked for. Three vote counters
+  arrive as bare `int32` with no comment at all (`:517-519`), so `vote_count` clamping a negative to
+  zero is written as this crate's judgement, not as something Steam promised.
+- **Two honest unwelcome readings, recorded instead of papered over.** `GetPublishedItemVoteDetails`
+  (`:294`) and `GetUserPublishedItemVoteDetails` (`:298`) are annotated with the same struct (`:293`,
+  `:297`), and that struct (`:512-520`) has no field for the caller's own vote -- so the second
+  method's name is larger than its answer, and its doc says so. And which struct each call answers
+  with is taken from the header's own `STEAM_CALL_RESULT` annotation: no static ruler can judge that
+  pairing (the type is pinned by the reader function, the match only happens at runtime), so it sits
+  in the unverified column rather than in a test no input can reach.
+- **What is left in that block, and why it is not here**: two publish calls, five enumerators and
+  `GetPublishedFileDetails`. The publish pair is annotated with
+  `RemoteStoragePublishFileProgress_t` (`:265`, `:301` -- a progress payload of
+  `double m_dPercentFile;` and `bool m_bPreview;`, `:613-614`) while the header also declares
+  `RemoteStoragePublishFileResult_t` (`:360`) that no call annotation names. That contradiction needs
+  its own decision, so it is registered rather than guessed at here.
+- Repo coverage: **712 -> 719 of 913**; tests 323 -> 327; 4 mutations red on their own assertion
+  messages (`D:\tmp\a7\mut49.py`); citation ruler 54 files / 529 spans / debt **0-0-0**.
+
 ### Added — the four call results that make the two cloud faces whole
 
 - **`ISteamRemoteStorage` 40 -> 44 of 59** (`src/remote_storage/download.rs`, new, plus `commit` on
