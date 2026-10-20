@@ -18,7 +18,12 @@ still declares version `0.13.1`.
   dropping it (`Arc::clone` in the macro today), which runs on whatever thread pumps Steam's callbacks,
   while the thread that owns the request is the one that releases it and drops the closure that clone
   was taken from. A non-atomic refcount written from two threads is not a field you can spot in a list;
-  it is only visible by asking rustc whether the thing is `Send` at all. The closures are now
+  it is visible by removing the impl and letting rustc complain: deleting all 15 `unsafe impl Send`
+  in `src/` breaks `cargo check --all-targets` with five distinct `cannot be sent between threads
+  safely` complaints (`*mut ISteamHTTP` among them, measured). Note that `assert_send::<T>` judges a
+  type only when its `Send` is derived -- for a type carrying the impl, the assertion is satisfied by
+  the impl itself and can never fail, which is why the debt below is not paid with assertions. The
+  closures are now
   `Arc<dyn Fn(..) + Send + Sync>` and the file keeps a compile-time claim beside the promise --
   `assert_send::<ServerListRequest>()`, plus one per callback type, in `mod thread_claims`.
   **Breaking for callers**: `PingCallbacks::new` / `PlayerDetailsCallbacks::new` /
@@ -32,7 +37,7 @@ still declares version `0.13.1`.
   `scripts/ci/baselines/callback_threads.txt`, one step in `.github/workflows/ci.yml`). Per file it
   counts `unsafe impl Send for T` with no `*_send::<T>` beside it, and any `Rc` token in a file that
   carries such a promise. The first column ships as a **shrink-only debt register, not as zero** --
-  measured 13 unverified promises across 11 files, and a gate that lied about the tree would be worse
+  measured 14 unverified promises across 11 files (15 promises in total, one of which is the claimed `ServerListRequest`), and a gate that lied about the tree would be worse
   than no gate. The second column ships at zero. Its canary (4 new assertions, chain now 126) pins the
   deliberate exception too: this ruler does not strip test material, because the claim lives in a
   `#[cfg(test)]` module, and stripping it would report the fixed file as broken.

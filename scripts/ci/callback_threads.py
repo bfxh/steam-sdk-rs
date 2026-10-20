@@ -8,9 +8,19 @@ Three shapes are counted per file:
     claim rests on the author having looked at the fields, which is exactly how the shape that this
     gate was written after survived for years: `ServerListRequest` was `Send` while the object it
     points at refcounted its closures with `Rc`, and the refcount was cloned on the thread Steam
-    pumps callbacks on and dropped on the thread that owns the request. A non-atomic counter touched
-    from two threads is not a `Send` hole you can see in the field list; it is one you can only see
-    by asking the compiler whether the thing is `Send` at all;
+    pumps callbacks on and dropped on the thread that owns the request.
+
+    **What this column can and cannot judge, stated plainly.** `assert_send::<T>` has judgement power
+    only for a type whose `Send` is *derived* -- the four callback objects here, where dropping the
+    `+ Send + Sync` from the closure makes rustc refuse with E0277 (measured 2026-10-20). For a type
+    that carries an `unsafe impl Send`, the assertion is satisfied by that very impl and can never
+    fail, so a promise paid this way would be a test that cannot go red. The measurement that does
+    say something about promises is **removal**: deleting all 15 `unsafe impl Send` in `src/` makes
+    `cargo check --all-targets` red with 16 error lines and five distinct complaints
+    (`*mut ISteamHTTP`, `*mut ISteamHTMLSurface`, `*mut ISteamNetworkingMessages`,
+    `*mut ISteamNetworkingSockets`, `*mut steamworks_sys::SteamNetworkingMessage_t`) -- the promises
+    are load-bearing at real boundaries, and `rc_next_to_claim` is the column that guards the hazard
+    class rustc cannot see;
   * **rc_next_to_claim** -- any `Rc` token in a file that carries an `unsafe impl Send`, because a
     non-atomic refcount in a file whose types claim to cross threads is the same defect by its other
     half;

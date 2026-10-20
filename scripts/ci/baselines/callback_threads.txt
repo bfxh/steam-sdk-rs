@@ -3,7 +3,7 @@
 # The second column is 0 by rule: the callback objects this file used to refcount with `Rc` were
 # cloned on the thread Steam pumps callbacks on and dropped on the thread owning the request, so a
 # non-atomic count there is the defect this ledger was written after (2026-10-20, #21-B).
-# The first column is a DEBT REGISTER and may only shrink: 13 promises across 11 files were
+# The first column is a DEBT REGISTER and may only shrink: 14 promises across 11 files were
 # unverified when the gate was written, each one a type whose fields nobody asked rustc about.
 # Adding a promise without a claim, or an `Rc` beside one, changes a row and goes red.
 src/html_surface/browser.rs 1 0
