@@ -1,4 +1,5 @@
 # 33 interfaces, 913 declared, 699 called
+# 2026-10-21 ISteamRemoteStorage.called 31 -> 40: the nine synchronous entries of "publishing UGC" (isteamremotestorage.h:264-273, :292) and GetUGCDetails (:250) are wrapped in src/remote_storage/workshop_update.rs. The other 19 of that block return SteamAPICall_t and stay registered as unwrapped, not missing: each needs its own call result struct -- see docs/SuperSteam-Design.md 6.1d.
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -57,7 +58,7 @@ ISteamNetworkingUtils.called 16
 ISteamParentalSettings.called 6
 ISteamParties.called 12
 ISteamRemotePlay.called 7
-ISteamRemoteStorage.called 31
+ISteamRemoteStorage.called 40
 ISteamScreenshots.called 9
 ISteamTimeline.called 18
 ISteamUGC.called 97

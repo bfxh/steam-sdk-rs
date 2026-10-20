@@ -8,12 +8,14 @@ mod changes;
 mod files;
 mod platforms;
 mod visibility;
+mod workshop_update;
 
 pub use cached_ugc::*;
 pub use changes::*;
 pub use files::*;
 pub use platforms::*;
 pub use visibility::*;
+pub use workshop_update::*;
 
 /// Access to the steam remote storage interface
 pub struct RemoteStorage {

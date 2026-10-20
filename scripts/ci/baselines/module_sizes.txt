@@ -1,3 +1,4 @@
+# 2026-10-21 +src/remote_storage/workshop_update.rs 412, src/remote_storage/mod.rs 249 -> 251 (one mod and one re-export line for the new module).
 src/matchmaking_servers.rs 901
 src/lib.rs 833
 src/matchmaking/mod.rs 754
@@ -23,6 +24,7 @@ src/networking_types/state.rs 458
 src/remote_storage/files.rs 438
 src/user/voice.rs 436
 src/networking_types/addresses.rs 417
+src/remote_storage/workshop_update.rs 412
 src/ugc/update.rs 412
 src/friends/friend.rs 405
 src/user/duration.rs 396
@@ -50,7 +52,7 @@ src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking_utils/fake_ip.rs 261
 src/networking.rs 257
-src/remote_storage/mod.rs 249
+src/remote_storage/mod.rs 251
 src/html_surface/callbacks.rs 247
 src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244

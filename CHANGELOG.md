@@ -10,6 +10,41 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — the Workshop update request, and a classification of what is left
+
+- **`ISteamRemoteStorage` 31 -> 40 of 59** (`src/remote_storage/workshop_update.rs`, new): the eight
+  synchronous entries of Steam's "publishing UGC" block (`isteamremotestorage.h:264-273`, `:292`) are
+  now wrapped as `PublishedFileUpdate` -- `create_published_file_update_request` hands back `None`
+  when Steam answers its own marker, and the seven setters (`file`, `preview_file`, `title`,
+  `description`, `visibility`, `tags`, `change_description`) each return `Result<Self, SteamError>` so
+  a `virtual bool` of false is `InvalidParameter` instead of an `assert!` panicking in the caller. The
+  marker is the defect class this unit was about: `k_PublishedFileUpdateHandleInvalid` is
+  `0xffffffffffffffffull` (`:46`), all ones, not the `0` that the neighbouring
+  `k_PublishedFileIdInvalid` uses (`:44`) -- read the other way round, every real request is thrown
+  away and a fake one is kept. `GetUGCDetails` (`:250`) joins them as `ugc_details`: its signed
+  `int32` size is clamped (`details_size`, because `as u64` would sign-extend a negative into
+  ~1.8e19), and its `char **ppchName` reads as `None` for null, empty, and non-UTF-8 alike -- the
+  same collapse `src/friends/history.rs` already makes rather than inventing a lossy title that
+  compares against nothing. 5 tests, 5 mutations, each red on its own assertion message (none of them
+  a crash or a compile failure), including one that mutates `visibility.rs`'s `Unknown => Err` arm to
+  prove the setter's refusal is a real boundary and not a restatement.
+- **The remaining 19 of that surface are registered, not silently skipped, and the registration says
+  what is not known.** Measured: 16 sit in the publishing block and 3 outside it (`FileWriteAsync`
+  `:202`, `UGCDownload` `:243`, `UGCDownloadToLocation` `:312`) and all 19 return `SteamAPICall_t`, so
+  each needs its own call-result struct before a wrapper method can exist. They are **not** described
+  as superseded: a case-insensitive scan of the whole `isteamremotestorage.h` finds the word
+  "deprecated" exactly twice (`:354`, `:368`), both about callback ids, and no sentence anywhere in
+  that header says the block was replaced -- unlike `isteamcontroller.h:2`, which does say so about
+  `ISteamController`, and is why that interface stays at 0/34 by choice. `ISteamUGC` at 97/99 is a
+  parallel surface, not the successor of these 19, and the doc says so instead of borrowing a
+  justification it does not have.
+- **One stale number in `docs/SuperSteam-Design.md` corrected**: the `ISteamController` paragraph
+  claimed `ISteamInput` was wrapped "18" deep. The ledger reads 44 called of 48 declared today, and
+  `type_surface` separately counts 45 `pub fn` on `Input` -- both numbers are now written with the
+  ruler that produced each, because the two rulers do not measure the same thing.
+- Repo coverage: **699 -> 708 of 913** (sum of the `*.called` rows in
+  `scripts/ci/baselines/api_coverage.txt`).
+
 ### Fixed — a `Send` promise that was never checked
 
 - **All 15 `unsafe impl Send` in `src/` now say why they exist** (`// SAFETY:` above each one,

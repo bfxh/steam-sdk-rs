@@ -1,3 +1,4 @@
+# 2026-10-21 RemoteStorage 14 -> 16 (create_published_file_update_request, ugc_details) and +PublishedFileUpdate 7, the seven field setters of the update request.
 Friends 61
 Server 49
 Input 45
@@ -17,9 +18,9 @@ NetworkingUtils 18
 Timeline 18
 NetConnection 17
 NetworkingSockets 16
+RemoteStorage 16
 Friend 14
 NetworkingMessage 14
-RemoteStorage 14
 NetConnectionRealTimeInfo 13
 NetworkingIdentity 12
 Parties 12
@@ -37,6 +38,7 @@ HttpResponse 8
 InventoryResult 8
 AppNetConnectionEnd 7
 NetworkingMessages 7
+PublishedFileUpdate 7
 ServerListRequest 7
 SteamId 7
 HtmlSurface 6

@@ -130,6 +130,7 @@
 # paraphrase. (The previous version of this note lost those names to shell command
 # substitution -- backticks inside a double-quoted argument -- which is why they are written
 # out here without them.)
+# 2026-10-21 +3 rows for src/remote_storage/workshop_update.rs, all columns zero: its 33 spans each sit in a block that carries a verbatim header phrase, so the debt columns did not move.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -235,6 +236,9 @@ src/remote_storage/cached_ugc.rs~undeclared 0
 src/remote_storage/files.rs 0
 src/remote_storage/files.rs~unjudged 0
 src/remote_storage/files.rs~undeclared 0
+src/remote_storage/workshop_update.rs 0
+src/remote_storage/workshop_update.rs~unjudged 0
+src/remote_storage/workshop_update.rs~undeclared 0
 src/server/status.rs 0
 src/server/status.rs~unjudged 0
 src/server/status.rs~undeclared 0
