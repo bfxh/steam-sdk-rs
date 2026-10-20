@@ -123,6 +123,7 @@
 # 2026-10-20 cached-UGC face (src/remote_storage/cached_ugc.rs): 51 files / 408 spans, debt 0-0-0.
 # 2026-10-20 #21-B callback ownership (src/matchmaking_servers.rs): Rc -> Arc<dyn Fn + Send + Sync>;
 # the file's Send promise now carries a compile-time claim, and the span count moves with its doc.
+# 2026-10-20 #44-B: SAFETY lines added above all 15 Send promises (files grew by those lines).
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0

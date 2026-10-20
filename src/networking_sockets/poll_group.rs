@@ -10,6 +10,14 @@ pub(crate) struct InnerSocket {
     pub(crate) inner: Arc<Inner>,
 }
 
+// SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
+// this line, which makes `cargo check --all-targets` fail with
+// `*mut ISteamNetworkingSockets` cannot be sent between threads safely.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for InnerSocket {}
 
 unsafe impl Sync for InnerSocket {}
@@ -40,6 +48,14 @@ pub struct NetPollGroup {
     message_buffer: Vec<*mut SteamNetworkingMessage_t>,
 }
 
+// SAFETY: nothing in this crate's tree needs `Send` for this type today (measured: this
+// line deleted, `cargo check --all-targets` stays green). The promise is kept because
+// the type is public and a caller may move it to the thread that pumps callbacks.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for NetPollGroup {}
 
 unsafe impl Sync for NetPollGroup {}

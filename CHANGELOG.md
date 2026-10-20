@@ -12,6 +12,22 @@ still declares version `0.13.1`.
 
 ### Fixed — a `Send` promise that was never checked
 
+- **All 15 `unsafe impl Send` in `src/` now say why they exist** (`// SAFETY:` above each one,
+  enforced by a new third column in `scripts/ci/callback_threads.py` at zero tolerance). The text is
+  not boilerplate: each line reports what was measured about that promise by deleting it and
+  re-compiling the whole workspace (`D:\tmp\a6\probe_send_promises.py`), which splits the 15 into
+  **seven the tree actually needs** -- `Browser`, `HttpResponse`, `ServerListRequest`,
+  `SessionRequestBuilder`, `NetConnection`, `InnerSocket`, `ConnectionCallbackHandler`, each naming
+  the `cannot be sent between threads safely` complaint rustc produces without it -- and **eight that
+  nothing in this repository requires today** (`NetworkingMessages`, `SessionRequest`, `FakeUDPPort`,
+  `NetworkingSockets`, `NetPollGroup`, `NetworkingUtils`, `Server`, `UpdateWatchHandle`), which say so
+  plainly instead of dressing a capability promise up as a requirement. Deleting a promise nobody
+  needs would be the narrower public surface, but it is a breaking change for a downstream caller who
+  moves the handle, so the promises stay and the reason is now written down where a reviewer can
+  disagree with it.
+  Column 1 (`unclaimed`) is unchanged and still reads 14: `assert_send::<T>` cannot audit a type whose
+  `Send` the impl itself grants, and the ledger does not pretend otherwise.
+
 - **`ServerListRequest` was `Send` while the object it pointed at was not** (`src/matchmaking_servers.rs`,
   task #21-B). The four `*Callbacks` types stored their closures in `Rc`, and that count was touched by
   two threads at once: the generated `extern "C"` trampolines clone a callback so it survives the callee
@@ -230,7 +246,7 @@ still declares version `0.13.1`.
   makes this crate fail to **compile** first, because the request builder writes a 256-element array
   into it, so compile-red there would not have been a lock either.
   Two things are registered rather than fixed. `CancelServerQuery` (`:516`) stays unwrapped because
-  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:624`, `:647`, `:672`)
+  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:632`, `:655`, `:680`)
   return `()` and **discard the `HServerQuery`** Steam hands back, so there is nothing to cancel with;
   measured by probe, changing one of them to return the handle costs one line in this crate and breaks
   no in-repo or example call site (`cargo check --locked --all-targets` reported exactly
@@ -630,7 +646,7 @@ plus the callbacks the wrapper can deliver.
   "the IP address of the game server" and then says *nothing* about byte order
   (`isteamuser.h:156-158`). Rather than invent a rule, the wrapper takes the one this crate already
   uses at both ends and can be checked against itself: `MatchmakingServers::ping_server` sends
-  `ip.into()` outward (`src/matchmaking_servers.rs:624-641`) and the server-list reader turns an
+  `ip.into()` outward (`src/matchmaking_servers.rs:632-649`) and the server-list reader turns an
   address Steam reported back with `Ipv4Addr::from(raw.m_NetAdr.m_unIP)` (`:213`). Those round-trip,
   and measured on this host `u32::from(addr) == addr.to_bits()` -- first octet most significant, so
   `192.168.1.1` is `0xC0A80101`, the shape Steam itself hands back. The doc says all of that,

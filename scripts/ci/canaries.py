@@ -1022,7 +1022,9 @@ def canary_callback_threads():
         # The claim inside a `#[cfg(test)]` module -- material this gate must NOT strip, because that
         # is the only place a compile-time `T: Send` check can live.
         write(tmp / "src" / "claimed.rs",
-              "pub struct Good { p: *mut u8 }\nunsafe impl Send for Good {}\n"
+              "pub struct Good { p: *mut u8 }\n"
+              "// SAFETY: a use site needs this; measured by deleting the impl and re-compiling.\n"
+              "unsafe impl Send for Good {}\n"
               "#[cfg(test)]\nmod claims {\n    use super::Good;\n"
               "    fn assert_send<T: Send>() {}\n"
               "    #[test]\n    fn checks() { assert_send::<Good>(); }\n}\n")
@@ -1031,15 +1033,26 @@ def canary_callback_threads():
         # Prose naming the old shape must not become a site, the way every other ledger reads it.
         write(tmp / "src" / "prose.rs",
               "// Before 2026-10-20 this held an Rc, and the Rc was the bug.\n"
-              "pub struct Fixed { p: *mut u8 }\nunsafe impl Send for Fixed {}\n"
+              "pub struct Fixed { p: *mut u8 }\n"
+              "// SAFETY: a use site needs this; measured by deleting the impl and re-compiling.\n"
+              "unsafe impl Send for Fixed {}\n"
               "#[cfg(test)]\nmod t {\n    use super::Fixed;\n"
               "    fn assert_send<T: Send>() {}\n"
               "    #[test]\n    fn c() { assert_send::<Fixed>(); }\n}\n")
+        # The two columns judge different things: a `// SAFETY:` line clears `unexplained` but not
+        # `unclaimed`, and an `assert_send` clears `unclaimed` but not `unexplained`.
+        write(tmp / "src" / "halfclear.rs",
+              "pub struct Said { p: *mut u8 }\n"
+              "// SAFETY: named here, but never asked of rustc.\n"
+              "unsafe impl Send for Said {}\n")
         out = run_script(dst, ["src"], cwd=tmp)
         text = out.stdout
-        expect("an unverified Send promise is emitted", 0 if "src/promise.rs 1 0" in text else 1, 0)
+        expect("an unverified promise is unclaimed AND unexplained",
+               0 if "src/promise.rs 1 0 1" in text else 1, 0)
+        expect("a SAFETY line does not masquerade as a compile-time claim",
+               0 if "src/halfclear.rs 1 0 0" in text else 1, 0)
         # Two `Rc` tokens in that file (the `use` and the field type), both beside the promise.
-        expect("every Rc token beside a promise is counted", 0 if "src/rc.rs 1 2" in text else 1, 0)
+        expect("every Rc token beside a promise is counted", 0 if "src/rc.rs 1 2 1" in text else 1, 0)
         expect("a compile-time claim satisfies the promise", 0 if "claimed.rs" not in text else 1, 0)
         expect("an Rc with no promise is nobody's business", 0 if "rc_only.rs" not in text else 1, 0)
         expect("a comment mentioning Rc is not a refcount", 0 if "prose.rs" not in text else 1, 0)
@@ -1051,11 +1064,12 @@ def canary_callback_threads():
                run_script(ROOT / CI / "compare_baseline.py", [baseline, measure]).returncode, 1)
         # The positive control: with every promise claimed and no Rc beside one, no row may appear --
         # otherwise "clean" here is unfalsifiable and a ruler that matches nothing looks like a pass.
-        for name in ("promise.rs", "rc.rs", "rc_only.rs", "prose.rs", "claimed.rs"):
+        for name in ("promise.rs", "rc.rs", "rc_only.rs", "prose.rs", "claimed.rs",
+                     "halfclear.rs"):
             write(tmp / "src" / name, "pub fn clean(v: u8) -> u8 { v }\n")
         clean = run_script(dst, ["src"], cwd=tmp)
         expect("a fully claimed tree emits no rows",
-               clean.stdout.strip().splitlines(), ["#scanned 5"])
+               clean.stdout.strip().splitlines(), ["#scanned 6"])
         expect("a fully claimed tree passes", clean.returncode, 0)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

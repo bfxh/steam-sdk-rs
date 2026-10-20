@@ -24,6 +24,10 @@ Three shapes are counted per file:
   * **rc_next_to_claim** -- any `Rc` token in a file that carries an `unsafe impl Send`, because a
     non-atomic refcount in a file whose types claim to cross threads is the same defect by its other
     half;
+  * **unexplained** -- an `unsafe impl Send for T` not preceded by a `// SAFETY:` line, i.e. nobody
+    wrote down which boundary needs the promise and what makes the thing it points at safe to reach
+    from there. rustc cannot check this either way, which is precisely why it has to be written: a
+    promise with no stated reason is what let the `Rc` refcount above survive a type-level claim.
   * a `*_send::<T>` claim naming a type the file does not define is left to rustc: the crate already
     keeps such claims where they belong (`src/lib.rs:389` holds `static_assert_send`, `:424` claims
     `Client`, which is `Send` without any `unsafe impl`), and a claim naming a missing type does not
@@ -36,7 +40,8 @@ gate reads and report the fixed file as broken. The cost of that exception is st
 written in a *different* file from the promise is not found, which is what `claim_without_owner`
 exists to catch when the drift goes the other way.
 
-Stdout is the ledger (`<path> <unclaimed> <rc_next_to_claim>` plus the `#scanned <N>` marker).
+Stdout is the ledger (`<path> <unclaimed> <rc_next_to_claim> <unexplained>` plus the `#scanned <N>`
+marker).
 The `unclaimed` column is a **debt register that may only shrink**: 17 files carried an unverified
 `unsafe impl Send` when this gate was written (measured below), so shipping it as zero tolerance would
 have been a lie about the tree. `rc_next_to_claim` ships at **zero** because the shape it guards is the
@@ -64,16 +69,35 @@ RC = re.compile(r"\bRc\b")
 
 
 def measure(text):
-    """Return (unclaimed, rc_next_to_claim) for one file.
+    """Return (unclaimed, rc_next_to_claim, unexplained) for one file.
 
     Comments are blanked for the `Rc` rule only: the claim itself lives in a `#[cfg(test)]` module,
-    and a doc sentence that mentions `Rc` to explain why it is gone is not a refcount.
+    and a doc sentence that mentions `Rc` to explain why it is gone is not a refcount. The
+    `unexplained` rule needs the comments, so it walks the raw lines.
     """
     claims = CLAIM.findall(text)
     asserted = set(ASSERTED.findall(text))
     rc = len(RC.findall(blank_comments(text)))
     unclaimed = [name for name in claims if name not in asserted]
-    return unclaimed, (rc if claims else 0)
+    lines = text.splitlines()
+    unexplained = 0
+    for index, line in enumerate(lines):
+        if not CLAIM.match(line):
+            continue
+        # Walk the contiguous comment run above the promise: a doc block may sit between the
+        # `// SAFETY:` line and the impl, and requiring adjacency would push the justification
+        # below the prose -- the reason belongs with the promise, not nearest to it.
+        block = []
+        for back in range(index - 1, -1, -1):
+            stripped = lines[back].strip()
+            if not stripped:
+                break
+            if not stripped.startswith("//"):
+                break
+            block.append(stripped)
+        if not any(line.startswith("// SAFETY:") for line in block):
+            unexplained += 1
+    return unclaimed, (rc if claims else 0), unexplained
 
 
 def sources(fixture, scan):
@@ -97,18 +121,21 @@ def main():
     for path in sources(fixture, scan):
         files += 1
         text = path.read_text(encoding="utf-8", errors="replace")
-        unclaimed, rc_with_claim = measure(text)
-        if not unclaimed and not rc_with_claim:
+        unclaimed, rc_with_claim, unexplained = measure(text)
+        if not unclaimed and not rc_with_claim and not unexplained:
             continue
         name = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.name
-        rows.append("%s %d %d" % (name, len(unclaimed), rc_with_claim))
+        rows.append("%s %d %d %d" % (name, len(unclaimed), rc_with_claim, unexplained))
         if unclaimed:
             print("::error:: %s promises Send for %s with no `assert_send` beside it"
                   % (name, ", ".join(unclaimed)), file=sys.stderr)
         if rc_with_claim:
             print("::error:: %s carries %d `Rc` token(s) next to an `unsafe impl Send` -- a "
                   "non-atomic refcount cannot cross threads" % (name, rc_with_claim), file=sys.stderr)
-        total += rc_with_claim
+        if unexplained:
+            print("::error:: %s carries %d `unsafe impl Send` with no `// SAFETY:` line naming the "
+                  "boundary it serves" % (name, unexplained), file=sys.stderr)
+        total += rc_with_claim + unexplained
     for row in rows:
         print(row)
     print("#scanned %d" % files)

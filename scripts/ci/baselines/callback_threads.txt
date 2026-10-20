@@ -1,20 +1,19 @@
-# Every `unsafe impl Send` in the crate, and whether a compile-time claim sits beside it.
-# Columns: <path> <promises-without-assert_send> <Rc-tokens-next-to-a-promise>.
-# The second column is 0 by rule: the callback objects this file used to refcount with `Rc` were
-# cloned on the thread Steam pumps callbacks on and dropped on the thread owning the request, so a
-# non-atomic count there is the defect this ledger was written after (2026-10-20, #21-B).
-# The first column is a DEBT REGISTER and may only shrink: 14 promises across 11 files were
-# unverified when the gate was written, each one a type whose fields nobody asked rustc about.
-# Adding a promise without a claim, or an `Rc` beside one, changes a row and goes red.
-src/html_surface/browser.rs 1 0
-src/http.rs 1 0
-src/networking_messages.rs 3 0
-src/networking_sockets/connection.rs 1 0
-src/networking_sockets/fake_udp.rs 1 0
-src/networking_sockets/mod.rs 1 0
-src/networking_sockets/poll_group.rs 2 0
-src/networking_sockets_callback.rs 1 0
-src/networking_utils/mod.rs 1 0
-src/server/mod.rs 1 0
-src/ugc/update.rs 1 0
-#scanned 140
+# Columns: <path> <promises-without-assert_send> <Rc-tokens-next-to-a-promise>
+#         <promises-without-a-SAFETY-line>. Columns 2 and 3 ship at ZERO tolerance (the ruler
+#         exits 1 on either); column 1 is a DEBT REGISTER that may only shrink.
+# 2026-10-20 #44-B: every one of the 15 promises in `src/` now carries a `// SAFETY:` line,
+# each naming what was measured about it -- 7 are required by a use site (deleting the impl
+# makes `cargo check --all-targets` fail with a named `cannot be sent` complaint), 8 are not
+# required by anything in this tree and say so. Column 1 stays 14 because `assert_send` cannot
+# audit a type whose Send the impl itself grants; that is recorded in the ruler's docstring.
+src/html_surface/browser.rs 1 0 0
+src/http.rs 1 0 0
+src/networking_messages.rs 3 0 0
+src/networking_sockets/connection.rs 1 0 0
+src/networking_sockets/fake_udp.rs 1 0 0
+src/networking_sockets/mod.rs 1 0 0
+src/networking_sockets/poll_group.rs 2 0 0
+src/networking_sockets_callback.rs 1 0 0
+src/networking_utils/mod.rs 1 0 0
+src/server/mod.rs 1 0 0
+src/ugc/update.rs 1 0 0

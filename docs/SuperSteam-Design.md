@@ -957,7 +957,7 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 - `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
   of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
-  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:624-641`），
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:632-649`），
   入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
   （`src/matchmaking_servers.rs:279`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
   即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
@@ -1198,7 +1198,7 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   真去缩生成层那一格会先撞**编译不过**——本仓的请求构造器往那字段里写的是 256 元素数组——而编译红不算
   锁；所以它的真实触发条件是"布局以另一种方式变了"（补白、字段次序、元素宽度），不是字段宽度本身。
 - **`CancelServerQuery`（`:516`）不封，登记成缺陷**：`ping_server` / `player_details` / `server_rules`
-  （落地前：`src/matchmaking_servers.rs:624`、`:647`、`:672`）当时返回 `()`，把 Steam 给的 `HServerQuery`
+  （落地前：`src/matchmaking_servers.rs:632`、`:655`、`:680`）当时返回 `()`，把 Steam 给的 `HServerQuery`
   **丢了**，调用方手里没有可取消的东西。探针实测（改完立刻逐字节还原，基线 `cargo check` 回 rc=0）：
   把其中一只改成返回句柄，本仓只有**一处**编译错——FFI 调用末尾那个 `;`（`expected 'i32', found '()'`）——
   `--all-targets` 里没有任何别的调用点或 example 受影响。差的不是工作量，是**公开形状谁来定**：
@@ -1254,6 +1254,22 @@ Steam 自己那条警告说的就是这个窗口："crashing when callbacks occu
 **注释里提到 `Rc` 不算引用计数**、全判定的树一行都不出。
 本仓早有这种写法（`static_assert_send` 在 `src/lib.rs:389`、`:424` 声称 `Client`），
 从前只是习惯，现在它是机器判定。本地门链加一步 ⇒ **30 项**。
+
+**#44-B 还债（2026-10-20 接上）**：`src/` 的 **15** 处 `unsafe impl Send` 每一处上面现在都有
+`// SAFETY:`，这变成尺子第三列、**0 容忍**。说明不是套话——每条写的是**删掉那一行、重编译全树**
+量出来的事实（逐处探针 `D:	mp6\probe_send_promises.py`，先自证基线绿）：
+**7 处树内真有人要**（`Browser` *mut ISteamHTMLSurface、`HttpResponse` *mut ISteamHTTP、
+`ServerListRequest` *mut ISteamMatchmakingServers 与它指向的回调对象、`SessionRequestBuilder`、
+`NetConnection`、`InnerSocket`、`ConnectionCallbackHandler`），**8 处本树没人要**
+（`NetworkingMessages`、`SessionRequest`、`FakeUDPPort`、`NetworkingSockets`、`NetPollGroup`、
+`NetworkingUtils`、`Server`、`UpdateWatchHandle`——删掉 `cargo check --all-targets` 仍绿，注释就这样写）。
+删掉那 8 处确实是更窄的公开面，但对"把句柄挪去别的线程"的下游是破坏性变更 ⇒ 选择保留承诺、
+把理由写下来让人可以反驳，而不是留一句沉默的 `unsafe impl Send`。
+第一列 `unclaimed` **仍是 14**，不粉饰：`assert_send` 审不了"Send 由该 impl 自己授予"的类型。
+canary 加两条独立性判定（总 **128**）：`// SAFETY:` 清第三列不清第一列（`halfclear.rs 1 0 0`）、
+`assert_send` 清第一列不清第三列；正向控制要 6 个夹具全干净才不出行。
+🔴 **观察层又红给自己看**：生成注释的脚本把共享段首行的 `// ` 前缀漏了 ⇒ 12 个文件里出现**裸文本行**
+（编译不过），是 `cargo check` 先抓住的；补完前缀才看见第三列真的归零。
 
 **2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
 声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，
