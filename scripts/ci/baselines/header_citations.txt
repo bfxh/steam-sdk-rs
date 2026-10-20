@@ -135,6 +135,7 @@
 # 2026-10-21 (third slice) +3 rows for src/remote_storage/workshop_answers.rs at zero debt (46 spans). The debt was paid before the re-record: two phrases I had put in quotation marks were my own words, and six spans sat in blocks with no verbatim phrase at all.
 # 2026-10-21 (fourth slice) +3 rows for src/remote_storage/workshop_publish.rs at zero debt (21 spans); workshop_update.rs spans 40 -> 35 with the removed struct. Ten spans arrived unanchored in the first draft and were paid before this re-record, not registered as debt.
 # 2026-10-21 (fifth slice) +3 rows for src/remote_storage/workshop_enumerate.rs at zero debt (25 spans). It arrived with 7 unanchored spans and one WRONG line number the ruler caught: a declaration was cited at :307, which is the public-view comment; the call is :306.
+# 2026-10-21 (sixth slice) +3 rows for src/remote_storage/published_details.rs at zero debt (34 spans). It arrived with 14 unanchored spans and one quote-pairing break caused by writing an empty `""` in prose -- two quote characters to the ruler.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -243,6 +244,9 @@ src/remote_storage/download.rs~undeclared 0
 src/remote_storage/files.rs 0
 src/remote_storage/files.rs~unjudged 0
 src/remote_storage/files.rs~undeclared 0
+src/remote_storage/published_details.rs 0
+src/remote_storage/published_details.rs~unjudged 0
+src/remote_storage/published_details.rs~undeclared 0
 src/remote_storage/workshop_answers.rs 0
 src/remote_storage/workshop_answers.rs~unjudged 0
 src/remote_storage/workshop_answers.rs~undeclared 0

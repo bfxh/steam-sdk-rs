@@ -10,6 +10,52 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Fixed — a class only another target can see, and the eight errors that reached `master`
+
+- **`b559e35` failed six CI jobs with `error[E0793]: reference to field of packed struct is unaligned`
+  while every local check was green**, and the reason is in the generated layer: the same C struct is
+  `#[repr(C)]` in ``steamworks-sys/src/windows_bindings.rs`` and `#[repr(C, packed(4))]` in the Linux and
+  macOS bindings (measured: `RemoteStorageEnumerateUserSubscribedFilesResult_t` carries the packed
+  attribute at ``linux_bindings.rs:7740``). A Windows host cannot fail to compile that code, so no amount
+  of local checking could have caught it. The wrappers now copy each array out of the answer before
+  slicing it (`let ids = v.m_rgPublishedFileId;`), which is also what removes the implicit borrow, and
+  the local replay chain gained
+  `cargo check --locked --workspace --all-targets --target x86_64-unknown-linux-gnu`: 31 verdicts
+  instead of 30, and this class has a judge on this machine for the first time.
+- **A ruler for it was written, measured, and deleted in the same session.** The first version was blind
+  by its own regex -- an attribute body of `[^)]*` stops at the first `)`, so it matched no `packed(N)`
+  struct at all and reported zero violations against the exact code that broke CI; only the pre-fix
+  control file showed that. Widening it to the three spellings of a borrow made it see them, and then it
+  flagged legal code: `cb.m_unAppID.into()` and `raw_details.m_nFileSize.max(0)` are by-value calls and
+  cannot be unaligned. A gate that both misses its defect and cries wolf is worse than none, so the file
+  is gone and the compiler on the other target is the ruler -- the same retirement standard the
+  `unclaimed` column of `callback_threads.py` was held to.
+
+### Added — `ISteamRemoteStorage` reaches 59 of 59
+
+- **`GetPublishedFileDetails`** (`isteamremotestorage.h:280`) is the last entry the interface declares
+  (`src/remote_storage/published_details.rs`), so **`ISteamRemoteStorage` is closed at 59/59** and the
+  repo total is **727 / 913**. Its twenty fields are read as declared, with three judgements: the five
+  fixed character buffers are read inside their own bounds, the two `int32` sizes (`:488-489`) are
+  clamped, and the two handles (`:478-479`) go through Steam's all-ones marker (`:45`) into `Option` --
+  an item with no primary file (a collection, an external video) is a normal answer, not a failure.
+- **The tag list keeps its own truncation flag.** Steam writes "comma separated list of all tags
+  associated with this file" (`:485`) and a separate "whether the list of tags was too long to be
+  returned in the provided buffer" (`:486`); `split_tags` drops empty pieces and nothing else, and the
+  flag is carried beside the vector -- dropping it would let a cut-off list read as a complete one.
+- **Two freshness cases, not three.** "If unMaxSecondsOld is greater than 0, cached data may be
+  returned" and "A value of 0 will force a refresh" (`:276-277`) are both expressible; the third option
+  the comment mentions, `k_WorkshopForceLoadPublishedFileDetailsFromCache` (`:278`), is **named once in
+  the whole vendored SDK and declared nowhere** (measured: one grep hit, the comment itself), so there is
+  no number to send and no arm to write. `PublishedFileFreshness` says so in its own doc.
+- Timestamps pass through as `u32` (`:481-482`): the header gives those fields no unit or epoch, so
+  converting them to a clock would be a guess -- the same rule `RTime32` already follows in
+  `src/user/answers.rs`.
+- 3 mutations red on their own assertion messages (`D:\tmp\a7\mut52.py`); tests 335 -> 337; citation
+  ruler 57 files / 604 spans / debt **0-0-0**. The new file arrived with 14 unanchored spans and one
+  quote-pairing break caused by an empty `""` written in prose, which is two quote characters to the
+  ruler; `rustdoc` caught a public field doc linking to the private splitter, fifth hit of that family.
+
 ### Fixed — four public types that no user could name
 
 - **`publish_workshop_file` / `publish_video` reached `master` in `d36d64e` with their argument and

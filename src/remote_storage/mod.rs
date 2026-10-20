@@ -8,6 +8,7 @@ mod changes;
 mod download;
 mod files;
 mod platforms;
+mod published_details;
 mod visibility;
 mod workshop_answers;
 mod workshop_enumerate;
@@ -19,6 +20,7 @@ pub use changes::*;
 pub use download::*;
 pub use files::*;
 pub use platforms::*;
+pub use published_details::*;
 pub use visibility::*;
 pub use workshop_answers::*;
 pub use workshop_enumerate::*;
@@ -268,10 +270,10 @@ fn test_cloud() {
 #[cfg(test)]
 mod reachable_from_the_root {
     use crate::{
-        NewWorkshopItem, PublishedFileAnswer, PublishedFileUpdate, PublishedItemVoteDetails,
-        SubscribedPage, UgcDetails, UgcDownloaded, VideoWorkshopItem, WorkshopActionPage,
-        WorkshopEnumeration, WorkshopFileAction, WorkshopPage, WorkshopSearch, WorkshopSearchPage,
-        WorkshopVideoProvider,
+        NewWorkshopItem, PublishedFileAnswer, PublishedFileDetails, PublishedFileFreshness,
+        PublishedFileUpdate, PublishedItemVoteDetails, SubscribedPage, UgcDetails, UgcDownloaded,
+        VideoWorkshopItem, WorkshopActionPage, WorkshopEnumeration, WorkshopFileAction,
+        WorkshopPage, WorkshopSearch, WorkshopSearchPage, WorkshopVideoProvider,
     };
 
     #[test]
@@ -280,6 +282,8 @@ mod reachable_from_the_root {
         let _ = core::any::type_name::<(
             NewWorkshopItem,
             PublishedFileAnswer,
+            PublishedFileDetails,
+            PublishedFileFreshness,
             PublishedFileUpdate,
             PublishedItemVoteDetails,
             SubscribedPage,

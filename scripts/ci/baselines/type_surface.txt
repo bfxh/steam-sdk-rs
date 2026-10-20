@@ -3,15 +3,16 @@
 # 2026-10-21 (third slice) RemoteStorage 19 -> 26: the seven call-result methods. PublishedItemVoteDetails and WorkshopFileAction add no rows of their own -- this ruler counts pub fn per type, and those two carry fields and variants only.
 # 2026-10-21 (fourth slice) RemoteStorage 26 -> 28: publish_workshop_file and publish_video.
 # 2026-10-21 (fifth slice) RemoteStorage 28 -> 33: the five enumerate methods. The page types (WorkshopPage, SubscribedPage, WorkshopActionPage, WorkshopSearchPage) carry fields only, so they add no rows -- this ruler counts pub fn per type.
+# 2026-10-21 (sixth slice) RemoteStorage 33 -> 34: get_published_file_details.
 Friends 61
 Server 49
 Input 45
 Matchmaking 38
 UGC 37
+RemoteStorage 34
 UserStats 34
 Browser 33
 QueryHandle 33
-RemoteStorage 33
 User 33
 Apps 29
 Client 29

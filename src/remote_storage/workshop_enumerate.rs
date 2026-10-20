@@ -176,8 +176,12 @@ impl RemoteStorage {
                     if io_error {
                         return cb(Err(SteamError::IOFailure));
                     }
+                    // Copied before being sliced: `m_rgPublishedFileId` is a field of a struct that
+                    // the vendored bindings declare `#[repr(C, packed(4))]` for Linux and macOS, and a
+                    // `&field` there is an unaligned reference -- E0793, which only those targets raise.
+                    let ids = v.m_rgPublishedFileId;
                     cb(to_steam_result(v.m_eResult).map(|()| WorkshopPage {
-                        published_file_ids: ids_page(v.m_nResultsReturned, &v.m_rgPublishedFileId),
+                        published_file_ids: ids_page(v.m_nResultsReturned, &ids),
                         total_results: total_results(v.m_nTotalResultCount),
                     }))
                 },
@@ -207,13 +211,16 @@ impl RemoteStorage {
                         return cb(Err(SteamError::IOFailure));
                     }
                     cb(to_steam_result(v.m_eResult).map(|()| {
-                        let len = page_len(v.m_nResultsReturned, v.m_rgPublishedFileId.len());
+                        // Both arrays are copied out before slicing, for the packed-field reason above.
+                        let ids = v.m_rgPublishedFileId;
+                        let times = v.m_rgRTimeSubscribed;
+                        let len = page_len(v.m_nResultsReturned, ids.len());
                         SubscribedPage {
-                            entries: v.m_rgPublishedFileId[..len]
+                            entries: ids[..len]
                                 .iter()
                                 .copied()
                                 .map(PublishedFileId)
-                                .zip(v.m_rgRTimeSubscribed[..len].iter().copied())
+                                .zip(times[..len].iter().copied())
                                 .collect(),
                             total_results: total_results(v.m_nTotalResultCount),
                         }
@@ -271,8 +278,12 @@ impl RemoteStorage {
                     if io_error {
                         return cb(Err(SteamError::IOFailure));
                     }
+                    // Copied before being sliced: `m_rgPublishedFileId` is a field of a struct that
+                    // the vendored bindings declare `#[repr(C, packed(4))]` for Linux and macOS, and a
+                    // `&field` there is an unaligned reference -- E0793, which only those targets raise.
+                    let ids = v.m_rgPublishedFileId;
                     cb(to_steam_result(v.m_eResult).map(|()| WorkshopPage {
-                        published_file_ids: ids_page(v.m_nResultsReturned, &v.m_rgPublishedFileId),
+                        published_file_ids: ids_page(v.m_nResultsReturned, &ids),
                         total_results: total_results(v.m_nTotalResultCount),
                     }))
                 },
@@ -314,13 +325,15 @@ impl RemoteStorage {
                         return cb(Err(SteamError::IOFailure));
                     }
                     cb(to_steam_result(v.m_eResult).map(|()| {
-                        let len = page_len(v.m_nResultsReturned, v.m_rgPublishedFileId.len());
+                        let ids = v.m_rgPublishedFileId;
+                        let times = v.m_rgRTimeUpdated;
+                        let len = page_len(v.m_nResultsReturned, ids.len());
                         WorkshopActionPage {
-                            entries: v.m_rgPublishedFileId[..len]
+                            entries: ids[..len]
                                 .iter()
                                 .copied()
                                 .map(PublishedFileId)
-                                .zip(v.m_rgRTimeUpdated[..len].iter().copied())
+                                .zip(times[..len].iter().copied())
                                 .collect(),
                             action: action_from_code(v.m_eAction as c_int),
                             total_results: total_results(v.m_nTotalResultCount),
@@ -377,13 +390,15 @@ impl RemoteStorage {
                         return cb(Err(SteamError::IOFailure));
                     }
                     cb(to_steam_result(v.m_eResult).map(|()| {
-                        let len = page_len(v.m_nResultsReturned, v.m_rgPublishedFileId.len());
+                        let ids = v.m_rgPublishedFileId;
+                        let scores = v.m_rgScore;
+                        let len = page_len(v.m_nResultsReturned, ids.len());
                         WorkshopSearchPage {
-                            entries: v.m_rgPublishedFileId[..len]
+                            entries: ids[..len]
                                 .iter()
                                 .copied()
                                 .map(PublishedFileId)
-                                .zip(v.m_rgScore[..len].iter().copied())
+                                .zip(scores[..len].iter().copied())
                                 .collect(),
                             app_id: AppId(v.m_nAppId),
                             start_index: v.m_unStartIndex,

@@ -51,7 +51,7 @@ pub struct UgcDownloaded {
 /// An all-zero buffer and a non-UTF-8 one both read as `None`, the collapse this crate already makes
 /// for names (`src/remote_storage/workshop_update.rs` and `src/friends/history.rs`): neither shape is
 /// a name a caller could show or compare.
-fn fixed_name(raw: &[c_char]) -> Option<String> {
+pub(super) fn fixed_name(raw: &[c_char]) -> Option<String> {
     let end = raw.iter().position(|byte| *byte == 0).unwrap_or(raw.len());
     let bytes: Vec<u8> = raw[..end].iter().map(|byte| *byte as u8).collect();
     let text = std::str::from_utf8(&bytes).ok()?;

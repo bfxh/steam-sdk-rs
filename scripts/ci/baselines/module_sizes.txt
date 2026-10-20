@@ -3,6 +3,7 @@
 # 2026-10-21 (third slice) +src/remote_storage/workshop_answers.rs 419 and src/remote_storage/mod.rs 253 -> 255 (module + re-export line).
 # 2026-10-21 (fourth slice) +src/remote_storage/workshop_publish.rs 412, workshop_update.rs 462 -> 446 (the duplicated answer struct is gone -- one PublishedFileAnswer now serves both publish and commit), mod.rs 255 -> 256.
 # 2026-10-21 (fifth slice) +src/remote_storage/workshop_enumerate.rs 515, mod.rs +2 lines.
+# 2026-10-21 (sixth slice) +src/remote_storage/published_details.rs, mod.rs and download.rs one-line visibility changes, workshop_enumerate.rs 515 -> 538 (the packed fields are copied out before they are sliced).
 src/matchmaking_servers.rs 901
 src/lib.rs 833
 src/matchmaking/mod.rs 754
@@ -17,9 +18,9 @@ src/callback.rs 560
 src/ugc/types.rs 559
 src/app.rs 551
 src/networking_sockets/fake_udp.rs 544
+src/remote_storage/workshop_enumerate.rs 531
 src/networking_messages.rs 526
 src/networking_sockets/fake_ip.rs 526
-src/remote_storage/workshop_enumerate.rs 516
 src/parties.rs 486
 src/networking_types/end.rs 480
 src/ugc/results.rs 473
@@ -52,7 +53,7 @@ src/remote_storage/download.rs 315
 src/matchmaking/favorites.rs 310
 src/server_stats.rs 309
 src/friends/profile_items.rs 302
-src/remote_storage/mod.rs 298
+src/remote_storage/mod.rs 302
 src/user_stats/global_stats.rs 293
 src/user_stats/user_reads.rs 283
 src/matchmaking/chat.rs 281
@@ -64,6 +65,7 @@ src/networking.rs 257
 src/html_surface/callbacks.rs 247
 src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244
+src/remote_storage/published_details.rs 231
 src/matchmaking/queries.rs 229
 src/remote_storage/api.rs 227
 src/friends/groups.rs 225

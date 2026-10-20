@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   58 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   59 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 726 / 913**（33 个接口；2026-10-21 第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 727 / 913**（33 个接口；2026-10-21 第六片补 `GetPublishedFileDetails` 58→59，`ISteamRemoteStorage` **首次到满**，见 §6.1d 末段第六片）；第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1500,6 +1500,34 @@ ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFol
   用删除探针（`D:\tmp\a7\probe_reachable.py`）实测：抽掉任一行 `pub use` 即
   `E0432 unresolved imports` —— 名字可达性这类断言的判决形式就是"移除后编译拒"（与本仓对
   `unsafe impl Send` 用的同一把标准）。
+
+**2026-10-21 第六片：`GetPublishedFileDetails` 补完，`ISteamRemoteStorage` 首次 59/59（仓总 726→727）**
+
+- 答复是 `struct RemoteStorageGetPublishedFileDetailsResult_t`（`:469-493`）20 个字段。判定仍只有三类，
+  全部可测：五个定长字符数组（`:476-477`、`:485`、`:487`、`:490`）走**切片边界内读取**那一把尺；
+  两个 `int32` 尺寸（`:488-489`）夹非负；两个 `UGCHandle_t`（`:478-479`）过 `k_UGCHandleInvalid`（`:45`）
+  翻成 `Option` —— **没有主文件的条目是正常形状**（合集、外链视频），所以是 `None` 而不是错误。
+- **标签列表带着自己的截断标志交出**：Steam 把标签写成 `m_rgchTags` 那一串
+  "comma separated list of all tags associated with this file"（`:485`），旁边另有
+  "whether the list of tags was too long to be returned in the provided buffer"（`:486`）。
+  拆函数只丢空段，**不猜截断与否**；`tags_truncated` 原样保留 —— 丢掉它就会把一份被剪短的标签表
+  读成完整的一份。3 变异 3 红在各自断言（`D:\tmp\a7\mut52.py`）。
+- `m_rtimeCreated` / `m_rtimeUpdated`（`:481-482`）按 `u32` 原样交出：那两行只说 time when ... created /
+  last updated，头文件从未给单位或纪元 ⇒ 不造 `SystemTime`（与 `RTime32` 在 `src/user/answers.rs` 同口径）。
+- 🔴 **新鲜度只有两档，第三档是查无此数**：`:276-277` 说了 `>0` 可用缓存、`0` 强制刷新；`:278` 又提到
+  "A value of k_WorkshopForceLoadPublishedFileDetailsFromCache will use cached data if it exists"。
+  复算：这个名字在 `steamworks-sys/` 全树**只出现一次、且只在注释里**（`grep -r` 实测 1 命中）⇒
+  没有任何可发的数字，本仓就**不提供**这一档，并把"为什么少一档"写在类型 doc 里。
+- 🔴 **同片修掉一处只有 CI 能看见的破坏（`b559e35` 的八处 E0793）**：这些结果结构体在 Windows 绑定里是
+  `#[repr(C)]`，在 Linux/macOS 绑定里是 `#[repr(C, packed(4))]`（实测 `linux_bindings.rs:7740`）⇒
+  对 packed 字段取引用（含 `x.f[..n]`、`x.f.len()` 这类自动借位）在 Windows 主机上**根本编不出错**，
+  本地一片绿、CI 六个 job 全红。修法是把数组先拷出来再切（`let ids = v.m_rgPublishedFileId;`），
+  并给复算链新增一步 `cargo check --locked --workspace --all-targets
+  --target x86_64-unknown-linux-gnu`（本机装有该 target 的 std），判决数 30→**31**。
+  ⚠️ **一度写了一把文本尺 `packed_borrows.py`，量过之后当场删掉**：它先因为 `packed(4)` 的括号写错
+  而全盲（`[^)]*` 停在第一个 `)`，对恰好害人的那段代码报 0），改成三种借位写法后又开始误报既有码
+  （`cb.m_unAppID.into()`、`m_nFileSize.max(0)` 是按值调用，完全合法）。一把既会漏又会误的门比没有更糟，
+  所以按 `callback_threads` 那列 `unclaimed` 的先例退役，改由交叉 target 的编译器当尺。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 
