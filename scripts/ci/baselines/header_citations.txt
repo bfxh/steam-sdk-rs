@@ -121,11 +121,13 @@
 # two blocks first landed in ~undeclared and were anchored with the header's own sentence.
 # 2026-10-20 overlay protocol face (src/friends/overlay.rs): 50 files / 379 spans, debt 0-0-0.
 # 2026-10-20 cached-UGC face (src/remote_storage/cached_ugc.rs): 51 files / 408 spans, debt 0-0-0.
+# 2026-10-20 #21-B callback ownership (src/matchmaking_servers.rs): Rc -> Arc<dyn Fn + Send + Sync>;
+# the file's Send promise now carries a compile-time claim, and the span count moves with its doc.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
 src/matchmaking_servers.rs 0
-src/matchmaking_servers.rs~unjudged 0
+src/matchmaking_servers.rs~unjudged 1
 src/matchmaking_servers.rs~undeclared 0
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0

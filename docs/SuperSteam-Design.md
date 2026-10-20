@@ -957,7 +957,7 @@ needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文�
 
 - `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
   of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
-  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:616-633`），
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:624-641`），
   入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
   （`src/matchmaking_servers.rs:279`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
   即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
@@ -1198,7 +1198,7 @@ callback, that is all." 与 "Calling this w/ N out of N progress will NOT set th
   真去缩生成层那一格会先撞**编译不过**——本仓的请求构造器往那字段里写的是 256 元素数组——而编译红不算
   锁；所以它的真实触发条件是"布局以另一种方式变了"（补白、字段次序、元素宽度），不是字段宽度本身。
 - **`CancelServerQuery`（`:516`）不封，登记成缺陷**：`ping_server` / `player_details` / `server_rules`
-  （落地前：`src/matchmaking_servers.rs:616`、`:639`、`:664`）当时返回 `()`，把 Steam 给的 `HServerQuery`
+  （落地前：`src/matchmaking_servers.rs:624`、`:647`、`:672`）当时返回 `()`，把 Steam 给的 `HServerQuery`
   **丢了**，调用方手里没有可取消的东西。探针实测（改完立刻逐字节还原，基线 `cargo check` 回 rc=0）：
   把其中一只改成返回句柄，本仓只有**一处**编译错——FFI 调用末尾那个 `;`（`expected 'i32', found '()'`）——
   `--all-targets` 里没有任何别的调用点或 example 受影响。差的不是工作量，是**公开形状谁来定**：
@@ -1233,6 +1233,27 @@ that the file is read in chunks"，`:257`），而拿 Steam 返回的数去给�
 **丢掉真句柄、留下假的那个**；测试里既钉了"标记是 `u64::MAX`"这个前提，也把"比较式换成 `== 0`"
 这只变异打红。7 测试 / 7 变异各红在自己的断言上。
 登记未证：哪些内容真在缓存里、进度到多少、越界下标 Steam 答什么（本机无客户端）。
+
+**2026-10-20 结掉 #21-B：回调对象的所有权改造（`src/matchmaking_servers.rs`）**。
+`unsafe impl Send for ServerListRequest` 是一句**没人问过编译器**的承诺：四个 `*Callbacks` 用 `Rc`
+存闭包，而那个引用计数被两个线程碰——生成的 `extern "C"` 跳板为了"被调方把回调 drop 掉也还活着"
+会 clone 一份（现 `Arc::clone`），这跑在泵 Steam 回调的那条线程上；而释放请求、从而 drop 掉被 clone
+的那个闭包的，是持有请求的线程。**非原子计数在两线程下写同一个值**，这不是看字段清单能看出的洞。
+⇒ 闭包改成 `Arc<dyn Fn(..) + Send + Sync>`，承诺旁边放**编译期判定**
+（`mod thread_claims`：`assert_send::<ServerListRequest>()` + 四个回调类型各一只）。
+🔴 **公开形状代价（破坏性，四条）**：`Ping/PlayerDetails/ServerRules/ServerList Callbacks::new`
+现在收 `Box<dyn Fn(_) + Send + Sync>`——捕获非原子东西的闭包再也交不进服务器查询，这正是目的；
+Steam 自己那条警告说的就是这个窗口："crashing when callbacks occur"（`isteammatchmaking.h:514-515`）。
+**A 案（删 `unsafe impl Send`）此前实测证伪**：本仓代价 0，但它只让不 Sound 的代码不再通过类型检查，
+两线程写同一计数一字未改。
+新门 `scripts/ci/callback_threads.py`：每文件数「有承诺无判定」与「承诺同文件里还有 `Rc`」。
+第一列按**只许变短的债账**出货（建门时实测 **11 文件 13 处**），第二列 0 容忍——
+"允许 13 的门等于放行第 14 个"，但也不许把没还清的债写成已还清。canary +4（总 **126**），
+并钉住本门那条**故意例外**：不剥测试材料——判定就住在 `#[cfg(test)]` 里，剥了会把修好的文件报成坏的。
+正反例都真跑：无判定的承诺被吐出行、`Rc` 与承诺同文件被计数（`1 2`）、只有 `Rc` 不算、
+**注释里提到 `Rc` 不算引用计数**、全判定的树一行都不出。
+本仓早有这种写法（`static_assert_send` 在 `src/lib.rs:389`、`:424` 声称 `Client`），
+从前只是习惯，现在它是机器判定。本地门链加一步 ⇒ **30 项**。
 
 **2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
 声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，

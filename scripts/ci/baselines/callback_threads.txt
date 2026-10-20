@@ -1,0 +1,20 @@
+# Every `unsafe impl Send` in the crate, and whether a compile-time claim sits beside it.
+# Columns: <path> <promises-without-assert_send> <Rc-tokens-next-to-a-promise>.
+# The second column is 0 by rule: the callback objects this file used to refcount with `Rc` were
+# cloned on the thread Steam pumps callbacks on and dropped on the thread owning the request, so a
+# non-atomic count there is the defect this ledger was written after (2026-10-20, #21-B).
+# The first column is a DEBT REGISTER and may only shrink: 13 promises across 11 files were
+# unverified when the gate was written, each one a type whose fields nobody asked rustc about.
+# Adding a promise without a claim, or an `Rc` beside one, changes a row and goes red.
+src/html_surface/browser.rs 1 0
+src/http.rs 1 0
+src/networking_messages.rs 3 0
+src/networking_sockets/connection.rs 1 0
+src/networking_sockets/fake_udp.rs 1 0
+src/networking_sockets/mod.rs 1 0
+src/networking_sockets/poll_group.rs 2 0
+src/networking_sockets_callback.rs 1 0
+src/networking_utils/mod.rs 1 0
+src/server/mod.rs 1 0
+src/ugc/update.rs 1 0
+#scanned 140

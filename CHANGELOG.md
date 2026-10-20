@@ -10,6 +10,39 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Fixed — a `Send` promise that was never checked
+
+- **`ServerListRequest` was `Send` while the object it pointed at was not** (`src/matchmaking_servers.rs`,
+  task #21-B). The four `*Callbacks` types stored their closures in `Rc`, and that count was touched by
+  two threads at once: the generated `extern "C"` trampolines clone a callback so it survives the callee
+  dropping it (`Arc::clone` in the macro today), which runs on whatever thread pumps Steam's callbacks,
+  while the thread that owns the request is the one that releases it and drops the closure that clone
+  was taken from. A non-atomic refcount written from two threads is not a field you can spot in a list;
+  it is only visible by asking rustc whether the thing is `Send` at all. The closures are now
+  `Arc<dyn Fn(..) + Send + Sync>` and the file keeps a compile-time claim beside the promise --
+  `assert_send::<ServerListRequest>()`, plus one per callback type, in `mod thread_claims`.
+  **Breaking for callers**: `PingCallbacks::new` / `PlayerDetailsCallbacks::new` /
+  `ServerRulesCallbacks::new` / `ServerListCallbacks::new` now take `Box<dyn Fn(_) + Send + Sync>`.
+  A closure capturing something non-atomic can no longer be handed to a server query, which is the
+  point: Steam's own line about this window is that cancelling before destructing a callback object
+  avoids "crashing when callbacks occur" (`isteammatchmaking.h:514-515`).
+  **Option A was measured and refused earlier**: deleting `unsafe impl Send` costs nothing in this repo
+  and closes nothing -- the two-thread refcount stays exactly as unsound, it just stops type-checking.
+- **A new gate keeps the promise honest** (`scripts/ci/callback_threads.py`,
+  `scripts/ci/baselines/callback_threads.txt`, one step in `.github/workflows/ci.yml`). Per file it
+  counts `unsafe impl Send for T` with no `*_send::<T>` beside it, and any `Rc` token in a file that
+  carries such a promise. The first column ships as a **shrink-only debt register, not as zero** --
+  measured 13 unverified promises across 11 files, and a gate that lied about the tree would be worse
+  than no gate. The second column ships at zero. Its canary (4 new assertions, chain now 126) pins the
+  deliberate exception too: this ruler does not strip test material, because the claim lives in a
+  `#[cfg(test)]` module, and stripping it would report the fixed file as broken.
+  Verified both directions: a fixture promise with no claim is emitted (the row reads
+  `promise.rs 1 0`), an `Rc` beside a promise is counted (`rc.rs 1 2`), `Rc` alone is nobody's
+  business, a *comment* mentioning `Rc` is not a refcount, and a fully claimed tree emits no
+  rows at all.
+  The crate already kept such claims where they belong (`static_assert_send` at `src/lib.rs:389`,
+  claiming `Client` at `:424`); this makes the practice machine-checked instead of customary.
+
 ### Added — interface wrappers that upstream never bound
 
 - **The cached-UGC face (`src/remote_storage/cached_ugc.rs`)**: `cached_ugc_count`,
@@ -192,7 +225,7 @@ still declares version `0.13.1`.
   makes this crate fail to **compile** first, because the request builder writes a 256-element array
   into it, so compile-red there would not have been a lock either.
   Two things are registered rather than fixed. `CancelServerQuery` (`:516`) stays unwrapped because
-  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:616`, `:639`, `:664`)
+  `ping_server` / `player_details` / `server_rules` (`src/matchmaking_servers.rs:624`, `:647`, `:672`)
   return `()` and **discard the `HServerQuery`** Steam hands back, so there is nothing to cancel with;
   measured by probe, changing one of them to return the handle costs one line in this crate and breaks
   no in-repo or example call site (`cargo check --locked --all-targets` reported exactly
@@ -592,7 +625,7 @@ plus the callbacks the wrapper can deliver.
   "the IP address of the game server" and then says *nothing* about byte order
   (`isteamuser.h:156-158`). Rather than invent a rule, the wrapper takes the one this crate already
   uses at both ends and can be checked against itself: `MatchmakingServers::ping_server` sends
-  `ip.into()` outward (`src/matchmaking_servers.rs:616-633`) and the server-list reader turns an
+  `ip.into()` outward (`src/matchmaking_servers.rs:624-641`) and the server-list reader turns an
   address Steam reported back with `Ipv4Addr::from(raw.m_NetAdr.m_unIP)` (`:213`). Those round-trip,
   and measured on this host `u32::from(addr) == addr.to_bits()` -- first octet most significant, so
   `192.168.1.1` is `0xC0A80101`, the shape Steam itself hands back. The doc says all of that,

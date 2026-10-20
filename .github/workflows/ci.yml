@@ -195,6 +195,16 @@ jobs:
           python3 scripts/ci/erased_errors.py src > "$RUNNER_TEMP/erased_errors.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/erased_errors.txt "$RUNNER_TEMP/erased_errors.txt"
 
+      # `unsafe impl Send` 是一句承诺：类型里没有任何跨线程不Sound的东西。2026-10-20 之前这句承诺
+      # 没人问过编译器——`ServerListRequest` 声称 Send，而它指向的回调对象用 `Rc` 数引用，
+      # 计数在 Steam 回调泵线程上 clone、在持有请求的线程上 drop（同一值两处非原子写）。
+      # 现在改成 `Arc<dyn Fn + Send + Sync>`，并在同文件放 `assert_send::<T>` 让编译器裁决。
+      # 第二列目标 0；第一列是**只许变短的债账**（建门时实测 11 文件 13 处承诺无判定）。
+      - name: every Send promise has a compile-time claim
+        run: |
+          python3 scripts/ci/callback_threads.py src > "$RUNNER_TEMP/callback_threads.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/callback_threads.txt "$RUNNER_TEMP/callback_threads.txt"
+
       - name: interface handles keep the client alive
         run: |
           python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"

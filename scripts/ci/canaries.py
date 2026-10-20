@@ -1003,13 +1003,72 @@ def canary_type_surface():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def canary_callback_threads():
+    print("callback_threads.py -- which Send promise is a promise, and which is a checked claim")
+    ruler = ROOT / CI / "callback_threads.py"
+    tmp, dst = fixture(ruler)
+    # It shares the comment-blanking rule with `cstring_unwraps.py`, which in turn imports the
+    # test-scoping helpers from `api_coverage.py`; a fixture missing either reports a crash as 0 rows.
+    shutil.copyfile(ROOT / CI / "cstring_unwraps.py", dst.parent / "cstring_unwraps.py")
+    shutil.copyfile(ROOT / CI / "api_coverage.py", dst.parent / "api_coverage.py")
+    try:
+        # A bare `unsafe impl Send`: nothing in the tree ever asked rustc whether the fields agree.
+        write(tmp / "src" / "promise.rs",
+              "pub struct Thing { p: *mut u8 }\nunsafe impl Send for Thing {}\n")
+        # The shape this gate was written after: a promise kept next to a non-atomic refcount.
+        write(tmp / "src" / "rc.rs",
+              "use std::rc::Rc;\npub struct Other { c: Rc<u8> }\n"
+              "unsafe impl Send for Other {}\n")
+        # The claim inside a `#[cfg(test)]` module -- material this gate must NOT strip, because that
+        # is the only place a compile-time `T: Send` check can live.
+        write(tmp / "src" / "claimed.rs",
+              "pub struct Good { p: *mut u8 }\nunsafe impl Send for Good {}\n"
+              "#[cfg(test)]\nmod claims {\n    use super::Good;\n"
+              "    fn assert_send<T: Send>() {}\n"
+              "    #[test]\n    fn checks() { assert_send::<Good>(); }\n}\n")
+        # `Rc` with no promise anywhere is ordinary single-threaded code, not a violation.
+        write(tmp / "src" / "rc_only.rs", "use std::rc::Rc;\npub struct Local { c: Rc<u8> }\n")
+        # Prose naming the old shape must not become a site, the way every other ledger reads it.
+        write(tmp / "src" / "prose.rs",
+              "// Before 2026-10-20 this held an Rc, and the Rc was the bug.\n"
+              "pub struct Fixed { p: *mut u8 }\nunsafe impl Send for Fixed {}\n"
+              "#[cfg(test)]\nmod t {\n    use super::Fixed;\n"
+              "    fn assert_send<T: Send>() {}\n"
+              "    #[test]\n    fn c() { assert_send::<Fixed>(); }\n}\n")
+        out = run_script(dst, ["src"], cwd=tmp)
+        text = out.stdout
+        expect("an unverified Send promise is emitted", 0 if "src/promise.rs 1 0" in text else 1, 0)
+        # Two `Rc` tokens in that file (the `use` and the field type), both beside the promise.
+        expect("every Rc token beside a promise is counted", 0 if "src/rc.rs 1 2" in text else 1, 0)
+        expect("a compile-time claim satisfies the promise", 0 if "claimed.rs" not in text else 1, 0)
+        expect("an Rc with no promise is nobody's business", 0 if "rc_only.rs" not in text else 1, 0)
+        expect("a comment mentioning Rc is not a refcount", 0 if "prose.rs" not in text else 1, 0)
+        expect("the scan marker is emitted",
+               0 if re.search(r"^#scanned \d+$", text, re.M) else 1, 0)
+        measure = write(tmp / "cur.txt", text)
+        baseline = write(tmp / "base.txt", "# registered debt\n")
+        expect("the comparator turns an unregistered debt red",
+               run_script(ROOT / CI / "compare_baseline.py", [baseline, measure]).returncode, 1)
+        # The positive control: with every promise claimed and no Rc beside one, no row may appear --
+        # otherwise "clean" here is unfalsifiable and a ruler that matches nothing looks like a pass.
+        for name in ("promise.rs", "rc.rs", "rc_only.rs", "prose.rs", "claimed.rs"):
+            write(tmp / "src" / name, "pub fn clean(v: u8) -> u8 { v }\n")
+        clean = run_script(dst, ["src"], cwd=tmp)
+        expect("a fully claimed tree emits no rows",
+               clean.stdout.strip().splitlines(), ["#scanned 5"])
+        expect("a fully claimed tree passes", clean.returncode, 0)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 CANARIES = (canary_comparator, canary_panic_ledger, canary_panic_stub, canary_handle_owners,
             canary_cstring_unwraps,
             canary_doc_pointers,
             canary_baseline_files,
             canary_api_coverage, canary_bindings_drift, canary_header_citations,
             canary_shell_hatches, canary_workflow_inputs, canary_lock_poisons,
-            canary_erased_errors, canary_type_surface)
+            canary_erased_errors, canary_type_surface,
+            canary_callback_threads)
 
 
 def main():

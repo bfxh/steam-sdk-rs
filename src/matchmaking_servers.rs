@@ -1,6 +1,5 @@
 use std::net::Ipv4Addr;
 use std::ptr;
-use std::rc::Rc;
 use std::time::Duration;
 
 use super::*;
@@ -78,7 +77,7 @@ macro_rules! matchmaking_servers_callback {
                             let [<$fn_arg_name _norm>]: $rust_fn_arg = $normalize;
                         )*
                         // In case of dropping rust_callbacks inside $fn_name
-                        let rc_fn = Rc::clone(&(*(*$self).rust_callbacks).$fn_name);
+                        let rc_fn = Arc::clone(&(*(*$self).rust_callbacks).$fn_name);
                         (*rc_fn)($([<$fn_arg_name _norm>]),*);
                         $clear_after_call;
                     }
@@ -87,7 +86,7 @@ macro_rules! matchmaking_servers_callback {
 
             pub struct [<$name Callbacks>] {
                 $(
-                    pub (self) $fn_name: Rc<Box<dyn Fn($($rust_fn_arg),*)>>,
+                    pub (self) $fn_name: Arc<dyn Fn($($rust_fn_arg),*) + Send + Sync>,
                 )*
                 $(
                     pub (self) $additional_name: $additional_type,
@@ -95,10 +94,9 @@ macro_rules! matchmaking_servers_callback {
             }
 
             impl [<$name Callbacks>] {
-                // Arc can also be here, without Box
-                pub fn new($($fn_name: Box<dyn Fn($($rust_fn_arg),*)>),*) -> Self {
+                pub fn new($($fn_name: Box<dyn Fn($($rust_fn_arg),*) + Send + Sync>),*) -> Self {
                     Self {
-                        $($fn_name: Rc::new($fn_name),)*
+                        $($fn_name: Arc::new($fn_name),)*
                         $($additional_name: $additional_content,)*
                     }
                 }
@@ -393,6 +391,16 @@ pub struct ServerListRequest {
     pub(self) inner: Option<Arc<Inner>>,
 }
 
+/// A request is reached from two threads by Steam's own design, and the ownership graph it sits in
+/// is therefore refcounted atomically -- `Arc<dyn Fn(..) + Send>`, never `Rc`.
+///
+/// The thread that pumps callbacks runs the generated `extern "C"` trampolines, which clone a
+/// callback to survive the callee dropping it (`Arc::clone` in the macro above); the thread that
+/// owns the `ServerListRequest` releases it, and releasing is what drops the closure that clone was
+/// taken from. With a non-atomic counter those two are unsynchronised mutation of one value -- the
+/// kind of defect `unsafe impl Send` papers over rather than fixes. Steam itself warns about the
+/// window this describes: cancelling a query before destructing a callback object avoids
+/// "crashing when callbacks occur" (`isteammatchmaking.h:514-515`).
 unsafe impl Send for ServerListRequest {}
 
 impl ServerListRequest {
@@ -749,9 +757,9 @@ impl MatchmakingServers {
 fn test_internet_servers() {
     let client = Client::init_app(304930).unwrap();
 
-    let data = std::rc::Rc::new(Mutex::new(0));
-    let data2 = std::rc::Rc::clone(&data);
-    let data3 = std::rc::Rc::clone(&data);
+    let data = Arc::new(Mutex::new(0));
+    let data2 = Arc::clone(&data);
+    let data3 = Arc::clone(&data);
     let callbacks = ServerListCallbacks::new(
         Box::new(move |list, server| {
             let details = list.lock().unwrap().get_server_details(server).unwrap();
@@ -857,5 +865,29 @@ mod filter_tests {
             256 * 2 * std::mem::size_of::<c_char>(),
             "the filter pair is two 256-byte fields and nothing else"
         );
+    }
+}
+
+#[cfg(test)]
+mod thread_claims {
+    //! Each `unsafe impl Send` here is an assertion, not a structure: a raw pointer is `Send` only
+    //! because the code says so. So the claim is checked at compile time -- if the callback objects
+    //! ever go back to a non-atomic refcount, or drop the `Send + Sync` the closures now carry,
+    //! `assert_send` stops compiling and this module is what says so out loud.
+
+    use super::{
+        PingCallbacks, PlayerDetailsCallbacks, ServerListCallbacks, ServerListRequest,
+        ServerRulesCallbacks,
+    };
+
+    fn assert_send<T: Send>() {}
+
+    #[test]
+    fn every_object_the_send_claim_covers_is_actually_send() {
+        assert_send::<PingCallbacks>();
+        assert_send::<PlayerDetailsCallbacks>();
+        assert_send::<ServerRulesCallbacks>();
+        assert_send::<ServerListCallbacks>();
+        assert_send::<ServerListRequest>();
     }
 }
