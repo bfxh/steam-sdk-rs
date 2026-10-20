@@ -2,6 +2,7 @@
 # 2026-10-21 ISteamRemoteStorage.called 31 -> 40: the nine synchronous entries of "publishing UGC" (isteamremotestorage.h:264-273, :292) and GetUGCDetails (:250) are wrapped in src/remote_storage/workshop_update.rs. The other 19 of that block return SteamAPICall_t and stay registered as unwrapped, not missing: each needs its own call result struct -- see docs/SuperSteam-Design.md 6.1d.
 # 2026-10-21 (second slice) ISteamRemoteStorage.called 40 -> 44: the four call-result entries whose absence made the synchronous face unusable -- CommitPublishedFileUpdate (isteamremotestorage.h:275), UGCDownload (:243), UGCDownloadToLocation (:312), FileWriteAsync (:202). 15 Workshop publish/vote/enumerate entries still return SteamAPICall_t and wait in docs/SuperSteam-Design.md 6.1d.
 # 2026-10-21 (third slice) ISteamRemoteStorage.called 44 -> 51: the seven Workshop entries whose answer names the item back -- delete/subscribe/unsubscribe (:282, :287, :291), the two vote-detail reads (:294, :298, both annotated with the same struct at :293 and :297), the user's own vote (:296) and SetUserPublishedFileAction (:304), in src/remote_storage/workshop_answers.rs. 8 of the block remain (2 publish, 5 enumerate, GetPublishedFileDetails).
+# 2026-10-21 (fourth slice) ISteamRemoteStorage.called 51 -> 53: PublishWorkshopFile (isteamremotestorage.h:266) and PublishVideo (:302), in src/remote_storage/workshop_publish.rs. Their answer is read from RemoteStoragePublishFileResult_t (:360-366, Purpose at :358) rather than the struct the two STEAM_CALL_RESULT lines name (:265, :301) -- the reason is argued in the module doc and in docs/SuperSteam-Design.md 6.1d. 6 remain: 5 enumerate + GetPublishedFileDetails (:280).
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -60,7 +61,7 @@ ISteamNetworkingUtils.called 16
 ISteamParentalSettings.called 6
 ISteamParties.called 12
 ISteamRemotePlay.called 7
-ISteamRemoteStorage.called 51
+ISteamRemoteStorage.called 53
 ISteamScreenshots.called 9
 ISteamTimeline.called 18
 ISteamUGC.called 97

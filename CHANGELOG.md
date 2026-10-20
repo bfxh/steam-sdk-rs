@@ -10,6 +10,46 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — publishing an item, and the annotation contradiction that had to be judged first
+
+- **`ISteamRemoteStorage` 51 -> 53 of 59** (`src/remote_storage/workshop_publish.rs`):
+  `publish_workshop_file` and `publish_video` (`isteamremotestorage.h:266`, `:302`).
+- 🔴 **The answer struct was a contradiction, not a detail.** Both calls carry the annotation
+  `STEAM_CALL_RESULT( RemoteStoragePublishFileProgress_t )` (`:265`, `:301`), and that struct's only
+  fields are "double m_dPercentFile;" and "bool m_bPreview;" (`:613-614`) -- no item id, no completion.
+  The same header writes "Purpose: The result of a call to PublishFile()" over
+  `RemoteStoragePublishFileResult_t` (`:357-360`), assigns it
+  `k_iSteamRemoteStorageCallbacks + 9` (`:362`) and gives it the result, the new id and the legal flag
+  (`:363-365`). This wrapper reads the latter: a Purpose line written for the call, a callback id
+  assigned to it, and a payload containing the only value a caller can act on outweigh two annotation
+  lines that name a progress report. Both readings are cited in the module doc so the next reader
+  checks the same two places, and the choice is registered as needing a live client to settle.
+- **`WorkshopVideoProvider` is write-only, with no `Unrecognized` arm.** `EWorkshopVideoProvider`
+  appears in the vendored headers only as the enum itself (`:137-141`) and as `PublishVideo`'s
+  parameter (`:302`): no result struct carries it back, so a read side would be code no input reaches
+  -- the opposite of `WorkshopFileAction`, which Steam does answer with (`:592`) and which therefore
+  keeps `Unrecognized(i32)` plus a refusal on the way out.
+- **A submission is all-or-nothing.** `encode_copy` converts title, description, tags and visibility
+  and only then resolves the preview path (the sole step touching the filesystem); any embedded NUL is
+  `InvalidParameter` and nothing is sent, and one unencodable tag refuses the whole list -- dropping
+  that tag alone would publish an item carrying a tag set the caller never approved.
+- **The tag buffer cannot cross threads, so it is not used.** `SteamParamStringArray` holds
+  `*mut c_char`, which is not `Send`, while the closure waiting on Steam's answer must be; tags are
+  kept as `Vec<CString>` and `SteamParamStringArray_t` is borrowed out of them at the call (`tag_array`
+  -- an empty list is a zero count with a dangling-but-aligned pointer, which Steam does not
+  dereference). Every allocation Steam reads by pointer is owned by the closure and dropped after the
+  answer is read.
+- **A duplicate public type removed in the same commit**: `PublishedFileCommit` and the publish answer
+  declare the same three fields (`:445-447` vs `:363-365`), so they now share one safe type,
+  `PublishedFileAnswer` -- while the two FFI reads stay separate, because merging safe types is not a
+  promise that Steam keeps the structs in step. `PublishedFileCommit` was introduced earlier the same
+  day and never tagged, so no released user sees either name.
+- 5 mutations red on their own assertion messages (`D:\tmp\a7\mut50.py`, `mut50b.py`): a dropped tag
+  still sent, `Unknown` visibility substituted with `Public`, the preview path left unresolved, both
+  providers collapsed to one code, the legal flag forced to `false`.
+- Repo coverage: **719 -> 721 of 913**; tests 327 -> 330; citation ruler 55 files / 545 spans /
+  debt **0-0-0**. Remaining in this block: the five enumerators and `GetPublishedFileDetails` (`:280`).
+
 ### Added — the seven Workshop answers that name the item back
 
 - **`ISteamRemoteStorage` 44 -> 51 of 59** (`src/remote_storage/workshop_answers.rs`, new): delete,

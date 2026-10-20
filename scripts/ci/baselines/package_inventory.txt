@@ -2,6 +2,7 @@
 # 2026-10-21 +steamworks/src/remote_storage/workshop_update.rs: one new module file in what users receive; no existing path removed.
 # 2026-10-21 (second slice) +steamworks/src/remote_storage/download.rs; nothing removed.
 # 2026-10-21 (third slice) +steamworks/src/remote_storage/workshop_answers.rs; nothing removed. WorkshopFileAction is the third out-of-table vocabulary this crate now owns, after PublishedFileVisibility and FileType.
+# 2026-10-21 (fourth slice) +steamworks/src/remote_storage/workshop_publish.rs. Also: PublishedFileCommit, added earlier the same day and never tagged, is renamed to PublishedFileAnswer in the same commit -- no released user can see either shape.
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -107,6 +108,7 @@ steamworks/src/remote_storage/mod.rs
 steamworks/src/remote_storage/platforms.rs
 steamworks/src/remote_storage/visibility.rs
 steamworks/src/remote_storage/workshop_answers.rs
+steamworks/src/remote_storage/workshop_publish.rs
 steamworks/src/remote_storage/workshop_update.rs
 steamworks/src/safe_ugc.rs
 steamworks/src/screenshots.rs

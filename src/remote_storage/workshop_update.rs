@@ -16,6 +16,7 @@
 //! (`isteamcontroller.h:2`). It is a parallel surface to `ISteamUGC`, not a superseded one.
 
 use super::*;
+use crate::remote_storage::workshop_publish::PublishedFileAnswer;
 use crate::utils::SteamParamStringArray;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -53,7 +54,7 @@ fn request_or_none(raw: u64) -> Option<sys::PublishedFileUpdateHandle_t> {
 /// the same answer as "it is not there". The rule and the split are the ones the modern sibling
 /// already applies to the same kind of argument (`src/ugc/update.rs:22-31`); what matters here is
 /// that refusing happens before the FFI call, so a typo never becomes a partial update request.
-fn readable_path(path: &Path) -> Result<CString, SteamError> {
+pub(super) fn readable_path(path: &Path) -> Result<CString, SteamError> {
     let resolved = path.canonicalize().map_err(|error| match error.kind() {
         std::io::ErrorKind::NotFound => SteamError::FileNotFound,
         _ => SteamError::IOFailure,
@@ -121,23 +122,6 @@ fn details_name(raw: *mut c_char) -> Option<String> {
 /// "int32 *pnBytesDownloaded" (`:247`). Zero is what no size written already looks like.
 pub(super) fn details_size(raw: ::std::os::raw::c_int) -> u64 {
     u64::try_from(raw).unwrap_or(0)
-}
-
-/// What Steam answers when an update request is committed.
-///
-/// The three fields are the whole of "struct RemoteStorageUpdatePublishedFileResult_t"
-/// (`isteamremotestorage.h:442-448`): "The result of the operation." (`:445`), the published file
-/// (`:446`) and the legal flag kept here as `needs_legal_acceptance` (`:447`).
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PublishedFileCommit {
-    pub published_file_id: PublishedFileId,
-    /// Steam's "bool m_bUserNeedsToAcceptWorkshopLegalAgreement;" (`isteamremotestorage.h:447`);
-    /// That declaration line is everything Steam writes about the field -- there is no comment on it.
-    ///
-    /// Nothing in this wrapper can accept on the user's behalf; the field exists so a caller can open
-    /// the Workshop page instead of treating a committed update as published. Dropping it would make
-    /// "committed" and "live" the same answer when Steam said they are not.
-    pub needs_legal_acceptance: bool,
 }
 
 impl RemoteStorage {
@@ -353,7 +337,7 @@ impl PublishedFileUpdate {
     /// fill in afterwards would be editing an update that is already on its way.
     pub fn commit<F>(self, cb: F)
     where
-        F: FnOnce(Result<PublishedFileCommit, SteamError>) + 'static + Send,
+        F: FnOnce(Result<PublishedFileAnswer, SteamError>) + 'static + Send,
     {
         let api_call = unsafe {
             sys::SteamAPI_ISteamRemoteStorage_CommitPublishedFileUpdate(self.rs, self.handle)
@@ -366,7 +350,7 @@ impl PublishedFileUpdate {
                     if io_error {
                         return cb(Err(SteamError::IOFailure));
                     }
-                    cb(to_steam_result(v.m_eResult).map(|()| PublishedFileCommit {
+                    cb(to_steam_result(v.m_eResult).map(|()| PublishedFileAnswer {
                         published_file_id: PublishedFileId(v.m_nPublishedFileId),
                         needs_legal_acceptance: v.m_bUserNeedsToAcceptWorkshopLegalAgreement,
                     }))

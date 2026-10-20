@@ -1,6 +1,7 @@
 # 2026-10-21 +src/remote_storage/workshop_update.rs 412, src/remote_storage/mod.rs 249 -> 251 (one mod and one re-export line for the new module).
 # 2026-10-21 (second slice) +src/remote_storage/download.rs 315, src/remote_storage/workshop_update.rs 412 -> 462 (commit + the PublishedFileCommit answer), src/remote_storage/mod.rs 251 -> 253.
 # 2026-10-21 (third slice) +src/remote_storage/workshop_answers.rs 419 and src/remote_storage/mod.rs 253 -> 255 (module + re-export line).
+# 2026-10-21 (fourth slice) +src/remote_storage/workshop_publish.rs 412, workshop_update.rs 462 -> 446 (the duplicated answer struct is gone -- one PublishedFileAnswer now serves both publish and commit), mod.rs 255 -> 256.
 src/matchmaking_servers.rs 901
 src/lib.rs 833
 src/matchmaking/mod.rs 754
@@ -21,13 +22,14 @@ src/parties.rs 486
 src/networking_types/end.rs 480
 src/ugc/results.rs 473
 src/ugc/query.rs 464
-src/remote_storage/workshop_update.rs 462
 src/user_stats/leaderboard.rs 459
 src/networking_types/state.rs 458
+src/remote_storage/workshop_update.rs 446
 src/remote_storage/files.rs 438
 src/user/voice.rs 436
 src/remote_storage/workshop_answers.rs 419
 src/networking_types/addresses.rs 417
+src/remote_storage/workshop_publish.rs 412
 src/ugc/update.rs 412
 src/friends/friend.rs 405
 src/user/duration.rs 396
@@ -56,7 +58,7 @@ src/networking_types/connection_info.rs 273
 src/safe_ugc.rs 269
 src/networking_utils/fake_ip.rs 261
 src/networking.rs 257
-src/remote_storage/mod.rs 255
+src/remote_storage/mod.rs 256
 src/html_surface/callbacks.rs 247
 src/user_stats/achievement_percents.rs 245
 src/user/auth.rs 244

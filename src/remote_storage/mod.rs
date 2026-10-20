@@ -10,6 +10,7 @@ mod files;
 mod platforms;
 mod visibility;
 mod workshop_answers;
+mod workshop_publish;
 mod workshop_update;
 
 pub use cached_ugc::*;

@@ -1,6 +1,7 @@
 # 2026-10-21 RemoteStorage 14 -> 16 (create_published_file_update_request, ugc_details) and +PublishedFileUpdate 7, the seven field setters of the update request.
 # 2026-10-21 (second slice) RemoteStorage 16 -> 19 (ugc_download, ugc_download_to_location, write_file_async) and PublishedFileUpdate 7 -> 8 (commit).
 # 2026-10-21 (third slice) RemoteStorage 19 -> 26: the seven call-result methods. PublishedItemVoteDetails and WorkshopFileAction add no rows of their own -- this ruler counts pub fn per type, and those two carry fields and variants only.
+# 2026-10-21 (fourth slice) RemoteStorage 26 -> 28: publish_workshop_file and publish_video.
 Friends 61
 Server 49
 Input 45
@@ -12,8 +13,8 @@ QueryHandle 33
 User 33
 Apps 29
 Client 29
+RemoteStorage 28
 Utils 28
-RemoteStorage 26
 UpdateHandle 22
 Inventory 21
 QueryResults 21
