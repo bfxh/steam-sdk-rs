@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   53 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   58 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 721 / 913**（33 个接口；2026-10-21 第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 726 / 913**（33 个接口；2026-10-21 第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1467,7 +1467,39 @@ ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFol
 - 🔴 **过程自曝（第三次踩同一个坑）**：用 heredoc 生成的补丁把测试里的 `"title\0"` 写成了**真 NUL 字节**
   （文件一度成二进制、`grep` 报 binary）。按字节改回两字符转义后 `cargo` 才绿——这条已经记在记忆里，
   本轮仍然发生，说明"生成含转义的源码"要直接用写文件工具而不是 heredoc。
-- 本块仍余 6 只：enumerate 5 + `GetPublishedFileDetails`（`:280`）。
+- 本块仍余 6 只：enumerate 5 + `GetPublishedFileDetails`（`:280`）——**同日第五片已补掉 enumerate 5，实余 1 只**。
+
+**2026-10-21 第五片：五只 enumerate（`ISteamRemoteStorage` 53→58，仓总 721→726）**
+
+- 四只结果形状一样：`EResult m_eResult;` + "int32 m_nResultsReturned;" + "int32 m_nTotalResultCount;"
+  盖在 `PublishedFileId_t m_rgPublishedFileId[ k_unEnumeratePublishedFilesMaxResults ]` 上
+  （`isteamremotestorage.h:389-392`、`:413-417`、`:499-503`、`:598-603`），容量是 Steam 自己的常数
+  "const uint32 k_unEnumeratePublishedFilesMaxResults = 50;"（`:55`）。
+  🔴 **这一族的真缺陷是"计数与数组同出一个不可信写者"**：`page_len` 因此同时受两端约束——负数=0 条
+  （不是 `as usize` 那样回绕成整页），超过 50 = 50（数组就这么长）。并行数组用**同一个长度**切片，
+  所以不会出现"这个 id 配了别人的时间/分数"。5 变异 5 红在各自断言（`D:\tmp\a7\mut51.py`）。
+- `m_nTotalResultCount` 与页长是两个数（`:390` vs `:391`），夹负后原样交出去：调用方靠它翻页翻到 total。
+- `WorkshopEnumeration` 七个次序**只写不读**（`RemoteStorageEnumerateWorkshopFilesResult_t` `:496-506`
+  里没有次序字段），所以照 `WorkshopVideoProvider` 的先例**不写** `Unrecognized`；测试也**不跟自己写的
+  数字比**，而是 `wrapper→binding` 与 `binding→头文件所列 0..6` 两段分别断言（比之前那版更强）。
+- `:417` 的 `m_rgRTimeSubscribed` 按 `u32` 原样交出（该行没有注释，头文件不说单位/纪元），沿用
+  `src/user/answers.rs:69-70` 已有的同条口径；不做 `SystemTime` 猜测。
+- 🔴 **引用尺抓到一处行号写错**：我把 `EnumeratePublishedFilesByUserAction` 的声明记成 `:307`，
+  而 `:307` 是 "// this method enumerates the public view of workshop files"，声明在 `:306` ⇒ 尺子报
+  WRONG-PLACE。这是本仓这条门又一次在我自己写数字时拦住我（不是第一次，也不会是最后一次）。
+- 🔴 **一片里的 `Send` 教训**：标签数组先前想跟着闭包活到答复，但 `Vec<*const c_char>` 不是 `Send` ⇒
+  编译期直接拒。改回本仓已有的口径（`src/ugc/update.rs:319-321` 的变更说明同样在调用返回时释放）：
+  **参数在本次调用里被 Steam 取走，不入闭包**；这条与 `FileWriteAsync` 里"数据缓冲区由闭包持有"是
+  刻意的不对称（那只头文件对 `pvData` 何时不再被读一字未提，取保守支），两处都在代码里写明。
+
+- 🔴 **本片同时补一处我自己造成的缺陷**（登记见 `CHANGELOG.md` 的 "four public types that no user could
+  name"）：`d36d64e` 那一片的 `workshop_publish` 忘了在 `remote_storage/mod.rs` 里写 `pub use`，于是
+  `NewWorkshopItem`/`VideoWorkshopItem`/`WorkshopVideoProvider`/`PublishedFileAnswer` 四个公开类型
+  **用户根本叫不出名字**，而门链全绿（方法本身可调用，`pub use` 不影响）。修法是补两行 `pub use` +
+  加一道常驻门 `reachable_from_the_root`：测试用 `use crate::{...}` 逐个点名，**glob 满足不了它**；
+  用删除探针（`D:\tmp\a7\probe_reachable.py`）实测：抽掉任一行 `pub use` 即
+  `E0432 unresolved imports` —— 名字可达性这类断言的判决形式就是"移除后编译拒"（与本仓对
+  `unsafe impl Send` 用的同一把标准）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

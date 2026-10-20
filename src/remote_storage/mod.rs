@@ -10,6 +10,7 @@ mod files;
 mod platforms;
 mod visibility;
 mod workshop_answers;
+mod workshop_enumerate;
 mod workshop_publish;
 mod workshop_update;
 
@@ -20,6 +21,8 @@ pub use files::*;
 pub use platforms::*;
 pub use visibility::*;
 pub use workshop_answers::*;
+pub use workshop_enumerate::*;
+pub use workshop_publish::*;
 pub use workshop_update::*;
 
 /// Access to the steam remote storage interface
@@ -253,4 +256,43 @@ fn test_cloud() {
     println!("Got: {:?}", output);
 
     assert_eq!(output, "Testing");
+}
+/// Every type the Workshop and cloud call-result faces hand out must be nameable from the crate root.
+///
+/// This exists because a re-export line was missing: `publish_workshop_file` returned
+/// `PublishedFileAnswer` from a module that `remote_storage` never re-exported, so the method was
+/// public while the type in its signature was unreachable -- no user could spell the name, and no
+/// ruler in this repository noticed, because the file inventories count files and the type counters
+/// count methods. A `use` list is the cheapest check that cannot be satisfied by a glob: it fails to
+/// compile the moment one of these names stops reaching the root.
+#[cfg(test)]
+mod reachable_from_the_root {
+    use crate::{
+        NewWorkshopItem, PublishedFileAnswer, PublishedFileUpdate, PublishedItemVoteDetails,
+        SubscribedPage, UgcDetails, UgcDownloaded, VideoWorkshopItem, WorkshopActionPage,
+        WorkshopEnumeration, WorkshopFileAction, WorkshopPage, WorkshopSearch, WorkshopSearchPage,
+        WorkshopVideoProvider,
+    };
+
+    #[test]
+    fn the_workshop_types_are_nameable_from_the_crate_root() {
+        // Naming them above is the assertion; this only keeps the imports from being pruned.
+        let _ = core::any::type_name::<(
+            NewWorkshopItem,
+            PublishedFileAnswer,
+            PublishedFileUpdate,
+            PublishedItemVoteDetails,
+            SubscribedPage,
+            UgcDetails,
+            UgcDownloaded,
+            VideoWorkshopItem,
+            WorkshopActionPage,
+            WorkshopEnumeration,
+            WorkshopFileAction,
+            WorkshopPage,
+            WorkshopSearch,
+            WorkshopSearchPage,
+            WorkshopVideoProvider,
+        )>();
+    }
 }

@@ -56,7 +56,7 @@ pub enum WorkshopFileAction {
 }
 
 /// Which action the number in Steam's field names.
-fn action_from_code(raw: c_int) -> WorkshopFileAction {
+pub(super) fn action_from_code(raw: c_int) -> WorkshopFileAction {
     match raw {
         code if code == sys::EWorkshopFileAction::k_EWorkshopFileActionPlayed as c_int => {
             WorkshopFileAction::Played
@@ -69,7 +69,9 @@ fn action_from_code(raw: c_int) -> WorkshopFileAction {
 }
 
 /// Writes an action to Steam; the unnameable reading is refused here, not sent as a guess.
-fn action_to_sys(action: WorkshopFileAction) -> Result<sys::EWorkshopFileAction, SteamError> {
+pub(super) fn action_to_sys(
+    action: WorkshopFileAction,
+) -> Result<sys::EWorkshopFileAction, SteamError> {
     Ok(match action {
         WorkshopFileAction::Played => sys::EWorkshopFileAction::k_EWorkshopFileActionPlayed,
         WorkshopFileAction::Completed => sys::EWorkshopFileAction::k_EWorkshopFileActionCompleted,

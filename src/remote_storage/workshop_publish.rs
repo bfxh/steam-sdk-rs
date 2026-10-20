@@ -85,15 +85,30 @@ struct EncodedCopy {
 
 /// Steam's `{ int32 m_nNumStrings; char **m_ppStrings; }` pair, borrowed out of owned strings.
 ///
-/// An empty list yields a dangling-but-aligned pointer with a count of zero, which is what
-/// `Vec::as_mut_ptr` guarantees and what Steam reads as "no tags" -- nothing is dereferenced when the
-/// count is zero.
-fn tag_array(tags: &mut [CString]) -> sys::SteamParamStringArray_t {
+/// The pointer array comes back with the struct because `m_ppStrings` points into its heap buffer:
+/// that buffer stays where it is when the `Vec` itself is moved, but it does not survive being dropped
+/// or grown, so the caller has to hold both for as long as Steam may read them. An empty list yields a
+/// dangling-but-aligned pointer with a count of zero, which is what `Vec::as_mut_ptr` guarantees and
+/// what Steam reads as "no tags" -- nothing is dereferenced while the count is zero.
+pub(super) fn tag_array(tags: &[CString]) -> (Vec<*const c_char>, sys::SteamParamStringArray_t) {
     let mut pointers: Vec<*const c_char> = tags.iter().map(|tag| tag.as_ptr()).collect();
-    sys::SteamParamStringArray_t {
-        m_nNumStrings: c_int::try_from(pointers.len()).unwrap_or(0) as _,
+    let raw = sys::SteamParamStringArray_t {
+        m_nNumStrings: c_int::try_from(pointers.len()).unwrap_or(0),
         m_ppStrings: pointers.as_mut_ptr().cast(),
+    };
+    (pointers, raw)
+}
+
+/// Converts a tag list, refusing the whole list on the first entry that cannot become a C string.
+///
+/// Shared with the enumerators, which take two tag lists in one call: dropping a single bad tag would
+/// run the query under a filter the caller never approved.
+pub(super) fn encode_tags(tags: &[String]) -> Result<Vec<CString>, SteamError> {
+    let mut encoded = Vec::with_capacity(tags.len());
+    for tag in tags {
+        encoded.push(CString::new(tag.as_str()).map_err(|_| SteamError::InvalidParameter)?);
     }
+    Ok(encoded)
 }
 
 /// Converts the text both publish calls carry, refusing the whole submission on the first bad piece.
@@ -113,10 +128,7 @@ fn encode_copy(
 ) -> Result<EncodedCopy, SteamError> {
     let title = cloud_file_name(title)?;
     let description = cloud_file_name(description)?;
-    let mut encoded_tags = Vec::with_capacity(tags.len());
-    for tag in tags {
-        encoded_tags.push(CString::new(tag.as_str()).map_err(|_| SteamError::InvalidParameter)?);
-    }
+    let encoded_tags = encode_tags(tags)?;
     let visibility = sys::ERemoteStoragePublishedFileVisibility::try_from(visibility)?;
     // Checked last because it is the only step that touches the filesystem; the refusals above are
     // the ones a caller can get from copy alone.
@@ -206,8 +218,8 @@ impl RemoteStorage {
             Err(error) => return cb(Err(error)),
         };
         let file_type: sys::EWorkshopFileType = item.file_type.into();
-        let mut tags = copy.tags;
-        let mut raw = tag_array(&mut tags);
+        let tags = copy.tags;
+        let (_tag_pointers, mut raw) = tag_array(&tags);
         let api_call = unsafe {
             sys::SteamAPI_ISteamRemoteStorage_PublishWorkshopFile(
                 self.rs,
@@ -226,9 +238,10 @@ impl RemoteStorage {
                 &self.inner,
                 api_call,
                 move |v, io_error| {
-                    // The strings and the tag array are dropped with this closure, after Steam has
-                    // read them: `pchFile`/`pTags` are pointers into allocations the FFI does not own.
-                    let _held = (file, tags, copy.preview_file, copy.title, copy.description);
+                    // Steam marshals its string arguments during the call -- the same assumption the
+                    // crate already makes at src/ugc/update.rs:319-321, where a change note is dropped
+                    // when `submit` returns -- so nothing here is captured by the closure: the C strings
+                    // and their pointer array live in this frame across the call and go when it ends.
                     if io_error {
                         return cb(Err(SteamError::IOFailure));
                     }
@@ -273,8 +286,8 @@ impl RemoteStorage {
             Ok(copy) => copy,
             Err(error) => return cb(Err(error)),
         };
-        let mut tags = copy.tags;
-        let mut raw = tag_array(&mut tags);
+        let tags = copy.tags;
+        let (_tag_pointers, mut raw) = tag_array(&tags);
         let api_call = unsafe {
             sys::SteamAPI_ISteamRemoteStorage_PublishVideo(
                 self.rs,
@@ -294,16 +307,10 @@ impl RemoteStorage {
                 &self.inner,
                 api_call,
                 move |v, io_error| {
-                    // Same rule as the other publish path: everything Steam reads by pointer lives
-                    // until the answer has been read.
-                    let _held = (
-                        account,
-                        identifier,
-                        tags,
-                        copy.preview_file,
-                        copy.title,
-                        copy.description,
-                    );
+                    // Steam marshals its string arguments during the call -- the same assumption the
+                    // crate already makes at src/ugc/update.rs:319-321, where a change note is dropped
+                    // when `submit` returns -- so nothing here is captured by the closure: the C strings
+                    // and their pointer array live in this frame across the call and go when it ends.
                     if io_error {
                         return cb(Err(SteamError::IOFailure));
                     }

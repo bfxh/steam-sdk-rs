@@ -10,6 +10,63 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Fixed — four public types that no user could name
+
+- **`publish_workshop_file` / `publish_video` reached `master` in `d36d64e` with their argument and
+  answer types unreachable** (`NewWorkshopItem`, `VideoWorkshopItem`, `WorkshopVideoProvider`,
+  `PublishedFileAnswer`): the module declared them `pub`, but `remote_storage/mod.rs` never carried a
+  `pub use workshop_publish::*;` line, so nothing re-exported them and the crate root could not see
+  them. The methods were callable (`pub use` is not needed for an inherent method), so everything in the
+  gate chain stayed green while the published surface was unusable -- `commit()` on the update handle
+  was affected the same way, because its answer type moved into that module. **The same commit that adds
+  the missing re-exports adds a permanent guard**: `src/remote_storage/mod.rs` now carries a
+  `reachable_from_the_root` test that names every type these faces hand out through `use crate::{...}`,
+  which cannot be satisfied by a glob and fails to compile the moment a name stops reaching the root.
+  Measured with the removal probe (`D:\tmp\a7\probe_reachable.py`): dropping either re-export line
+  gives `error[E0432]: unresolved imports crate::NewWorkshopItem, crate::PublishedFileAnswer, ...` --
+  for a claim about *name reachability* that is the decisive form, the same removal-probe standard this
+  repository already applies to `unsafe impl Send`.
+- Recorded plainly: this is a defect **I shipped to `master`**, not a pre-existing one, and no ruler
+  in the chain caught it. `package_inventory` counts files, `type_surface` counts methods per impl
+  block, `api_coverage` counts FFI calls -- none of them asks whether a public signature's types are
+  nameable, which is the question that was wrong here.
+
+### Added — the five Workshop enumerators, and one rule for all four pages
+
+- **`ISteamRemoteStorage` 53 -> 58 of 59** (`src/remote_storage/workshop_enumerate.rs`):
+  `enumerate_user_published_files` (`isteamremotestorage.h:285`),
+  `enumerate_user_subscribed_files` (`:289`), `enumerate_user_shared_workshop_files` (`:300`),
+  `enumerate_published_files_by_user_action` (`:306`) and `enumerate_published_workshop_files`
+  (`:309`), under the header's own "this method enumerates the public view of workshop files" (`:307`).
+- 🔴 **The defect class in this family is a count and an array from the same untrusted writer.** Four
+  results carry "int32 m_nResultsReturned;" (`isteamremotestorage.h:390`) next to
+  `PublishedFileId_t m_rgPublishedFileId[ k_unEnumeratePublishedFilesMaxResults ];` (`:392`) whose
+  capacity is Steam's own "const uint32 k_unEnumeratePublishedFilesMaxResults = 50;" (`:55`). `page_len`
+  is bounded on both sides: a negative is zero entries rather than a wrapped full page, and a count
+  above 50 is the capacity. Every page slices its parallel arrays by that one length, so an id cannot
+  come back paired with another item's timestamp or score. `total_results` (`:391`) is a different
+  number and is kept, clamped the same way -- a caller pages until it has seen `total`.
+- **`WorkshopEnumeration` is write-only, like the video provider and for the same measured reason**:
+  `RemoteStorageEnumerateWorkshopFilesResult_t` (`:496-506`) carries no ordering field, so no `read`
+  side is written for a value no call can deliver. Its test does not grade the wrapper against numbers
+  this crate typed: it asserts `wrapper -> binding` and `binding -> the codes the header lists at
+  :128-134` separately.
+- `m_rgRTimeSubscribed` (`:417`) passes through as `u32`: that declaration line has no comment and the
+  header states no unit or epoch, so converting it to a clock would be a guess -- the same rule already
+  documented for `RTime32` in `src/user/answers.rs`.
+- **A `Send` lesson, caught by the compiler and then written down**: holding the tag pointer array
+  until the answer arrives is impossible, because `Vec<*const c_char>` is not `Send` and the call
+  result closure must be. The enumerators therefore follow the convention the crate already uses at
+  `src/ugc/update.rs:319-321` -- arguments are marshalled by the call itself and drop when it returns.
+  The asymmetry with `write_file_async`, which *does* keep its data buffer alive, is deliberate and
+  documented: that header says nothing about when `pvData` stops being read, so the conservative choice
+  is the only defensible one there.
+- The citation ruler caught a wrong number of mine: the by-user-action declaration was cited at `:307`,
+  which is the public-view comment; the call is at `:306`.
+- Repo coverage: **721 -> 726 of 913**; tests 330 -> 334; 5 mutations red on their own assertion
+  messages (`D:\tmp\a7\mut51.py`); citation ruler 56 files / 570 spans / debt **0-0-0**. One entry of
+  the block remains: `GetPublishedFileDetails` (`:280`).
+
 ### Added — publishing an item, and the annotation contradiction that had to be judged first
 
 - **`ISteamRemoteStorage` 51 -> 53 of 59** (`src/remote_storage/workshop_publish.rs`):
