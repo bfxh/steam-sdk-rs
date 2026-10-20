@@ -5,6 +5,7 @@ use serial_test::serial;
 mod api;
 mod cached_ugc;
 mod changes;
+mod download;
 mod files;
 mod platforms;
 mod visibility;
@@ -12,6 +13,7 @@ mod workshop_update;
 
 pub use cached_ugc::*;
 pub use changes::*;
+pub use download::*;
 pub use files::*;
 pub use platforms::*;
 pub use visibility::*;

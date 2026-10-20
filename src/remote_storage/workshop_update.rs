@@ -119,8 +119,25 @@ fn details_name(raw: *mut c_char) -> Option<String> {
 /// large, which is the same defect this crate already closed on "virtual int32 GetFileSize( const char
 /// *pchFile ) = 0;" (`:223`) and on the download-progress pair, whose counters Steam declares as
 /// "int32 *pnBytesDownloaded" (`:247`). Zero is what no size written already looks like.
-fn details_size(raw: ::std::os::raw::c_int) -> u64 {
+pub(super) fn details_size(raw: ::std::os::raw::c_int) -> u64 {
     u64::try_from(raw).unwrap_or(0)
+}
+
+/// What Steam answers when an update request is committed.
+///
+/// The three fields are the whole of "struct RemoteStorageUpdatePublishedFileResult_t"
+/// (`isteamremotestorage.h:442-448`): "The result of the operation." (`:445`), the published file
+/// (`:446`) and the legal flag kept here as `needs_legal_acceptance` (`:447`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PublishedFileCommit {
+    pub published_file_id: PublishedFileId,
+    /// Steam's "bool m_bUserNeedsToAcceptWorkshopLegalAgreement;" (`isteamremotestorage.h:447`);
+    /// That declaration line is everything Steam writes about the field -- there is no comment on it.
+    ///
+    /// Nothing in this wrapper can accept on the user's behalf; the field exists so a caller can open
+    /// the Workshop page instead of treating a committed update as published. Dropping it would make
+    /// "committed" and "live" the same answer when Steam said they are not.
+    pub needs_legal_acceptance: bool,
 }
 
 impl RemoteStorage {
@@ -323,6 +340,39 @@ impl PublishedFileUpdate {
             )
         })?;
         Ok(self)
+    }
+
+    /// Send the filled-in request, answering through `cb`.
+    ///
+    /// "virtual SteamAPICall_t CommitPublishedFileUpdate( PublishedFileUpdateHandle_t updateHandle ) = 0;"
+    /// (`isteamremotestorage.h:275`), under `STEAM_CALL_RESULT( RemoteStorageUpdatePublishedFileResult_t )`
+    /// (`:274`). This is the far end of the eight synchronous entries above: without it a request can
+    /// be filled in but never sent.
+    ///
+    /// The request is consumed, because Steam takes it away at this call -- keeping a live handle to
+    /// fill in afterwards would be editing an update that is already on its way.
+    pub fn commit<F>(self, cb: F)
+    where
+        F: FnOnce(Result<PublishedFileCommit, SteamError>) + 'static + Send,
+    {
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamRemoteStorage_CommitPublishedFileUpdate(self.rs, self.handle)
+        };
+        unsafe {
+            register_call_result::<sys::RemoteStorageUpdatePublishedFileResult_t, _>(
+                &self._inner,
+                api_call,
+                move |v, io_error| {
+                    if io_error {
+                        return cb(Err(SteamError::IOFailure));
+                    }
+                    cb(to_steam_result(v.m_eResult).map(|()| PublishedFileCommit {
+                        published_file_id: PublishedFileId(v.m_nPublishedFileId),
+                        needs_legal_acceptance: v.m_bUserNeedsToAcceptWorkshopLegalAgreement,
+                    }))
+                },
+            );
+        }
     }
 }
 

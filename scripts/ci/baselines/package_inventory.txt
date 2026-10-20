@@ -1,5 +1,6 @@
 # counts: {'steamworks': 155, 'steamworks-sys': 74}
 # 2026-10-21 +steamworks/src/remote_storage/workshop_update.rs: one new module file in what users receive; no existing path removed.
+# 2026-10-21 (second slice) +steamworks/src/remote_storage/download.rs; nothing removed.
 steamworks/.cargo_vcs_info.json
 steamworks/.gitattributes
 steamworks/.gitignore
@@ -99,6 +100,7 @@ steamworks/src/remote_play.rs
 steamworks/src/remote_storage/api.rs
 steamworks/src/remote_storage/cached_ugc.rs
 steamworks/src/remote_storage/changes.rs
+steamworks/src/remote_storage/download.rs
 steamworks/src/remote_storage/files.rs
 steamworks/src/remote_storage/mod.rs
 steamworks/src/remote_storage/platforms.rs

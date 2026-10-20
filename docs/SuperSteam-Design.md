@@ -659,7 +659,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   40 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamRemoteStorage |   44 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
 | ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 708 / 913**（33 个接口；2026-10-21 补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，余 19 只全是 `STEAM_CALL_RESULT` 异步，见 §6.1d 末段）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 712 / 913**（33 个接口；2026-10-21 再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1384,6 +1384,32 @@ ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFol
   把没有的证据写进台账是本轮不做的两件事之一（另一件是给异步面造一个跑不到的假测试）。
   对照：`isteamcontroller.h:2` 就**明写**了 "The older ISteamController interface has been
   deprecated in favor of ISteamInput"，所以那 34 只是主动不接（上面 §6.1 已登记）。
+
+**2026-10-21 第二片：先补"不做就把已做的半面废掉"的那 4 只异步（`ISteamRemoteStorage` 40→44，仓总 708→712）**
+
+- 先手判据不是面的大小，是**耦合**：
+  ① `CommitPublishedFileUpdate`（`isteamremotestorage.h:275`，`STEAM_CALL_RESULT` 在 `:274`）——上一片封了
+  "建请求 + 七个 setter"，没有 commit 就是**填得完、发不出**；
+  ② `UGCDownload`（`:243`）与 `UGCDownloadToLocation`（`:312`）——`cached_ugc.rs` 只读"已经下好的"内容，
+  本仓此前**没有任何调用能把内容变成已下载**，句柄只能等别人产生；
+  ③ `FileWriteAsync`（`:202`）——同步写与流式写都在，异步写缺位。
+- 三条判定全部抽成纯函数，5 变异 5 红在各自断言消息上（`D:\tmp\a7\mut48.py`）：
+  `fixed_name` 读 `char m_pchFileName[k_cchFilenameMax];`（`:461`，容量是 Steam 自己的常数
+  "const uint32 k_cchFilenameMax = 260;" `:57`）。🔴 **填满 260 而不写终止符是合法形状**，`CStr::from_ptr`
+  会为了找终止符走出数组边界；扫描因此限制在拿到的切片内，无终止符就读那 260 字节。
+  `downloaded` 在 EResult 为 OK 之后仍然翻译 `k_UGCHandleInvalid`（`:45`）：Steam 同时说"成功"和
+  "没有这个句柄"时取悲观那一支（`IOFailure`），不把本仓其它路径一律拒绝的值当结果交出去。
+  `async_write_len`：异步写的尺寸字段是 `uint32`（`:202`），同步写是 `int32`（`:197`）——**两个天花板**，
+  所以两条路各有各的拒绝，不共用一把尺；超限是拒绝不是截断（截断会把少写报成成功）。
+  `write_file_async` 把字节复制一份交给 call result 闭包持有，直到答复到达：头文件从未说明 `pvData`
+  何时不再被读，让调用方的缓冲区先离开就是悬垂读。
+- **登记（不检查的理由）**：`SteamAPICall_t` 返回 0 是什么意思，随仓头文件里查不到（在 public 目录扫
+  `k_SteamAPICall` 与 `SteamAPICall_tInvalid` 均**零命中**）。本仓因此**不写**"0 就是没启动"的哨兵——
+  不替 Steam 编造它没说的常数；后果如实记为未证：若真出现 0，注册的回调不会触发。
+- 🔴 **顺带挖出同族旧缺陷，本片不改**：`src/ugc/update.rs:319` 的 `submit(change_note)` 用
+  `CString::new(v).ok()` 把含 nul 的变更说明**静默变成 null**，等于"发一份没有变更说明的更新并报告成功"，
+  正是本仓在 overlay 协议注册与 `ugc_download_to_location` 里拒绝的那类失败。修它要动公开签名（改返
+  `Result`），属破坏性，登记待用户点头，不偷偷改。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

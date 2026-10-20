@@ -28,7 +28,7 @@ use std::os::raw::c_int;
 pub struct UgcHandle(pub u64);
 
 /// A handle, or nothing when Steam said its own marker.
-fn handle_or_none(raw: u64) -> Option<UgcHandle> {
+pub(super) fn handle_or_none(raw: u64) -> Option<UgcHandle> {
     if raw == sys::k_UGCHandleInvalid {
         None
     } else {

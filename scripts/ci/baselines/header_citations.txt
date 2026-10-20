@@ -131,6 +131,7 @@
 # substitution -- backticks inside a double-quoted argument -- which is why they are written
 # out here without them.)
 # 2026-10-21 +3 rows for src/remote_storage/workshop_update.rs, all columns zero: its 33 spans each sit in a block that carries a verbatim header phrase, so the debt columns did not move.
+# 2026-10-21 (second slice) +3 rows for src/remote_storage/download.rs at zero debt; workshop_update.rs spans 33 -> 40, still 0-0-0. Both files paid their debt before this re-record rather than having it registered as debt.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -233,6 +234,9 @@ src/remote_storage/api.rs~undeclared 0
 src/remote_storage/cached_ugc.rs 0
 src/remote_storage/cached_ugc.rs~unjudged 0
 src/remote_storage/cached_ugc.rs~undeclared 0
+src/remote_storage/download.rs 0
+src/remote_storage/download.rs~unjudged 0
+src/remote_storage/download.rs~undeclared 0
 src/remote_storage/files.rs 0
 src/remote_storage/files.rs~unjudged 0
 src/remote_storage/files.rs~undeclared 0

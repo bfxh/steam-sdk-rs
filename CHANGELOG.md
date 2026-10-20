@@ -10,6 +10,44 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — the four call results that make the two cloud faces whole
+
+- **`ISteamRemoteStorage` 40 -> 44 of 59** (`src/remote_storage/download.rs`, new, plus `commit` on
+  `PublishedFileUpdate`): coverage was chosen by coupling, not by size. `CommitPublishedFileUpdate`
+  (`isteamremotestorage.h:275`) is the far end of yesterday's update builder -- without it a request
+  can be filled in and never sent. `UGCDownload` (`:243`) and `UGCDownloadToLocation` (`:312`) are the
+  producers the cached-UGC face never had: `cached_ugc.rs` reads content that is already down, and
+  nothing in this crate could put content into that state. `FileWriteAsync` (`:202`) is the async
+  sibling of the two write paths that already exist.
+- **The name buffer is read inside its own bounds.** `char m_pchFileName[k_cchFilenameMax];`
+  (`:461`) is a fixed array whose capacity is Steam's own constant: "const uint32 k_cchFilenameMax =
+  260;" (`:57`). A buffer full to 260 entries has no obligation to hold a terminator, and
+  `CStr::from_ptr` would walk past the end of the array looking for one -- `fixed_name` scans the
+  slice it was given, so an unterminated name reads as the 260 bytes that are actually there. An
+  all-zero buffer and a non-UTF-8 buffer stay `None`, the same collapse the crate already makes for
+  names rather than a lossy string that looks like one.
+- **`handle_or_none` now serves both faces.** Steam declares "const UGCHandle_t k_UGCHandleInvalid =
+  0xffffffffffffffffull;" (`:45`); an answer whose EResult says OK and whose handle says no such
+  handle is two statements at once, so `downloaded` takes the pessimistic one and answers
+  `IOFailure` instead of handing out a handle every other path in this crate refuses to build.
+- **Two ceilings, two guards.** `FileWriteAsync` sizes `cubData` as `uint32` (`:202`) while the
+  synchronous `FileWrite` sizes it as `int32` (`:197`), so `async_write_len` refuses what a `uint32`
+  cannot carry instead of sharing the synchronous guard or clipping: a clipped length would report a
+  short write as a success. The bytes themselves are copied and the copy is owned by the call-result
+  closure until the answer arrives, because the header never says when `pvData` stops being read.
+- **What is deliberately not checked, with the reason.** No vendored header defines what a
+  `SteamAPICall_t` of zero means (a scan of `steamworks-sys/lib/steam/public/steam` for
+  `k_SteamAPICall` and `SteamAPICall_tInvalid` returns nothing), so these wrappers do not invent a
+  sentinel and do not test a branch no input reaches. Registered as unverified: if Steam ever
+  returns a handle of zero, the registered callback simply never fires.
+- **A sibling defect found while writing this, not fixed here**: `src/ugc/update.rs:319` turns a
+  change note that cannot become a `CString` into `None`, so `submit()` publishes **without** the note
+  the caller named and reports success -- the failure class this crate refuses on the overlay
+  protocol registration and on `ugc_download_to_location`. Fixing it changes a public signature, so it
+  is registered here as a breaking candidate for the maintainer's call rather than changed silently.
+- Repo coverage: **708 -> 712 of 913**; tests 319 -> 323; 5 mutations red on their own assertion
+  messages (`D:\tmp\a7\mut48.py`); citation ruler 53 files / 483 spans / debt **0-0-0**.
+
 ### Added — the Workshop update request, and a classification of what is left
 
 - **`ISteamRemoteStorage` 31 -> 40 of 59** (`src/remote_storage/workshop_update.rs`, new): the eight
