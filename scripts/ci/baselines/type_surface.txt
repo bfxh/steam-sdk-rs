@@ -4,6 +4,7 @@
 # 2026-10-21 (fourth slice) RemoteStorage 26 -> 28: publish_workshop_file and publish_video.
 # 2026-10-21 (fifth slice) RemoteStorage 28 -> 33: the five enumerate methods. The page types (WorkshopPage, SubscribedPage, WorkshopActionPage, WorkshopSearchPage) carry fields only, so they add no rows -- this ruler counts pub fn per type.
 # 2026-10-21 (sixth slice) RemoteStorage 33 -> 34: get_published_file_details.
+# 2026-10-21 Video 3 -> 4: +get_opf_settings, one inherent method. The two new callback types add no methods, so they do not move this ledger.
 Friends 61
 Server 49
 Input 45
@@ -59,12 +60,12 @@ FakeUDPPort 4
 ListenSocket 4
 NetConnectionRealTimeLaneStatus 4
 NetworkingConfigEntry 4
+Video 4
 DisconnectedEvent 3
 GameId 3
 Http 3
 ItemDetail 3
 SessionRequest 3
-Video 3
 AccountId 2
 AppIDs 2
 BeaconId 2

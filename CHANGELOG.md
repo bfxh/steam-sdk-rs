@@ -10,6 +10,40 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — `ISteamVideo` reaches 4 of 4
+
+- **`GetOPFSettings`** (`isteamvideo.h:40`) is the request half of the 360-video read path: the crate
+  already had `opf_string` reading whatever Steam happened to hold, and no way to ask for a fresh copy.
+  Wrapping it takes `ISteamVideo` to full coverage (repo 727 → 728 of 913).
+- **`GetVideoURLResult` and `GetOPFSettingsResult` join the callback stream**, which is what makes those
+  two void-returning calls answerable at all. Both go in as `CallbackResult` variants rather than into
+  `CALLBACKS_NOT_IN_STREAM`, because that debt list may only shrink and
+  `every_callback_is_streamable_or_listed_as_debt` fails on a callback that is defined but not streamed:
+  a new callback type cannot be added by half-registering it.
+- Judgements, all of them testable without a client: `m_eResult` becomes `Option<SteamError>` with
+  `k_EResultFail` landing on `Generic` (`src/error.rs:24-26`) and an unwritten zero staying an error
+  (`k_EResultNone` is not a success), and the fixed 256-byte `m_rgchURL` is bounded by the array when
+  Steam never writes a terminator. Two tests, 324 passing.
+
+### Fixed — two sentences in this crate's own docs had never been measured
+
+- **`opf_string` said the generated bindings contain no OPF request-result callback.** They do:
+  `GetOPFSettingsResult_t` appears 12 times in each of the three bindings files, the struct is at
+  ``steamworks-sys/src/windows_bindings.rs:16582``, and its id is `k_iSteamVideoCallbacks + 24`
+  (`isteamvideo.h:58-61`). The claim turned "I have not wrapped this" into "this cannot be wrapped", and
+  the consequence was a reader permanently pinned to cached data.
+- **`open_video_page` said Steam's own UI takes over and the call carries no result.** `isteamvideo.h:32`
+  describes it as "Get a URL suitable for streaming the given Video app ID's video", answered by
+  `GetVideoURLResult_t` (`:51-55`). The method keeps its name -- renaming it is a public-signature change
+  and sits with the other pending calls -- but the doc now states what the header says, and the URL can
+  actually reach a caller.
+- 📐 **The packed-field boundary got measured rather than assumed**, which is also why last round's
+  retired text ruler misfired: `GetVideoURLResult_t` and `GetOPFSettingsResult_t` are plain `#[repr(C)]`
+  in all three bindings, and `GetAppDependenciesResult_t` *is* `#[repr(C, packed(4))]` on Linux and macOS
+  while borrowing its 4-byte `m_rgAppIDs` stays legal. The rule is that `packed(N)` only endangers fields
+  whose alignment demand exceeds `N` -- the 8-byte `PublishedFileId_t` / `UGCHandle_t` cases -- not every
+  field of a packed struct. The cross-target compiler remains the judge.
+
 ### Fixed — a class only another target can see, and the eight errors that reached `master`
 
 - **`b559e35` failed six CI jobs with `error[E0793]: reference to field of packed struct is unaligned`

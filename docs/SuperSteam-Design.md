@@ -664,7 +664,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
 | ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
 | ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
-| ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
+| ISteamNetworking |    6 |  22 | ISteamVideo |    4 |   4 |
 | ISteamFriends |   76 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
 | ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
@@ -674,7 +674,7 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
 | ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 727 / 913**（33 个接口；2026-10-21 第六片补 `GetPublishedFileDetails` 58→59，`ISteamRemoteStorage` **首次到满**，见 §6.1d 末段第六片）；第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 728 / 913**（33 个接口；2026-10-21 第七片补 `ISteamVideo` 的请求半 `GetOPFSettings` 3→4，**该接口首次到满**，并订正 `opf_string` 文档里"绑定层没有 OPF 结果回调"这一未测说法，见 §6.1d 末段第七片）；第六片补 `GetPublishedFileDetails` 58→59，`ISteamRemoteStorage` **首次到满**，见 §6.1d 末段第六片）；第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
  与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
  与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
@@ -1528,6 +1528,36 @@ ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFol
   而全盲（`[^)]*` 停在第一个 `)`，对恰好害人的那段代码报 0），改成三种借位写法后又开始误报既有码
   （`cb.m_unAppID.into()`、`m_nFileSize.max(0)` 是按值调用，完全合法）。一把既会漏又会误的门比没有更糟，
   所以按 `callback_threads` 那列 `unclaimed` 的先例退役，改由交叉 target 的编译器当尺。
+
+**2026-10-21 第七片：`ISteamVideo` 的请求半补上，该接口首次 4/4（仓总 727→728），并撤掉两句没测过的说法**
+
+- 缺的那只一直是**请求半**：`GetOPFSettings( AppId_t unVideoAppID )`（`:40`）在这版绑定里被声明、
+  从未被 `src/` 调过（`api_coverage` 实测 `ISteamVideo.called 3`）。补上 ⇒ 4/4，仓总 728。
+- 🔴 **`opf_string` 原文写"本仓生成的绑定里没有 OPF 请求-结果回调"，这句从来没有被量过，而且是错的**：
+  `GetOPFSettingsResult_t` 在三份绑定里各命中 12 次，结构体在 `windows_bindings.rs:16582`，回调号
+  `k_iSteamVideoCallbacks + 24`（`isteamvideo.h:58-61`）。它就是 `GetOPFSettings` 的答复，字段只有
+  `m_eResult` 与 `m_unVideoAppID`。这句话把"我还没接"写成了"接不了"，后果是读侧被钉死成只能读缓存；
+  现在文档改陈实测事实，请求与就绪信号都能表达。
+- 🔴 **同一文件里第二句没测的说法**：`open_video_page` 原文写"Steam 自己的界面接管，这调用没有结果可报"。
+  `isteamvideo.h:32` 给的是 "Get a URL suitable for streaming the given Video app ID's video"，答复是
+  `GetVideoURLResult_t`（`:51-55`，`k_iSteamVideoCallbacks + 11`，带 `m_rgchURL[256]`）⇒ 有结果，而且
+  一直是唯一能把 URL 交回调用方的通道。方法名 `open_video_page` 保留（改名动公开签名，属 §待拍板那一档），
+  文档按实测重写，并新增 `GetVideoURLResult` 让 URL 真能到达调用方。
+- **两个回调类型走的是流注册那条严格路，不是债清单**：`CALLBACKS_NOT_IN_STREAM` 只许变短，
+  `every_callback_is_streamable_or_listed_as_debt` 会把"定义了但没进流、也没登记"的类型判红 ⇒
+  加类型必须同时加 `CallbackResult` 变体与 `from_raw` 分发臂，漏一半就红。
+- **判定面**：`m_eResult` 一律翻成 `Option<SteamError>`——`k_EResultFail` 落 `Generic`（`src/error.rs:24-26`），
+  没人写过的 0 是 `k_EResultNone`，**仍算错误**（一次没成功的取回不能读成成功）；`m_rgchURL` 无终止符时
+  以数组边界为长度，走 `utils::fixed_string` 的 lossy 解码，不再 `expect`。
+- 📐 **本片顺手把 packed 的边界量准了**（这是上一轮那把尺误报的根因）：`GetVideoURLResult_t` 与
+  `GetOPFSettingsResult_t` 在**三份绑定都是 `#[repr(C)]`**，不属 E0793 那一类；同接口的
+  `GetAppDependenciesResult_t` 在 Linux/macOS 确是 `#[repr(C, packed(4))]`，但它被借的 `m_rgAppIDs`
+  是 4 字节 `AppId_t`——**align 恰等于 packing 值，所以取引用合法**。⇒ 规则是"`packed(N)` 只对
+  对齐需求 **> N** 的字段构成危害"（8 字节的 `PublishedFileId_t`/`UGCHandle_t` 才是雷），不是"packed
+  结构体的任何字段都不能借"。这条只有交叉 target 的编译器能判红，本机复算链第 31 条就是它。
+- 本接口仍余 2 只，且都是**有主登记**而非漏：`RequestUGCDetails`（`:290`，头文件 `:227` 自己写明
+  "the RequestUGCDetails call is deprecated and replaced with this"）与 `GetAppDependencies`（`:383`，
+  `answers.rs:242-245` 已明确拒用 one-shot 闭包形状，因为多页答复用 `FnOnce` 会把第一页当成整张表）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 

@@ -136,6 +136,7 @@
 # 2026-10-21 (fourth slice) +3 rows for src/remote_storage/workshop_publish.rs at zero debt (21 spans); workshop_update.rs spans 40 -> 35 with the removed struct. Ten spans arrived unanchored in the first draft and were paid before this re-record, not registered as debt.
 # 2026-10-21 (fifth slice) +3 rows for src/remote_storage/workshop_enumerate.rs at zero debt (25 spans). It arrived with 7 unanchored spans and one WRONG line number the ruler caught: a declaration was cited at :307, which is the public-view comment; the call is :306.
 # 2026-10-21 (sixth slice) +3 rows for src/remote_storage/published_details.rs at zero debt (34 spans). It arrived with 14 unanchored spans and one quote-pairing break caused by writing an empty `""` in prose -- two quote characters to the ruler.
+# 2026-10-21 +src/video.rs cites isteamvideo.h (58 files, 608 spans, debt 0-0-0): four spans anchored verbatim, and the gate judged red on all four until the line numbers were re-read (:31 is the GetVideoURL purpose comment, :38 the STEAM_CALL_BACK annotation, :39-40 the request next to its reader).
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -145,6 +146,9 @@ src/matchmaking_servers.rs~undeclared 0
 src/networking_messages.rs 0
 src/networking_messages.rs~unjudged 0
 src/networking_messages.rs~undeclared 0
+src/video.rs 0
+src/video.rs~unjudged 0
+src/video.rs~undeclared 0
 src/friends/callbacks.rs 0
 src/friends/callbacks.rs~unjudged 0
 src/friends/callbacks.rs~undeclared 0

@@ -33,7 +33,9 @@ pub enum CallbackResult {
     GamepadTextInputDismissed(GamepadTextInputDismissed),
     GameRichPresenceJoinRequested(GameRichPresenceJoinRequested),
     GetAppDependenciesResult(GetAppDependenciesResult),
+    GetOPFSettingsResult(GetOPFSettingsResult),
     GetUserItemVoteResult(GetUserItemVoteResult),
+    GetVideoURLResult(GetVideoURLResult),
     GlobalStatsReceived(GlobalStatsReceived),
     LobbyChatMsg(LobbyChatMsg),
     LobbyChatUpdate(LobbyChatUpdate),
@@ -190,6 +192,10 @@ impl CallbackResult {
             GetAppDependenciesResult::ID => {
                 Self::GetAppDependenciesResult(GetAppDependenciesResult::from_raw(data))
             }
+            GetOPFSettingsResult::ID => {
+                Self::GetOPFSettingsResult(GetOPFSettingsResult::from_raw(data))
+            }
+            GetVideoURLResult::ID => Self::GetVideoURLResult(GetVideoURLResult::from_raw(data)),
             GetUserItemVoteResult::ID => {
                 Self::GetUserItemVoteResult(GetUserItemVoteResult::from_raw(data))
             }

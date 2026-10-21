@@ -4,6 +4,7 @@
 # 2026-10-21 (fourth slice) +src/remote_storage/workshop_publish.rs 412, workshop_update.rs 462 -> 446 (the duplicated answer struct is gone -- one PublishedFileAnswer now serves both publish and commit), mod.rs 255 -> 256.
 # 2026-10-21 (fifth slice) +src/remote_storage/workshop_enumerate.rs 515, mod.rs +2 lines.
 # 2026-10-21 (sixth slice) +src/remote_storage/published_details.rs, mod.rs and download.rs one-line visibility changes, workshop_enumerate.rs 515 -> 538 (the packed fields are copied out before they are sliced).
+# 2026-10-21 seventh slice: src/video.rs 122 -> 291 (OPF request + two video callbacks + their tests), src/callback.rs 560 -> 566 (two CallbackResult variants and their dispatch arms).
 src/matchmaking_servers.rs 901
 src/lib.rs 833
 src/matchmaking/mod.rs 754
@@ -14,7 +15,7 @@ src/ugc/mod.rs 604
 src/error.rs 603
 src/ugc/answers.rs 600
 src/timeline.rs 579
-src/callback.rs 560
+src/callback.rs 566
 src/ugc/types.rs 559
 src/app.rs 551
 src/networking_sockets/fake_udp.rs 544
@@ -55,6 +56,7 @@ src/server_stats.rs 309
 src/friends/profile_items.rs 302
 src/remote_storage/mod.rs 302
 src/user_stats/global_stats.rs 293
+src/video.rs 291
 src/user_stats/user_reads.rs 283
 src/matchmaking/chat.rs 281
 src/networking_utils/ping.rs 279
@@ -101,7 +103,6 @@ src/server/interfaces.rs 131
 src/user/answers.rs 130
 src/server/callbacks.rs 129
 src/networking_sockets/poll_group.rs 123
-src/video.rs 122
 src/inventory/actions.rs 121
 src/utils/locks.rs 117
 src/server/mod.rs 115

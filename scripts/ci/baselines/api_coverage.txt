@@ -1,10 +1,11 @@
-# 33 interfaces, 913 declared, 699 called
 # 2026-10-21 ISteamRemoteStorage.called 31 -> 40: the nine synchronous entries of "publishing UGC" (isteamremotestorage.h:264-273, :292) and GetUGCDetails (:250) are wrapped in src/remote_storage/workshop_update.rs. The other 19 of that block return SteamAPICall_t and stay registered as unwrapped, not missing: each needs its own call result struct -- see docs/SuperSteam-Design.md 6.1d.
 # 2026-10-21 (second slice) ISteamRemoteStorage.called 40 -> 44: the four call-result entries whose absence made the synchronous face unusable -- CommitPublishedFileUpdate (isteamremotestorage.h:275), UGCDownload (:243), UGCDownloadToLocation (:312), FileWriteAsync (:202). 15 Workshop publish/vote/enumerate entries still return SteamAPICall_t and wait in docs/SuperSteam-Design.md 6.1d.
 # 2026-10-21 (third slice) ISteamRemoteStorage.called 44 -> 51: the seven Workshop entries whose answer names the item back -- delete/subscribe/unsubscribe (:282, :287, :291), the two vote-detail reads (:294, :298, both annotated with the same struct at :293 and :297), the user's own vote (:296) and SetUserPublishedFileAction (:304), in src/remote_storage/workshop_answers.rs. 8 of the block remain (2 publish, 5 enumerate, GetPublishedFileDetails).
 # 2026-10-21 (fourth slice) ISteamRemoteStorage.called 51 -> 53: PublishWorkshopFile (isteamremotestorage.h:266) and PublishVideo (:302), in src/remote_storage/workshop_publish.rs. Their answer is read from RemoteStoragePublishFileResult_t (:360-366, Purpose at :358) rather than the struct the two STEAM_CALL_RESULT lines name (:265, :301) -- the reason is argued in the module doc and in docs/SuperSteam-Design.md 6.1d. 6 remain: 5 enumerate + GetPublishedFileDetails (:280).
 # 2026-10-21 (fifth slice) ISteamRemoteStorage.called 53 -> 58: the five enumerators (isteamremotestorage.h:285, :289, :300, :306, :309) in src/remote_storage/workshop_enumerate.rs. One of the block is left: GetPublishedFileDetails (:280). Repo total 721 -> 726 of 913.
 # 2026-10-21 (sixth slice) ISteamRemoteStorage.called 58 -> 59: GetPublishedFileDetails (isteamremotestorage.h:280), in src/remote_storage/published_details.rs. The interface is closed at 59/59 -- every entry the flat layer declares is now called from src/. Repo total 726 -> 727 of 913.
+# 2026-10-21 ISteamVideo.called 3 -> 4: the request half `GetOPFSettings` (isteamvideo.h:39) is now called, so ISteamVideo is 4/4 for the first time; repo total 727 -> 728 of 913.
+# 33 interfaces, 913 declared, 728 called
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -70,4 +71,4 @@ ISteamUGC.called 97
 ISteamUser.called 30
 ISteamUserStats.called 41
 ISteamUtils.called 32
-ISteamVideo.called 3
+ISteamVideo.called 4
