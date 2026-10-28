@@ -324,6 +324,19 @@ plus the callbacks the wrapper can deliver.
 Ledgers for this commit: `Input` 44 -> 45 inherent methods (key count stays 80), `src/input.rs`
 636 -> 725, `src/callback.rs` 539 -> 543, lib test floor 130 -> 133.
 
+### Added — three-valued truth for answers Steam cannot give
+
+- `Ternary` — the crate now exports a Kleene three-valued truth (`False` / `Unknown` / `True`)
+  (`ac193f2`), so an answer of "Steam could not tell" can be composed instead of collapsing to
+  `false`. `UserHasLicense` gains `From<UserHasLicense>`, the one projection whose unknown has a
+  real source (`NoAuth`, `Unknown`); `Apps::is_subscribed_*` and the rest of the boolean surface
+  deliberately do not, because Steam's boolean queries have no "I cannot tell" return and a
+  fabricated `Unknown` would be a guess rather than a signal. `and` keeps K3's
+  `False & Unknown == False` instead of Bochvar's absorbing `X`, `implies` is a method rather than
+  an operator because `X => X = X`, and the admission rule a game would actually write is proved
+  by enumerating all 3^5 assignments in the test module. Design, trade-offs and the measurement
+  behind them: `docs/ternary-integration.md`.
+
 ### Added — CI and release automation
 
 - **Workflow syntax is now checked by `actionlint`.** `workflow_inputs.py` deliberately does not
