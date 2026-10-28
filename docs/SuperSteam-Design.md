@@ -28,6 +28,7 @@
 > - `repro/call_result_chain_deadlock_test.rs` —— 缺陷 #2 场景 E：call_result 内链式调 API 同锁自锁（含跨锁对照组）
 > - `repro/call_result_chain_deadlock_fixed.rs` —— 缺陷 #2 场景 E **修复 A/B**（E-before 死锁 / E-after 正常），对应 `src/lib.rs` 已实施的守卫作用域收缩
 > - `repro/stream_deadlock_demo.rs` —— CallbackStream（本地 futures 封装）的挂起语义实测：空队列 `block_on(pending)` 死锁 vs `now_or_never()` 返回 None
+> - `repro/ternary_bulk_bench.rs` —— 三值批量谓词的成本（纯 AND / AND+计数两种口径，含二进制基线与 K3 自检；无 Steam 依赖，见 `docs/ternary-integration.md` §3.2）
 
 ---
 
@@ -1380,7 +1381,7 @@ option 4 下 `call_results` 自重入依然存在。
 **「代码级 D-only 窄版」不存在**（这是做窄版前先量出来的）：`ebd1183` 是一个不可拆机制
 （dispatch 整桶取出→放锁调用→按 seq 归并回插，`pending_removal` 墓碑专司 D），B/C 只是「放锁调用」
 的副产物；`ebd1183` 新增 4 测中**仅 1 测真正测 D**。唯一能独立于 B/C 的 D 修法是
-`Box<dyn FnMut>` → `Arc<dyn Fn>`（实测表定义在 `src/lib.rs:112`、可变调用站点 `iter_mut()` 仅 1 处），
+`Box<dyn FnMut>` → `Arc<dyn Fn>`（实测表定义在 `src/lib.rs:114`、可变调用站点 `iter_mut()` 仅 1 处），
 但那是**破坏性公开签名变更**（现收 `FnMut`，换 `Fn` 会让「只改捕获环境」的闭包不再满足约束），属 major
 范畴，且我在 #253 里自己写过「未在本仓原型验证」。⇒ 按用户拍板走**缩声称 + 缩测试**，机制不动。
 
@@ -1570,7 +1571,7 @@ SuperSteam 的价值主张需相应收敛：**不是「做一个更快的绑定�
 
 ### 缺陷 #4：release 下 null 指针 = Illegal instruction（`repro/null_guard_test.rs`）
 
-镜像 `src/lib.rs:349-358` 的模式（`debug_assert!(!ptr.is_null())` + 后续裸指针解引用），分两种编译模式运行：
+镜像 `src/lib.rs:351-360` 的模式（`debug_assert!(!ptr.is_null())` + 后续裸指针解引用），分两种编译模式运行：
 
 | 编译模式 | null 指针时的行为 | 退出码 |
 |---------|------------------|--------|
@@ -1604,7 +1605,7 @@ lib.rs 的 24 处守卫每一处都紧贴一行接口指针获取（`let x = sys
 
 先说清影响面的确切口径。23 处是**检查点**，对应的**公开方法**是 23 个：
 
-- `src/lib.rs:349-545` 共 **17 个**：`utils` / `matchmaking` / `matchmaking_servers` / `networking` / `apps` / `friends` / `input` / `user` / `user_stats` / `remote_play` / `remote_storage` / `screenshots` / `ugc` / `timeline` / `networking_messages` / `networking_sockets` / `networking_utils`
+- `src/lib.rs:351-547` 共 **17 个**：`utils` / `matchmaking` / `matchmaking_servers` / `networking` / `apps` / `friends` / `input` / `user` / `user_stats` / `remote_play` / `remote_storage` / `screenshots` / `ugc` / `timeline` / `networking_messages` / `networking_sockets` / `networking_utils`
 - `src/server.rs:534-593` 共 **6 个**：`ugc` / `utils` / `networking` / `networking_messages` / `networking_sockets` / `apps`
 
 若按「改成 `Result`」的直觉处理，会变成 `pub fn friends(&self) -> Result<Friends, SteamError>`——**这是对全部 23 个方法的破坏性变更**，所有调用方都要加 `?`。我在阶段 0 表里把 #4 标为「中风险（改公开 API 返回类型）」就是这个意思。

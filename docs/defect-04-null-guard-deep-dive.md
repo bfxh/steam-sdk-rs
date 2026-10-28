@@ -17,7 +17,7 @@
 
 ### A1. 复现证据
 
-`repro/null_guard_test.rs` 镜像 `src/lib.rs:349-358`（`utils()`）的模式：`debug_assert!` 守卫 + 裸指针解引用。
+`repro/null_guard_test.rs` 镜像 `src/lib.rs:351-360`（`utils()`）的模式：`debug_assert!` 守卫 + 裸指针解引用。
 
 **debug 模式**：
 ```

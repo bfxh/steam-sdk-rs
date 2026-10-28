@@ -41,6 +41,7 @@ InventoryUpdateHandle 6
 LobbyListFilter 6
 ParentalSettings 6
 ServerListRequest 6
+Ternary 6
 NetConnectionInfo 5
 NetworkingMessages 5
 RelayNetworkStatus 5

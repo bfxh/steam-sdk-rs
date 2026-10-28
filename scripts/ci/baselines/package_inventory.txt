@@ -50,6 +50,7 @@ steamworks/src/screenshots.rs
 steamworks/src/server.rs
 steamworks/src/server_stats.rs
 steamworks/src/timeline.rs
+steamworks/src/tri.rs
 steamworks/src/ugc/answers.rs
 steamworks/src/ugc/mod.rs
 steamworks/src/ugc/query.rs

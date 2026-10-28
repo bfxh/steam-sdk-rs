@@ -4,7 +4,7 @@ src/inventory.rs 966
 src/user_stats.rs 868
 src/html_surface.rs 842
 src/server.rs 821
-src/lib.rs 814
+src/lib.rs 816
 src/remote_storage.rs 792
 src/friends/mod.rs 790
 src/networking_sockets/mod.rs 789
@@ -31,6 +31,7 @@ src/friends/friend.rs 401
 src/networking_types/end.rs 384
 src/networking_messages.rs 372
 src/lib_tests.rs 354
+src/tri.rs 341
 src/ugc/ugc_tests.rs 331
 src/screenshots.rs 329
 src/server_stats.rs 309
