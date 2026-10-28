@@ -51,6 +51,7 @@ into `int` range and report `possibly_truncated` instead of quietly shortening a
 entry type this binding cannot name stays `Invalid` rather than wrapping into a neighbouring
 variant.
 `Friend::state()` no longer panics on a state Steam reports that this binding cannot name -- it yields the new `FriendState::Unknown`. |
+| `Ternary` | Kleene three-valued truth (`False` / `Unknown` / `True`) for the queries Steam answers with "I cannot tell". `owned & installed` composes without collapsing an unknown to `false`, and `From<UserHasLicense>` is the one projection whose unknown has a real source (`NoAuth`). Pure data -- no FFI, one byte per value, and `#[must_use]`. Rationale, trade-offs and measurements in `docs/ternary-integration.md`. |
 
 `SteamId` / `AppId` / `PublishedFileId` are distinct newtypes, so the compiler rejects mixing
 them. Steam does expose `PrioritizeHTTPRequest` and `GetHTTPStreamingResponseBodyData`, but this

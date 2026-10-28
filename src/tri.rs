@@ -34,6 +34,7 @@ use crate::UserHasLicense;
 /// A Kleene truth value: what a query answered, including "it did not answer".
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[must_use = "a truth value that is dropped is a decision that was never made"]
 pub enum Ternary {
     /// Answered no.
     False,
