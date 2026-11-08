@@ -128,7 +128,7 @@ impl Ternary {
     pub const fn implies(self, other: Self) -> Self;  // K3：Unknown ⇒ Unknown = Unknown
 }
 impl Not for Ternary { .. }                    // !x
-impl From<UserHasLicense> for Ternary { .. }   // Has→True, DoesNotHave→False, NoAuth/Unknown→Unknown
+impl From<UserHasLicense> for Ternary { .. }   // Has→True, DoesNotHave→False, NoAuth/Unrecognized→Unknown
 ```
 
 **没有做的事，以及为什么.** 上一版这里举的例子是给 `Apps::is_subscribed_app` 加一个
@@ -349,7 +349,7 @@ workspace 的 0.12.0 **未发布**；0.3.2–0.7.0 已全部 yank。
 | 切片 | 内容 | 状态 | 判据 |
 |---|---|---|---|
 | S1 | `tri` 模块：`Ternary` + K3 的 `and`/`or`/`implies`/`!` | **已落地** | 9 格真值表 ×3、De Morgan ×18、`size_of::<Ternary>() == 1`；新增 9 条测试 |
-| S2 | 许可证投影 `From<UserHasLicense>` | **已落地** | 4 个变体逐一钉住；`NoAuth` 与 `Unknown` 都必须落到 `Unknown` |
+| S2 | 许可证投影 `From<UserHasLicense>` | **已落地** | 4 个变体逐一钉住；`NoAuth` 与 `Unrecognized` 都必须落到 `Unknown` |
 | S3 | 准入策略的穷举证明 | **已落地（仓内穷举，不用外部引擎）** | 3^5 = 243 个赋值：`Yes` 恰好 1 个；`license=Unknown` 时绝不 `Yes`；任一确定的 `False` 必为 `False` |
 | S4 | `InventoryResult` 拆三态 | **不做** | 见下 |
 | S5 | `trit-cli` 进 CI 做策略证明 | **不做** | 见下 |

@@ -125,7 +125,7 @@ impl From<bool> for Ternary {
     }
 }
 
-/// `NoAuth` and `Unknown` both mean Steam did not answer, so both become
+/// `NoAuth` and `Unrecognized(_)` both mean Steam did not answer, so both become
 /// [`Ternary::Unknown`]; the distinction between them stays in the original enum, which is
 /// why this conversion exists instead of the wrapper returning `bool` in the first place.
 impl From<UserHasLicense> for Ternary {
@@ -133,7 +133,7 @@ impl From<UserHasLicense> for Ternary {
         match license {
             UserHasLicense::HasLicense => Self::True,
             UserHasLicense::DoesNotHaveLicense => Self::False,
-            UserHasLicense::NoAuth | UserHasLicense::Unknown => Self::Unknown,
+            UserHasLicense::NoAuth | UserHasLicense::Unrecognized(_) => Self::Unknown,
         }
     }
 }
@@ -251,7 +251,7 @@ mod tests {
             // Two different reasons, one composable answer. The distinction is not lost --
             // callers who need it still have the enum; this conversion is the opt-in.
             (UserHasLicense::NoAuth, Ternary::Unknown),
-            (UserHasLicense::Unknown, Ternary::Unknown),
+            (UserHasLicense::Unrecognized(0), Ternary::Unknown),
         ];
         for (license, want) in mapped {
             assert_eq!(Ternary::from(license), want);

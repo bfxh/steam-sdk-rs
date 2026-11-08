@@ -15,7 +15,7 @@ still declares version `0.13.1`.
 - `Ternary` — the crate now exports a Kleene three-valued truth (`False` / `Unknown` / `True`)
   (`ac193f2`), so an answer of "Steam could not tell" can be composed instead of collapsing to
   `false`. `UserHasLicense` gains `From<UserHasLicense>`, the one projection whose unknown has a
-  real source (`NoAuth`, `Unknown`); `Apps::is_subscribed_*` and the rest of the boolean surface
+  real source (`NoAuth`, `Unrecognized`); `Apps::is_subscribed_*` and the rest of the boolean surface
   deliberately do not, because Steam's boolean queries have no "I cannot tell" return and a
   fabricated `Unknown` would be a guess rather than a signal. `and` keeps K3's
   `False & Unknown == False` instead of Bochvar's absorbing `X`, `implies` is a method rather than
