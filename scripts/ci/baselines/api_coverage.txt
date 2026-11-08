@@ -6,6 +6,7 @@
 # 2026-10-21 (sixth slice) ISteamRemoteStorage.called 58 -> 59: GetPublishedFileDetails (isteamremotestorage.h:280), in src/remote_storage/published_details.rs. The interface is closed at 59/59 -- every entry the flat layer declares is now called from src/. Repo total 726 -> 727 of 913.
 # 2026-10-21 ISteamVideo.called 3 -> 4: the request half `GetOPFSettings` (isteamvideo.h:39) is now called, so ISteamVideo is 4/4 for the first time; repo total 727 -> 728 of 913.
 # 33 interfaces, 913 declared, 728 called
+# 2026-11-08 ISteamUserStats.called 41 -> 44 (DownloadLeaderboardEntriesForUsers, AttachLeaderboardUGC, GetNumberOfCurrentPlayers); repo total 731.
 ISteamApps.declared 33
 ISteamClient.declared 33
 ISteamController.declared 34
@@ -69,6 +70,6 @@ ISteamScreenshots.called 9
 ISteamTimeline.called 18
 ISteamUGC.called 97
 ISteamUser.called 30
-ISteamUserStats.called 41
+ISteamUserStats.called 44
 ISteamUtils.called 32
 ISteamVideo.called 4

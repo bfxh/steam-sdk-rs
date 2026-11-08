@@ -236,26 +236,102 @@ impl UserStats {
     ) where
         F: FnOnce(Result<Vec<LeaderboardEntry>, SteamError>) + 'static + Send,
     {
-        unsafe {
-            let request = match request {
-                LeaderboardDataRequest::Global => {
-                    sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestGlobal
-                }
-                LeaderboardDataRequest::GlobalAroundUser => {
-                    sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestGlobalAroundUser
-                }
-                LeaderboardDataRequest::Friends => {
-                    sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestFriends
-                }
-            };
-            let api_call = sys::SteamAPI_ISteamUserStats_DownloadLeaderboardEntries(
+        let request = match request {
+            LeaderboardDataRequest::Global => {
+                sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestGlobal
+            }
+            LeaderboardDataRequest::GlobalAroundUser => {
+                sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestGlobalAroundUser
+            }
+            LeaderboardDataRequest::Friends => {
+                sys::ELeaderboardDataRequest::k_ELeaderboardDataRequestFriends
+            }
+        };
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamUserStats_DownloadLeaderboardEntries(
                 self.user_stats,
                 leaderboard.0,
                 request,
                 start as _,
                 end as _,
+            )
+        };
+        self.finish_downloaded_entries(api_call, max_details_len, cb);
+    }
+
+    /// Downloads the leaderboard entries for a specific set of users.
+    ///
+    /// The request is rejected with [`SteamError::InvalidParameter`] when `users` is empty
+    /// a zero-length user list cannot name an entry, and handing it to Steam would produce
+    /// an answer that says nothing about the users the caller meant to ask about.
+    pub fn download_leaderboard_entries_for_users<F>(
+        &self,
+        leaderboard: &Leaderboard,
+        users: &[SteamId],
+        max_details_len: usize,
+        cb: F,
+    ) where
+        F: FnOnce(Result<Vec<LeaderboardEntry>, SteamError>) + 'static + Send,
+    {
+        let mut raw = match users_to_csteamid(users) {
+            Ok(raw) => raw,
+            Err(error) => {
+                cb(Err(error));
+                return;
+            }
+        };
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamUserStats_DownloadLeaderboardEntriesForUsers(
+                self.user_stats,
+                leaderboard.0,
+                raw.as_mut_ptr(),
+                raw.len() as _,
+            )
+        };
+        self.finish_downloaded_entries(api_call, max_details_len, cb);
+    }
+
+    /// Attaches a piece of user-generated content to a leaderboard.
+    ///
+    /// The callback receives the leaderboard handle written by Steam in
+    /// `LeaderboardUGCSet_t` (`isteamuserstats.h:246`, "AttachLeaderboardUGC"), so it can replace a stale handle
+    /// the caller may have been holding.
+    pub fn attach_leaderboard_ugc<F>(&self, leaderboard: &Leaderboard, ugc: UgcHandle, cb: F)
+    where
+        F: FnOnce(Result<Leaderboard, SteamError>) + 'static + Send,
+    {
+        let api_call = unsafe {
+            sys::SteamAPI_ISteamUserStats_AttachLeaderboardUGC(
+                self.user_stats,
+                leaderboard.0,
+                ugc.0,
+            )
+        };
+        unsafe {
+            register_call_result::<sys::LeaderboardUGCSet_t, _>(
+                &self.inner,
+                api_call,
+                move |v, io_error| {
+                    cb(attach_leaderboard_ugc_result(
+                        v.m_eResult,
+                        v.m_hSteamLeaderboard,
+                        io_error,
+                    ))
+                },
             );
-            let user_stats = self.user_stats as isize;
+        }
+    }
+
+    fn finish_downloaded_entries<F>(
+        &self,
+        api_call: sys::SteamAPICall_t,
+        max_details_len: usize,
+        cb: F,
+    ) where
+        F: FnOnce(Result<Vec<LeaderboardEntry>, SteamError>) + 'static + Send,
+    {
+        let user_stats = self.user_stats as isize;
+        unsafe {
             register_call_result::<sys::LeaderboardScoresDownloaded_t, _>(
                 &self.inner,
                 api_call,
@@ -366,12 +442,43 @@ impl UserStats {
     }
 }
 
+/// The C `CSteamID` array `DownloadLeaderboardEntriesForUsers` expects.
+///
+/// An empty list is rejected before the call: Steam would answer a question about no
+/// users, which is not the question an empty slice asks.
+fn users_to_csteamid(users: &[SteamId]) -> Result<Vec<sys::CSteamID>, SteamError> {
+    if users.is_empty() {
+        return Err(SteamError::InvalidParameter);
+    }
+    Ok(users
+        .iter()
+        .map(|id| sys::CSteamID {
+            m_steamid: sys::CSteamID_SteamID_t {
+                m_unAll64Bits: id.raw(),
+            },
+        })
+        .collect())
+}
+
+/// The `LeaderboardUGCSet_t` answer: the result code, plus the handle Steam wrote back.
+fn attach_leaderboard_ugc_result(
+    result: sys::EResult,
+    leaderboard: u64,
+    io_error: bool,
+) -> Result<Leaderboard, SteamError> {
+    if io_error {
+        Err(SteamError::IOFailure)
+    } else {
+        crate::to_steam_result(result).map(|()| Leaderboard(leaderboard))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! The two counts a downloaded leaderboard is built from, judged without a client. The FFI needs
     //! Steam, but every decision made from its answers does not, and those decisions are what used to
     //! size allocations and lengths.
-    use super::{details_len, entry_count};
+    use super::*;
 
     /// `m_cEntryCount` fed `Vec::with_capacity(len as usize)`: a negative value became ~1.8e19 and an
     /// absurd positive one a multi-gigabyte reservation, either of which aborts inside the callback
@@ -406,6 +513,38 @@ mod tests {
         assert_eq!(details_len(3, 8), 3);
         assert_eq!(details_len(8, 8), 8);
         assert_eq!(details_len(0, 8), 0);
+    }
+
+    #[test]
+    fn an_empty_user_list_is_rejected_before_the_ffi() {
+        assert!(matches!(
+            users_to_csteamid(&[]),
+            Err(SteamError::InvalidParameter)
+        ));
+    }
+
+    #[test]
+    fn a_user_list_is_converted_to_the_raw_ids_steam_expects() {
+        let users = [SteamId::from_raw(7), SteamId::from_raw(9)];
+        let raw = users_to_csteamid(&users).unwrap();
+        assert_eq!(raw.len(), 2);
+        // Reading the union field is the unsafe half; constructing it above is not.
+        assert_eq!(unsafe { raw[0].m_steamid.m_unAll64Bits }, 7);
+        assert_eq!(unsafe { raw[1].m_steamid.m_unAll64Bits }, 9);
+    }
+
+    #[test]
+    fn attach_ugc_maps_the_result_code_and_the_returned_handle() {
+        let ok = attach_leaderboard_ugc_result(sys::EResult::k_EResultOK, 42, false).unwrap();
+        assert_eq!(ok.raw(), 42);
+        assert!(matches!(
+            attach_leaderboard_ugc_result(sys::EResult::k_EResultFail, 42, false),
+            Err(SteamError::Generic)
+        ));
+        assert!(matches!(
+            attach_leaderboard_ugc_result(sys::EResult::k_EResultOK, 42, true),
+            Err(SteamError::IOFailure)
+        ));
     }
 }
 

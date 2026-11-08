@@ -10,6 +10,16 @@ still declares version `0.13.1`.
 
 ## [Unreleased]
 
+### Added — `ISteamUserStats` reaches 44 of 44
+
+- `DownloadLeaderboardEntriesForUsers` (`isteamuserstats.h:216`, "DownloadLeaderboardEntriesForUsers"),
+  `AttachLeaderboardUGC` (`isteamuserstats.h:246`, "AttachLeaderboardUGC") and
+  `GetNumberOfCurrentPlayers` (`isteamuserstats.h:251`, "GetNumberOfCurrentPlayers") close the
+  interface. The first reuses the existing `LeaderboardScoresDownloaded_t` decoder; the two new
+  answers (`LeaderboardUGCSet_t`, `NumberOfCurrentPlayers_t`) map through pure helpers with offline
+  tests. An empty user list is rejected with `InvalidParameter` before the FFI call. 7 new lib
+  tests; repo total **731/913**.
+
 ### Added — `ISteamVideo` reaches 4 of 4
 
 - **`GetOPFSettings`** (`isteamvideo.h:40`) is the request half of the 360-video read path: the crate

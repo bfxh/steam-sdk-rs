@@ -5,6 +5,7 @@
 # 2026-10-21 (fifth slice) +src/remote_storage/workshop_enumerate.rs 515, mod.rs +2 lines.
 # 2026-10-21 (sixth slice) +src/remote_storage/published_details.rs, mod.rs and download.rs one-line visibility changes, workshop_enumerate.rs 515 -> 538 (the packed fields are copied out before they are sliced).
 # 2026-10-21 seventh slice: src/video.rs 122 -> 291 (OPF request + two video callbacks + their tests), src/callback.rs 560 -> 566 (two CallbackResult variants and their dispatch arms).
+# 2026-11-08 +src/user_stats/current_players.rs 73, src/user_stats/leaderboard.rs 459 -> 598 (3 UserStats async methods), src/user_stats/mod.rs 24 -> 25.
 src/matchmaking_servers.rs 901
 src/lib.rs 833
 src/matchmaking/mod.rs 754
@@ -14,6 +15,7 @@ src/http.rs 624
 src/ugc/mod.rs 604
 src/error.rs 603
 src/ugc/answers.rs 600
+src/user_stats/leaderboard.rs 598
 src/timeline.rs 579
 src/callback.rs 566
 src/ugc/types.rs 559
@@ -26,7 +28,6 @@ src/parties.rs 486
 src/networking_types/end.rs 480
 src/ugc/results.rs 473
 src/ugc/query.rs 464
-src/user_stats/leaderboard.rs 459
 src/networking_types/state.rs 458
 src/remote_storage/workshop_update.rs 446
 src/remote_storage/files.rs 438
@@ -124,6 +125,7 @@ src/callback_stream.rs 84
 src/inventory/mod.rs 84
 src/input/callbacks.rs 83
 src/friends/mod.rs 76
+src/user_stats/current_players.rs 73
 src/user/passthrough.rs 70
 src/remote_storage/visibility.rs 68
 src/input/roster.rs 67
@@ -149,5 +151,5 @@ src/networking_types/mod.rs 36
 src/utils/battery.rs 34
 src/utils/callbacks.rs 29
 src/remote_storage/platforms.rs 27
-src/user_stats/mod.rs 24
+src/user_stats/mod.rs 25
 src/utils/counts.rs 17
