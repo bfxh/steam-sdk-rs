@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::c_string_arg;
+use crate::utils::try_c_string;
 
 use std::error;
 use std::ffi::{CStr, CString};
@@ -21,6 +22,9 @@ mod update;
 pub use answers::*;
 pub use query::*;
 pub use read::*;
+// Reused by `user.rs` for Steam's fixed-size inline char buffers; the glob above only
+// carries public items, and this one is deliberately not public.
+pub(crate) use read::steam_out_string;
 pub use results::*;
 pub use types::*;
 pub use update::*;
@@ -464,8 +468,13 @@ impl UGC {
     ///
     /// `true` upon success; otherwise, `false` if the calling user is not a game server or if the workshop is currently updating its content.
     pub fn init_for_game_server(&self, workshop_depot: sys::DepotId_t, folder: &str) -> bool {
+        let folder = match try_c_string(folder) {
+            Some(folder) => folder,
+            // Refused before Steam is asked: a truncated depot path would create a different directory
+            // than the caller named and still report success.
+            None => return false,
+        };
         unsafe {
-            let folder = CString::new(folder).unwrap();
             sys::SteamAPI_ISteamUGC_BInitWorkshopForGameServer(
                 self.ugc,
                 workshop_depot,

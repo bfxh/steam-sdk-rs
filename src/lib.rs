@@ -14,7 +14,7 @@ use sys::{EServerMode, ESteamAPIInitResult, SteamErrMsg};
 
 use core::ffi::c_void;
 use std::cell::Cell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Debug, Formatter};
 use std::sync::mpsc::Sender;
@@ -98,9 +98,24 @@ pub type SteamResult<T = ()> = Result<T, SteamError>;
 /// Convert a raw result to a Rust [`Result`] type.
 pub(crate) fn to_steam_result(result: sys::EResult) -> SteamResult {
     match result {
-        // sys::EResult::k_EResultNone => Ok(()), TODO: I'm not sure if this is considered a success
         sys::EResult::k_EResultOK => Ok(()),
-        error => Err(error.try_into().unwrap()),
+        // An answer this enum has no variant for becomes `Fail` rather than a panic. The `unwrap()`
+        // that used to sit here ran on any code outside the mapped list -- `k_EResultNone` (0) above
+        // all, since zero is what an unwritten status field holds -- and so panicked inside the
+        // caller's frame on a value Steam chose. Measured: reading a FakeIP result whose status was
+        // never filled aborted with `called `Result::unwrap()` on an `Err` value: Unknown(0)`, from
+        // the test `the_fake_ip_result_reaches_the_stream`.
+        // `Generic` is the coarsest true thing that can be said about such a code -- it is the
+        // variant Steam's own `k_EResultFail` decodes to (`src/error.rs:24-26`) -- and
+        // `k_EResultNone` stays an error on purpose: the open
+        // question this file used to carry as a TODO -- whether None counts as success -- resolves to
+        // no, because a status nobody wrote must not read as an operation that worked. Anyone who
+        // needs the exact number still has it: `SteamError::try_from(code)` returns
+        // `InvalidSteamError::Unknown(code)`.
+        error => match SteamError::try_from(error) {
+            Ok(code) => Err(code),
+            Err(_) => Err(SteamError::Generic),
+        },
     }
 }
 
@@ -152,20 +167,16 @@ impl Callbacks {
     }
 
     fn set_handler(&self, id: i32, handler: Box<dyn FnMut(*mut c_void) + Send + 'static>) {
-        self.callbacks.lock().unwrap().insert(id, handler);
+        crate::utils::mutex_guard(&self.callbacks).insert(id, handler);
     }
 
     fn remove_handler(&self, id: i32) {
         // A poisoned lock here is reported rather than panicked on, because
         // this runs from `CallbackHandle::drop`: panicking inside a Drop would
-        // turn a recoverable registry problem into an abort during unwinding.
-        match self.callbacks.lock() {
-            Ok(mut cb) => {
-                cb.remove(&id);
-            }
-            Err(err) => {
-                eprintln!("error while dropping callback: {:?}", err);
-            }
+        // turn a recoverable registry problem into an abort during unwinding. The decision itself --
+        // recover, report, or abort -- is made in `src/utils/locks.rs`, not at the call site.
+        if let Some(mut cb) = crate::utils::try_mutex_guard(&self.callbacks) {
+            cb.remove(&id);
         }
     }
 
@@ -184,7 +195,7 @@ impl Callbacks {
     /// never come.
     fn run_or_defer(&self, owner: *const (), op: impl FnOnce(&Callbacks) + Send + 'static) {
         if DISPATCHING.with(|flag| flag.get()) == owner {
-            self.deferred.lock().unwrap().push_back(Box::new(op));
+            crate::utils::mutex_guard(&self.deferred).push_back(Box::new(op));
         } else {
             op(self);
         }
@@ -193,7 +204,7 @@ impl Callbacks {
     /// Apply everything queued during the current dispatch pass.
     fn drain(&self) {
         loop {
-            let op = self.deferred.lock().unwrap().pop_front();
+            let op = crate::utils::mutex_guard(&self.deferred).pop_front();
             match op {
                 Some(op) => op(self),
                 None => break,
@@ -254,7 +265,7 @@ impl Inner {
     /// the same queue, so nothing is missed and nothing re-enters the lock.
     pub fn run_callbacks(&self) {
         self.run_callbacks_raw(|cb_discrim, data| {
-            let mut callbacks = self.callbacks.callbacks.lock().unwrap();
+            let mut callbacks = crate::utils::mutex_guard(&self.callbacks.callbacks);
             if let Some(cb) = callbacks.get_mut(&cb_discrim) {
                 cb(data);
             }
@@ -274,7 +285,7 @@ impl Inner {
     pub fn process_callbacks(&self, mut callback_handler: impl FnMut(CallbackResult)) {
         self.run_callbacks_raw(|cb_discrim, data| {
             {
-                let mut callbacks = self.callbacks.callbacks.lock().unwrap();
+                let mut callbacks = crate::utils::mutex_guard(&self.callbacks.callbacks);
                 if let Some(cb) = callbacks.get_mut(&cb_discrim) {
                     cb(data);
                 }
@@ -325,7 +336,8 @@ impl Inner {
                         // The &{val} pattern here is to avoid taking a reference to a packed field
                         // Since the value here is Copy, we can just copy it and borrow the copy
                         let handler = {
-                            let mut call_results = self.callbacks.call_results.lock().unwrap();
+                            let mut call_results =
+                                crate::utils::mutex_guard(&self.callbacks.call_results);
                             call_results.remove(&{ apicall.m_hAsyncCall })
                         };
                         if let Some(cb) = handler {
@@ -358,6 +370,12 @@ struct NetworkingSocketsData {
     /// Connections to a remote listening port
     independent_connections:
         HashMap<sys::HSteamNetConnection, Sender<networking_types::NetConnectionEvent>>,
+    /// FakeIP server-port indexes this crate has already wrapped.
+    ///
+    /// Steam returns the same, unreference-counted object for a repeated nonnegative index, so two
+    /// live wrappers would mean one of them can destroy the other's object; the claim is what keeps
+    /// that from happening. Ephemeral (`-1`) ports get a distinct object per call and are never listed.
+    fake_udp_ports: HashSet<i32>,
     connection_callback: Weak<CallbackHandle>,
 }
 
@@ -422,6 +440,7 @@ impl Client {
                 networking_sockets_data: Mutex::new(NetworkingSocketsData {
                     sockets: Default::default(),
                     independent_connections: Default::default(),
+                    fake_udp_ports: Default::default(),
                     connection_callback: Default::default(),
                 }),
             });

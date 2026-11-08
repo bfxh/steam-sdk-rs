@@ -81,24 +81,40 @@ where
     }
 }
 pub const _LIBCPP_ABI_VERSION: u32 = 1;
+pub const _LIBCPP_ABI_FORCE_ITANIUM: u32 = 0;
+pub const _LIBCPP_ABI_FORCE_MICROSOFT: u32 = 0;
+pub const _LIBCPP_HAS_THREADS: u32 = 1;
+pub const _LIBCPP_HAS_MONOTONIC_CLOCK: u32 = 1;
+pub const _LIBCPP_HAS_TERMINAL: u32 = 1;
+pub const _LIBCPP_HAS_MUSL_LIBC: u32 = 0;
+pub const _LIBCPP_HAS_THREAD_API_PTHREAD: u32 = 0;
+pub const _LIBCPP_HAS_THREAD_API_EXTERNAL: u32 = 0;
+pub const _LIBCPP_HAS_THREAD_API_WIN32: u32 = 0;
+pub const _LIBCPP_HAS_THREAD_API_C11: u32 = 0;
+pub const _LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS: u32 = 1;
+pub const _LIBCPP_HAS_FILESYSTEM: u32 = 1;
+pub const _LIBCPP_HAS_RANDOM_DEVICE: u32 = 1;
+pub const _LIBCPP_HAS_LOCALIZATION: u32 = 1;
+pub const _LIBCPP_HAS_UNICODE: u32 = 1;
+pub const _LIBCPP_HAS_WIDE_CHARACTERS: u32 = 1;
+pub const _LIBCPP_HAS_TIME_ZONE_DATABASE: u32 = 0;
+pub const _LIBCPP_INSTRUMENTED_WITH_ASAN: u32 = 0;
 pub const _LIBCPP_HARDENING_MODE_DEFAULT: u32 = 2;
+pub const _LIBCPP_ASSERTION_SEMANTIC_DEFAULT: u32 = 2;
 pub const _LIBCPP_OBJECT_FORMAT_MACHO: u32 = 1;
 pub const _LIBCPP_STD_VER: u32 = 11;
-pub const _LIBCPP_INTRODUCED_IN_LLVM_19: u32 = 0;
+pub const _LIBCPP_HAS_RTTI: u32 = 1;
+pub const _LIBCPP_HAS_EXCEPTIONS: u32 = 1;
+pub const _LIBCPP_INTRODUCED_IN_LLVM_21: u32 = 0;
+pub const _LIBCPP_INTRODUCED_IN_LLVM_20: u32 = 1;
+pub const _LIBCPP_INTRODUCED_IN_LLVM_19: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_18: u32 = 1;
-pub const _LIBCPP_INTRODUCED_IN_LLVM_17: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_16: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_15: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_14: u32 = 1;
-pub const _LIBCPP_INTRODUCED_IN_LLVM_13: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_12: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_11: u32 = 1;
-pub const _LIBCPP_INTRODUCED_IN_LLVM_10: u32 = 1;
 pub const _LIBCPP_INTRODUCED_IN_LLVM_9: u32 = 1;
-pub const _LIBCPP_INTRODUCED_IN_LLVM_4: u32 = 1;
-pub const _LIBCPP_AVAILABILITY_HAS_BAD_OPTIONAL_ACCESS: u32 = 1;
-pub const _LIBCPP_AVAILABILITY_HAS_BAD_VARIANT_ACCESS: u32 = 1;
-pub const _LIBCPP_AVAILABILITY_HAS_BAD_ANY_CAST: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_FILESYSTEM_LIBRARY: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_SYNC: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_ADDITIONAL_IOSTREAM_EXPLICIT_INSTANTIATIONS_1: u32 = 1;
@@ -107,16 +123,46 @@ pub const _LIBCPP_AVAILABILITY_HAS_VERBOSE_ABORT: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_PMR: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_INIT_PRIMARY_EXCEPTION: u32 = 1;
 pub const _LIBCPP_AVAILABILITY_HAS_PRINT: u32 = 1;
-pub const _LIBCPP_AVAILABILITY_HAS_TZDB: u32 = 0;
-pub const _LIBCPP_AVAILABILITY_HAS_BAD_FUNCTION_CALL_KEY_FUNCTION: u32 = 0;
-pub const _LIBCPP_AVAILABILITY_HAS_BAD_EXPECTED_ACCESS_KEY_FUNCTION: u32 = 0;
-pub const _LIBCPP_VERSION: u32 = 190102;
+pub const _LIBCPP_AVAILABILITY_HAS_TZDB: u32 = 1;
+pub const _LIBCPP_AVAILABILITY_HAS_BAD_FUNCTION_CALL_KEY_FUNCTION: u32 = 1;
+pub const _LIBCPP_AVAILABILITY_HAS_BAD_EXPECTED_ACCESS_KEY_FUNCTION: u32 = 1;
+pub const _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT: u32 = 1;
+pub const _LIBCPP_AVAILABILITY_HAS_HASH_MEMORY: u32 = 0;
+pub const _LIBCPP_AVAILABILITY_HAS_BAD_FUNCTION_CALL_GOOD_WHAT_MESSAGE: u32 = 0;
+pub const _LIBCPP_HAS_EXPERIMENTAL_LIBRARY: u32 = 0;
+pub const _LIBCPP_HAS_EXPERIMENTAL_PSTL: u32 = 0;
+pub const _LIBCPP_HAS_EXPERIMENTAL_TZDB: u32 = 0;
+pub const _LIBCPP_HAS_EXPERIMENTAL_SYNCSTREAM: u32 = 0;
+pub const _LIBCPP_HAS_EXPERIMENTAL_HARDENING_OBSERVE_SEMANTIC: u32 = 0;
 pub const _LIBCPP_HARDENING_MODE_NONE: u32 = 2;
 pub const _LIBCPP_HARDENING_MODE_FAST: u32 = 4;
 pub const _LIBCPP_HARDENING_MODE_EXTENSIVE: u32 = 16;
 pub const _LIBCPP_HARDENING_MODE_DEBUG: u32 = 8;
 pub const _LIBCPP_HARDENING_MODE: u32 = 2;
-pub const _LIBCPP_LOCALE__L_EXTENSIONS: u32 = 1;
+pub const _LIBCPP_ASSERTION_SEMANTIC_HARDENING_DEPENDENT: u32 = 2;
+pub const _LIBCPP_ASSERTION_SEMANTIC_IGNORE: u32 = 4;
+pub const _LIBCPP_ASSERTION_SEMANTIC_OBSERVE: u32 = 8;
+pub const _LIBCPP_ASSERTION_SEMANTIC_QUICK_ENFORCE: u32 = 16;
+pub const _LIBCPP_ASSERTION_SEMANTIC_ENFORCE: u32 = 32;
+pub const _LIBCPP_ASSERTION_SEMANTIC: u32 = 16;
+pub const _LIBCPP_VERSION: u32 = 210106;
+pub const _LIBCPP_HAS_OPEN_WITH_WCHAR: u32 = 0;
+pub const _LIBCPP_HAS_BITSCAN64: u32 = 0;
+pub const _LIBCPP_HAS_BLOCKS_RUNTIME: u32 = 1;
+pub const _LIBCPP_HAS_INT128: u32 = 1;
+pub const _LIBCPP_HAS_LIBRARY_ALIGNED_ALLOCATION: u32 = 1;
+pub const _LIBCPP_HAS_ALIGNED_ALLOCATION: u32 = 0;
+pub const _LIBCPP_HAS_C11_ALIGNED_ALLOC: u32 = 1;
+pub const _LIBCPP_HAS_CHAR8_T: u32 = 0;
+pub const _LIBCPP_HAS_COND_CLOCKWAIT: u32 = 0;
+pub const _LIBCPP_HAS_TRIVIAL_MUTEX_DESTRUCTION: u32 = 0;
+pub const _LIBCPP_HAS_TRIVIAL_CONDVAR_DESTRUCTION: u32 = 0;
+pub const _LIBCPP_HAS_C_ATOMIC_IMP: u32 = 1;
+pub const _LIBCPP_HAS_GCC_ATOMIC_IMP: u32 = 0;
+pub const _LIBCPP_HAS_EXTERNAL_ATOMIC_IMP: u32 = 0;
+pub const _LIBCPP_HAS_ATOMIC_HEADER: u32 = 1;
+pub const _LIBCPP_HAS_C8RTOMB_MBRTOC8: u32 = 0;
+pub const _LIBCPP_HAS_EXPLICIT_THIS_PARAMETER: u32 = 0;
 pub const __has_safe_buffers: u32 = 1;
 pub const __DARWIN_ONLY_64_BIT_INO_T: u32 = 1;
 pub const __DARWIN_ONLY_UNIX_CONFORMANCE: u32 = 1;
@@ -234,6 +280,14 @@ pub const __MAC_15_2: u32 = 150200;
 pub const __MAC_15_3: u32 = 150300;
 pub const __MAC_15_4: u32 = 150400;
 pub const __MAC_15_5: u32 = 150500;
+pub const __MAC_15_6: u32 = 150600;
+pub const __MAC_16_0: u32 = 160000;
+pub const __MAC_26_0: u32 = 260000;
+pub const __MAC_26_1: u32 = 260100;
+pub const __MAC_26_2: u32 = 260200;
+pub const __MAC_26_3: u32 = 260300;
+pub const __MAC_26_4: u32 = 260400;
+pub const __MAC_26_5: u32 = 260500;
 pub const __IPHONE_2_0: u32 = 20000;
 pub const __IPHONE_2_1: u32 = 20100;
 pub const __IPHONE_2_2: u32 = 20200;
@@ -286,7 +340,6 @@ pub const __IPHONE_14_1: u32 = 140100;
 pub const __IPHONE_14_2: u32 = 140200;
 pub const __IPHONE_14_3: u32 = 140300;
 pub const __IPHONE_14_5: u32 = 140500;
-pub const __IPHONE_14_4: u32 = 140400;
 pub const __IPHONE_14_6: u32 = 140600;
 pub const __IPHONE_14_7: u32 = 140700;
 pub const __IPHONE_14_8: u32 = 140800;
@@ -321,6 +374,14 @@ pub const __IPHONE_18_2: u32 = 180200;
 pub const __IPHONE_18_3: u32 = 180300;
 pub const __IPHONE_18_4: u32 = 180400;
 pub const __IPHONE_18_5: u32 = 180500;
+pub const __IPHONE_18_6: u32 = 180600;
+pub const __IPHONE_19_0: u32 = 190000;
+pub const __IPHONE_26_0: u32 = 260000;
+pub const __IPHONE_26_1: u32 = 260100;
+pub const __IPHONE_26_2: u32 = 260200;
+pub const __IPHONE_26_3: u32 = 260300;
+pub const __IPHONE_26_4: u32 = 260400;
+pub const __IPHONE_26_5: u32 = 260500;
 pub const __WATCHOS_1_0: u32 = 10000;
 pub const __WATCHOS_2_0: u32 = 20000;
 pub const __WATCHOS_2_1: u32 = 20100;
@@ -376,6 +437,14 @@ pub const __WATCHOS_11_2: u32 = 110200;
 pub const __WATCHOS_11_3: u32 = 110300;
 pub const __WATCHOS_11_4: u32 = 110400;
 pub const __WATCHOS_11_5: u32 = 110500;
+pub const __WATCHOS_11_6: u32 = 110600;
+pub const __WATCHOS_12_0: u32 = 120000;
+pub const __WATCHOS_26_0: u32 = 260000;
+pub const __WATCHOS_26_1: u32 = 260100;
+pub const __WATCHOS_26_2: u32 = 260200;
+pub const __WATCHOS_26_3: u32 = 260300;
+pub const __WATCHOS_26_4: u32 = 260400;
+pub const __WATCHOS_26_5: u32 = 260500;
 pub const __TVOS_9_0: u32 = 90000;
 pub const __TVOS_9_1: u32 = 90100;
 pub const __TVOS_9_2: u32 = 90200;
@@ -431,6 +500,14 @@ pub const __TVOS_18_2: u32 = 180200;
 pub const __TVOS_18_3: u32 = 180300;
 pub const __TVOS_18_4: u32 = 180400;
 pub const __TVOS_18_5: u32 = 180500;
+pub const __TVOS_18_6: u32 = 180600;
+pub const __TVOS_19_0: u32 = 190000;
+pub const __TVOS_26_0: u32 = 260000;
+pub const __TVOS_26_1: u32 = 260100;
+pub const __TVOS_26_2: u32 = 260200;
+pub const __TVOS_26_3: u32 = 260300;
+pub const __TVOS_26_4: u32 = 260400;
+pub const __TVOS_26_5: u32 = 260500;
 pub const __BRIDGEOS_2_0: u32 = 20000;
 pub const __BRIDGEOS_3_0: u32 = 30000;
 pub const __BRIDGEOS_3_1: u32 = 30100;
@@ -464,6 +541,13 @@ pub const __BRIDGEOS_9_2: u32 = 90200;
 pub const __BRIDGEOS_9_3: u32 = 90300;
 pub const __BRIDGEOS_9_4: u32 = 90400;
 pub const __BRIDGEOS_9_5: u32 = 90500;
+pub const __BRIDGEOS_9_6: u32 = 90600;
+pub const __BRIDGEOS_10_0: u32 = 100000;
+pub const __BRIDGEOS_10_1: u32 = 100100;
+pub const __BRIDGEOS_10_2: u32 = 100200;
+pub const __BRIDGEOS_10_3: u32 = 100300;
+pub const __BRIDGEOS_10_4: u32 = 100400;
+pub const __BRIDGEOS_26_5: u32 = 260500;
 pub const __DRIVERKIT_19_0: u32 = 190000;
 pub const __DRIVERKIT_20_0: u32 = 200000;
 pub const __DRIVERKIT_21_0: u32 = 210000;
@@ -484,6 +568,13 @@ pub const __DRIVERKIT_24_2: u32 = 240200;
 pub const __DRIVERKIT_24_3: u32 = 240300;
 pub const __DRIVERKIT_24_4: u32 = 240400;
 pub const __DRIVERKIT_24_5: u32 = 240500;
+pub const __DRIVERKIT_24_6: u32 = 240600;
+pub const __DRIVERKIT_25_0: u32 = 250000;
+pub const __DRIVERKIT_25_1: u32 = 250100;
+pub const __DRIVERKIT_25_2: u32 = 250200;
+pub const __DRIVERKIT_25_3: u32 = 250300;
+pub const __DRIVERKIT_25_4: u32 = 250400;
+pub const __DRIVERKIT_25_5: u32 = 250500;
 pub const __VISIONOS_1_0: u32 = 10000;
 pub const __VISIONOS_1_1: u32 = 10100;
 pub const __VISIONOS_1_2: u32 = 10200;
@@ -494,6 +585,14 @@ pub const __VISIONOS_2_2: u32 = 20200;
 pub const __VISIONOS_2_3: u32 = 20300;
 pub const __VISIONOS_2_4: u32 = 20400;
 pub const __VISIONOS_2_5: u32 = 20500;
+pub const __VISIONOS_2_6: u32 = 20600;
+pub const __VISIONOS_3_0: u32 = 30000;
+pub const __VISIONOS_26_0: u32 = 260000;
+pub const __VISIONOS_26_1: u32 = 260100;
+pub const __VISIONOS_26_2: u32 = 260200;
+pub const __VISIONOS_26_3: u32 = 260300;
+pub const __VISIONOS_26_4: u32 = 260400;
+pub const __VISIONOS_26_5: u32 = 260500;
 pub const MAC_OS_X_VERSION_10_0: u32 = 1000;
 pub const MAC_OS_X_VERSION_10_1: u32 = 1010;
 pub const MAC_OS_X_VERSION_10_2: u32 = 1020;
@@ -564,10 +663,18 @@ pub const MAC_OS_VERSION_15_2: u32 = 150200;
 pub const MAC_OS_VERSION_15_3: u32 = 150300;
 pub const MAC_OS_VERSION_15_4: u32 = 150400;
 pub const MAC_OS_VERSION_15_5: u32 = 150500;
+pub const MAC_OS_VERSION_15_6: u32 = 150600;
+pub const MAC_OS_VERSION_16_0: u32 = 160000;
+pub const MAC_OS_VERSION_26_0: u32 = 260000;
+pub const MAC_OS_VERSION_26_1: u32 = 260100;
+pub const MAC_OS_VERSION_26_2: u32 = 260200;
+pub const MAC_OS_VERSION_26_3: u32 = 260300;
+pub const MAC_OS_VERSION_26_4: u32 = 260400;
+pub const MAC_OS_VERSION_26_5: u32 = 260500;
 pub const __AVAILABILITY_VERSIONS_VERSION_HASH: u32 = 93585900;
 pub const __AVAILABILITY_VERSIONS_VERSION_STRING: &[u8; 6] = b"Local\0";
 pub const __AVAILABILITY_FILE: &[u8; 23] = b"AvailabilityVersions.h\0";
-pub const __MAC_OS_X_VERSION_MAX_ALLOWED: u32 = 150500;
+pub const __MAC_OS_X_VERSION_MAX_ALLOWED: u32 = 260500;
 pub const __ENABLE_LEGACY_MAC_AVAILABILITY: u32 = 1;
 pub const USE_CLANG_STDDEF: u32 = 0;
 pub const STEAMCLIENT_INTERFACE_VERSION: &[u8; 15] = b"SteamClient023\0";
@@ -580,6 +687,7 @@ pub const RENAME_SWAP: u32 = 2;
 pub const RENAME_EXCL: u32 = 4;
 pub const RENAME_RESERVED1: u32 = 8;
 pub const RENAME_NOFOLLOW_ANY: u32 = 16;
+pub const RENAME_RESOLVE_BENEATH: u32 = 32;
 pub const SEEK_SET: u32 = 0;
 pub const SEEK_CUR: u32 = 1;
 pub const SEEK_END: u32 = 2;
@@ -18585,11 +18693,6 @@ pub struct SteamDatagramHostedAddress {
 pub struct SteamDatagramGameCoordinatorServerLogin {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct SteamNetworkingFakeIPResult_t {
-    _unused: [u8; 0],
-}
 pub type FnSteamNetConnectionStatusChanged = ::std::option::Option<
     unsafe extern "C" fn(arg1: *mut SteamNetConnectionStatusChangedCallback_t),
 >;
@@ -20306,11 +20409,6 @@ pub struct ISteamNetworkingConnectionSignaling {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ISteamNetworkingSignalingRecvContext {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ISteamNetworkingFakeUDPPort {
     _unused: [u8; 0],
 }
 #[repr(C)]
@@ -28110,5 +28208,114 @@ extern "C" {
         pszInternalCheckInterfaceVersions: *const ::std::os::raw::c_char,
         pOutErrMsg: *mut SteamErrMsg,
     ) -> ESteamAPIInitResult;
+}
+pub const k_cbSteamNetworkingSocketsFakeUDPPortRecommendedMTU: ::std::os::raw::c_int = 1200;
+pub const k_cbSteamNetworkingSocketsFakeUDPPortMaxMessageSize: ::std::os::raw::c_int = 4096;
+#[repr(C)]
+pub struct ISteamNetworkingFakeUDPPort__bindgen_vtable(::std::os::raw::c_void);
+#[doc = " ISteamNetworkingFakeUDPPort\n\n Acts like a UDP port, sending and receiving datagrams addressed using\n FakeIP addresses.\n\n See: ISteamNetworkingSockets::CreateFakeUDPPort"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ISteamNetworkingFakeUDPPort {
+    pub vtable_: *const ISteamNetworkingFakeUDPPort__bindgen_vtable,
+}
+#[test]
+fn bindgen_test_layout_ISteamNetworkingFakeUDPPort() {
+    assert_eq!(
+        ::std::mem::size_of::<ISteamNetworkingFakeUDPPort>(),
+        8usize,
+        concat!("Size of: ", stringify!(ISteamNetworkingFakeUDPPort))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ISteamNetworkingFakeUDPPort>(),
+        8usize,
+        concat!("Alignment of ", stringify!(ISteamNetworkingFakeUDPPort))
+    );
+}
+#[doc = " A struct used to describe a \"fake IP\" we have been assigned to\n use as an identifier.  This callback is posted when\n ISteamNetworkingSoockets::BeginAsyncRequestFakeIP completes.\n See also ISteamNetworkingSockets::GetFakeIP"]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct SteamNetworkingFakeIPResult_t {
+    #[doc = " Status/result of the allocation request.  Possible failure values are:\n - k_EResultBusy - you called GetFakeIP but the request has not completed.\n - k_EResultInvalidParam - you called GetFakeIP with an invalid port index\n - k_EResultLimitExceeded - You asked for too many ports, or made an\n   additional request after one had already succeeded\n - k_EResultNoMatch - GetFakeIP was called, but no request has been made\n\n Note that, with the exception of k_EResultBusy (if you are polling),\n it is highly recommended to treat all failures as fatal."]
+    pub m_eResult: EResult,
+    #[doc = " Local identity of the ISteamNetworkingSockets object that made\n this request and is assigned the IP.  This is needed in the callback\n in the case where there are multiple ISteamNetworkingSockets objects.\n (E.g. one for the user, and another for the local gameserver)."]
+    pub m_identity: SteamNetworkingIdentity,
+    #[doc = " Fake IPv4 IP address that we have been assigned.  NOTE: this\n IP address is not exclusively ours!  Steam tries to avoid sharing\n IP addresses, but this may not always be possible.  The IP address\n may be currently in use by another host, but with different port(s).\n The exact same IP:port address may have been used previously.\n Steam tries to avoid reusing ports until they have not been in use for\n some time, but this may not always be possible."]
+    pub m_unIP: uint32,
+    pub m_unPorts: [uint16; 8usize],
+}
+pub const SteamNetworkingFakeIPResult_t_k_iCallback: SteamNetworkingFakeIPResult_t__bindgen_ty_1 =
+    SteamNetworkingFakeIPResult_t__bindgen_ty_1::k_iCallback;
+#[repr(u32)]
+#[non_exhaustive]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum SteamNetworkingFakeIPResult_t__bindgen_ty_1 {
+    k_iCallback = 1223,
+}
+pub const SteamNetworkingFakeIPResult_t_k_nMaxReturnPorts:
+    SteamNetworkingFakeIPResult_t__bindgen_ty_2 =
+    SteamNetworkingFakeIPResult_t__bindgen_ty_2::k_nMaxReturnPorts;
+#[repr(u32)]
+#[non_exhaustive]
+#[doc = " Port number(s) assigned to us.  Only the first entries will contain\n nonzero values.  Entries corresponding to ports beyond what was\n allocated for you will be zero.\n\n (NOTE: At the time of this writing, the maximum number of ports you may\n request is 4.)"]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum SteamNetworkingFakeIPResult_t__bindgen_ty_2 {
+    k_nMaxReturnPorts = 8,
+}
+#[test]
+fn bindgen_test_layout_SteamNetworkingFakeIPResult_t() {
+    const UNINIT: ::std::mem::MaybeUninit<SteamNetworkingFakeIPResult_t> =
+        ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<SteamNetworkingFakeIPResult_t>(),
+        160usize,
+        concat!("Size of: ", stringify!(SteamNetworkingFakeIPResult_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<SteamNetworkingFakeIPResult_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(SteamNetworkingFakeIPResult_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_eResult) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_eResult)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_identity) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_identity)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_unIP) as usize - ptr as usize },
+        140usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_unIP)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).m_unPorts) as usize - ptr as usize },
+        144usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(SteamNetworkingFakeIPResult_t),
+            "::",
+            stringify!(m_unPorts)
+        )
+    );
 }
 pub type __builtin_va_list = *mut ::std::os::raw::c_char;

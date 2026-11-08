@@ -15,7 +15,7 @@ pub(crate) fn get_or_create_connection_callback(
     inner: Arc<Inner>,
     sockets: *mut ISteamNetworkingSockets,
 ) -> Arc<CallbackHandle> {
-    let mut network_socket_data = inner.networking_sockets_data.lock().unwrap();
+    let mut network_socket_data = crate::utils::mutex_guard(&inner.networking_sockets_data);
     if let Some(callback) = network_socket_data.connection_callback.upgrade() {
         callback
     } else {
@@ -40,6 +40,14 @@ pub(crate) struct ConnectionCallbackHandler {
     sockets: *mut ISteamNetworkingSockets,
 }
 
+// SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
+// this line, which makes `cargo check --all-targets` fail with
+// `*mut ISteamNetworkingSockets` cannot be sent between threads safely.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for ConnectionCallbackHandler {}
 unsafe impl Sync for ConnectionCallbackHandler {}
 
@@ -58,19 +66,25 @@ impl ConnectionCallbackHandler {
         event: NetConnectionStatusChanged,
     ) {
         if let Some(inner) = self.inner.upgrade() {
-            let data = inner.networking_sockets_data.lock().unwrap();
+            let data = crate::utils::mutex_guard(&inner.networking_sockets_data);
             if let Some((socket, sender)) = data
                 .sockets
                 .get(&socket_handle)
                 .and_then(|(socket, sender)| socket.upgrade().map(|socket| (socket, sender)))
             {
                 let connection_handle = event.connection;
-                let state = event.connection_info.state().expect("invalid state");
+                // The only use of this value is to decide whether to reject a connection that nobody is
+                // left to accept, so an unnameable state code takes the same path as "not connecting":
+                // nothing is rejected on the strength of a number this crate cannot read. The `.expect`
+                // that used to sit here aborted the dispatch, while the sibling method below in this
+                // file already handles the same unknown answer by leaving the branch
+                // (`independent_connection_callback`, which reads it as `let Ok(..) = .. else`).
+                let state = event.connection_info.state().ok();
                 if let Ok(event) = event.into_listen_socket_event(socket) {
                     if let Err(_err) = sender.send(event) {
                         // If the main socket was dropped, but the inner socket still exists, reject all new connections,
                         // as there's no way to accept them.
-                        if let NetworkingConnectionState::Connecting = state {
+                        if let Some(NetworkingConnectionState::Connecting) = state {
                             self.reject_connection(connection_handle);
                         }
                     }
@@ -95,7 +109,7 @@ impl ConnectionCallbackHandler {
         let Some(inner) = self.inner.upgrade() else {
             return;
         };
-        let data = inner.networking_sockets_data.lock().unwrap();
+        let data = crate::utils::mutex_guard(&inner.networking_sockets_data);
 
         let Some(sender) = data.independent_connections.get(&status_changed.connection) else {
             // received an event of a connection we did not track... this should basically never happen

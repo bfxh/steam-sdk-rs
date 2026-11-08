@@ -8,10 +8,13 @@
 > 复现脚本与 grep 命令以工作区为准。
 >
 > **坐标更新（2026-10-15 按内容重测，master 已到 `467ab19`）**：本文行号是**当时**的实测坐标；此后源码做了目录化拆分与多处修复，以下落点是按内容重新定位的（不是按文件名猜的）。
-> - `src/friends.rs` 已不存在，分为 `src/friends/mod.rs`（`ISteamFriends` 接口，790 行）、`friend.rs`（`Friend` 句柄，401 行）、`callbacks.rs`（10 个回调载荷，155 行）、`chat.rs`（216 行）。原 `friends.rs:64-68` 的 `CStr::from_ptr` + `to_string_lossy` 读法现在在 `friend.rs:38`、`:50`、`:198` 与 `callbacks.rs:67`；原 `friends.rs:412/433/454` 的 `vec![0; 32*32*4]` 头像缓冲现在只剩一处，`friend.rs:111-112`；原 `friends.rs:124` 那类 `CString::new(..).unwrap()` 站点现在在 `friend.rs:172`、`:191`（`:277` 那处在测试里）。
+> - `src/friends.rs` 已不存在，分为 `src/friends/mod.rs`（2026-10-16 复测：它现在只剩 70 行测线——根里那 48 个 `pub fn` 已按关注点拆进 `list.rs` 85、`overlay.rs` 88、`rich_presence.rs` 77、`clans.rs` 174、`clan_chat.rs` 157、`followers.rs` 91、`messages.rs` 60、`flags.rs` 50 八件，`impl Friends` 变成 8 个块（`grep -rc '^impl Friends' src/friends/*.rs` 实测 8 个文件各 1 块））、`friend.rs`（`Friend` 句柄，401 行）、`callbacks.rs`（10 个回调载荷，155 行）、`chat.rs`（216 行）。原 `friends.rs:64-68` 的 `CStr::from_ptr` + `to_string_lossy` 读法现在在 `friend.rs:38`、`:50`、`:198` 与 `callbacks.rs:67`；原 `friends.rs:412/433/454` 的 `vec![0; 32*32*4]` 头像缓冲现在只剩一处，`friend.rs:111-112`；原 `friends.rs:124` 那类 `CString::new(..).unwrap()` 站点现在在 `friend.rs:172`、`:191`（`:277` 那处在测试里）。
 > - `src/ugc.rs` 已不存在，分为 `ugc/mod.rs`、`update.rs`、`query.rs`、`results.rs`、`answers.rs`、`types.rs`、`read.rs`、`ugc_tests.rs`。原 `ugc.rs:974` / `:986-997` 那两个 `canonicalize().unwrap()` 站点**已不再是站点**：路径解析收敛到 `src/ugc/update.rs:26` 的 `resolved_path`（NotFound→`FileNotFound`，其它 IO→`IOFailure`），两个 setter 各自 `?` 它。原 `ugc.rs:933-1050`「15+ 个构建方法返回 `Self` 而非 `Result`」**今天实测**：`update.rs` 21 个方法返回 `Result<Self, SteamError>`、**0 个返回 `Self`**，且文件里已无任何真实 panic 站点（`assert!`/`unwrap`/`expect` 三处命中全在文档注释里）；`query.rs` 现 **30 个方法返回 `Result<Self, SteamError>`、0 个返回 `Self`**，且文件内已无 `unwrap`/`expect`/`assert!`（唯一命中是我写的那句说明文字）；`fetch`/`fetch_total`/`fetch_ids` 保持回调签名，失败经 `cb(Err(..))` 送达。转换次序：8 个早于本轮、`visibility`/`add_content_descriptor`/`remove_content_descriptor` 三个在 `467ab19`、其余 10 个在本次改动。
 > - `src/lib.rs` 已瘦身三次（身份类型→`src/identity.rs`，根测试→`src/lib_tests.rs`）。原 `lib.rs:780` 的 `basic_test` 现在 `src/lib_tests.rs:12`；原 `lib.rs:322-323` 的 call_results「命中即摘除」现在 `src/lib.rs:326-327`；原 `lib.rs:508-518` 的 timeline `disabled` 标记现在在 `src/timeline.rs:7`（`lib.rs` 里已无 timeline 实现）；接口 getter 现在 `lib.rs:498`（utils）与 `:558`（friends），`debug_assert!(!x.is_null())` 守卫仍在原地（如 `lib.rs:501/513/534/549`）。
-> - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 129 个（114 passed + 15 ignored），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
+> - **最大的单文件模块已目录化（不是全部）**（2026-10-16 用 `git ls-files` + `wc -l` 重测，不是按文件名猜；
+>   `ls src/*.rs | wc -l` 实测仍有 **24 个**单文件模块直接躺在 `src/` 下，最大的是 `input.rs` 725、
+>   `error.rs` 603 等叶子模块——`input.rs` 725 与 `utils.rs` 710 已在 2026-10-16 分别拆进 `src/input/`、`src/utils/`，所以现在的第二名是 `networking_types/config.rs` 629）：除上面的 `friends`、`ugc` 外，`src/user/`（`mod.rs` 381、`voice.rs` 445、`duration.rs` 396、`auth.rs` 244、`buffers.rs` 207、`passthrough.rs` 70、`answers.rs` 63、`callbacks.rs` 61）、`src/user_stats/`（`leaderboard.rs` 384、`stats.rs` 276、`global_stats.rs` 280、`stat_callback.rs` 151、`stats_io.rs` 127、`achievements.rs` 90、`mod.rs` 20）、`src/matchmaking/`（478/314/280/205/111）、`src/inventory/`（338/204/132/121/101/83/44）、`src/networking_types/`（`mod.rs` 36，其余见目录）、`src/networking_sockets/`（`connection.rs` 536、`mod.rs` 261、`fake_ip.rs` 502、`fake_udp.rs` 427、`listen_socket.rs` 122、`listen.rs` 120、`poll_group.rs` 102、`status.rs` 98、`connect.rs` 92、`auth.rs` 49）、`src/utils/`（`text_input.rs` 178、`mod.rs` 142、`filtering.rs` 103、`ipv6.rs` 60、`identity.rs` 56、`warning.rs` 54、`overlay.rs` 47、`param_strings.rs` 47、`client_state.rs` 42、`battery.rs` 34、`callbacks.rs` 29）、`src/input/`（`origins.rs` 178、`actions.rs` 104、`layers.rs` 96、`effects.rs` 87、`callbacks.rs` 83、`roster.rs` 67、`core.rs` 58、`session.rs` 58、`mod.rs` 53）、`src/html_surface/`（`browser.rs` 352、`callbacks.rs` 247、`mod.rs` 206、`keys.rs` 63）、`src/remote_storage/`（`mod.rs` 247、`files.rs` 247、`api.rs` 182、`visibility.rs` 68、`changes.rs` 58、`platforms.rs` 27）、`src/server/`（`config.rs` 172、`lifecycle.rs` 170、`callbacks.rs` 128、`interfaces.rs` 130、`auth.rs` 107、`mod.rs` 105、`packets.rs` 59；`interfaces.rs` 里那段 `/* TODO: Buggy currently?` 就是原文里被注释掉的 `Server::apps()`，它一直是注释不是代码）。**测试名跟着模块路径走**：下文当日测试日志里的 `user_stats::test_global_stat_cstring_error` 今天叫 `user_stats::global_stats::test_global_stat_cstring_error`，`user_stats::test`（`#[ignore]`）今天叫 `user_stats::leaderboard::test`；日志原文不改写。
+> - **已经不再成立的论断**：手写源码里的 `unreachable!()` 位点现在是 **0**（`scripts/ci/baselines/no_panic_sites.txt` 为空，这条门的目标值本来就是 0），文中「10 处 / 9 处 / 2 处」都是当时计数；`Friend::state()`、`EPersonaState::k_EPersonaStateMax`、`k_EWorkshopFileTypeMax`、`ERemoteStoragePublishedFileVisibility`、`EUGCContentDescriptorID` 这几条兜底臂都改成了具名 `Unknown`。测试口径也变了：lib 套件现在实测到达 155 个（140 passed + 15 ignored，`bash scripts/ci/test_floor.sh lib` 于 2026-10-16 复测；同一晚先记 129、再记 153，两次都被后续提交超过，差额没有逐项归因，所以只换数不换解释），原文「20 个测试中 `basic_test` 依赖真实客户端、14 个模块零覆盖」是 `#[ignore]` 机制引入前的状态。
 > - **本轮未重测、因此别当现状读**：缺陷 #5 的 `CString::new(..).unwrap()` 站点总数（原文 77 处；本轮单行 grep 得 79，但跨行链式的口径没有复算，所以不拿它替换原数）、缺陷 #8 的 `Arc<Inner>` 克隆计数，以及 `defect-0N-*.md`、`ci-local-evidence-2026-10-13.md` 里的全部行号——那些文件是**当日证据记录**，保留原坐标不改动，引用时按上面的对照表落地。
 >
 > **复现脚本位于 `repro/` 目录**（独立可编译，无需 Steam 客户端）：
@@ -38,7 +41,7 @@
 |---|------|------|--------|
 | 1 | 同一回调类型重复注册会静默覆盖前一个；**陈旧 Handle drop 会按 ID 误杀新注册；内部自动注册与用户注册同表互杀** | src/callback.rs:198 `HashMap::insert`、callback.rs:167 `remove`（已复现，见 defect-01 文档） | 高 |
 | 2 | 可重入死锁：持锁运行用户闭包。**PR #259 已修复「回调内调 API」场景；仍存「回调内注册回调/嵌套派发/丢弃 Handle」+ 新发现「call_result 内链式调 API」共四种死锁**（**2026-10-14 更新：这四种已全部判死，见下方"缺陷 #2 状态"**） | Issue #253 + PR #259（已合并）；实测见 0.6 节与 defect-02 文档 | 高（**E 场景使影响面回升**） |
-| 3 | `apicall_result.resize(m_cubParam)` 无上限校验 + u32→i32 静默负数转换 | src/lib.rs:170/176（已实测，见 0.4 节） | 低 |
+| 3 | `apicall_result.resize(m_cubParam)` 无上限校验 + u32→i32 静默负数转换 | src/lib.rs:323/329（已实测，见 0.4 节） | 低 |
 | 4 | 接口指针仅 `debug_assert` 判空，release 下裸指针解引用 | `null_guard_test.rs` 实测：release 下 **Illegal instruction (退出码 132)** | 高（已复现） |
 | 5 | 77 处 `CString::new(...).unwrap()` 遇内嵌 NUL 直接 panic（原 73，漏 4 处跨行链式） | src/friends.rs:124 等 15 文件（已复现，双口径复核见 defect-05） | 高 |
 | 6 | UGC builder 方法失败即 panic（`canonicalize().unwrap()` + `assert!`，**25 个 panic 点**） | `ugc_builder_panic_test.rs` 实测；**归因订正：暂存未提交，公开状态未变更**（见 defect-06 文档） | 中（已复现） |
@@ -78,7 +81,7 @@
 
 在初步分析中，我曾断言 `SteamAPI_ManualDispatch_Init` 不存在于 Rust 绑定（基于在预编译 `libsteam_api64.dll` 导出表里找不到该符号）。
 
-**这个判断是错的。** 头文件 `steam_api.h:210` 明确定义了该函数，`windows_bindings.rs:19611` 也正确生成了绑定，`src/lib.rs:264` 确实调用了它。导出表搜不到的原因是该符号可能通过序号或宏转发导出。事实是：**Rust 侧调用是正确的，C 侧实现存在**。
+**这个判断是错的。** 头文件 `steam_api.h:210` 明确定义了该函数，`windows_bindings.rs:19600` 也正确生成了绑定，`src/lib.rs:436` 确实调用了它（游戏服侧同一处是 `src/server/lifecycle.rs:100`）。导出表搜不到的原因是该符号可能通过序号或宏转发导出。事实是：**Rust 侧调用是正确的，C 侧实现存在**。
 
 我把这条更正明确写在这里，因为「凭已编译二进制导出表下结论」正是容易产生假结论的取证方式——我在这个项目里踩了一次。
 
@@ -103,7 +106,7 @@
 
 **真实缺陷是可重入死锁，不是数据竞争。** 机制如下：
 
-- `src/lib.rs:255-257` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（`process_callbacks` 版本在 lib.rs:146-149 同样如此）。
+- `src/lib.rs:266-269` 的 `lock()` 作用域**覆盖了整个 `cb(data)` 用户闭包调用**（当年记录的坐标是 270-272；后续提交挪了行号，旧数字不带路径前缀只作历史保留）。`process_callbacks` 版本当年在 290-292 同样如此，今天它的守卫块是 `src/lib.rs:286-290`，第二个回调 `callback_handler` 已在块外（291-294）——也就是这一条对 `process_callbacks` 已不再成立，对 `run_callbacks` 仍成立。
 - 用户在任何 Steam 回调内部调用 `register_callback`（或 `run_callbacks`）都需要同一把 `callbacks` 锁。
 - `std::sync::Mutex` 不可重入 → 自锁 → 线程永久挂起。
 
@@ -487,7 +490,7 @@ while let Some(event) = events.next().await {
 
 | 方向 | 现状 | 评价 |
 |------|------|------|
-| **读**（Steam → Rust） | `CStr::from_ptr()` + `to_string_lossy()`，见 `src/friends.rs:64-68`、`src/app.rs:88`、`src/app.rs:104/117/134/155/170`、`src/input.rs:126` 等 | **已是零拷贝**，无中间分配，可直接借鉴 |
+| **读**（Steam → Rust） | `CStr::from_ptr()` + `to_string_lossy()`，见 `src/friends.rs:64-68`、`src/app.rs:88`、`src/app.rs:104/117/134/155/170`、`src/input/origins.rs:23`（拆分前这个读法在该文件里只有一处，旧行号 126 早就漂了——拆分前那份文件里，这个读法在第 542 行） 等 | **已是零拷贝**，无中间分配，可直接借鉴 |
 | **写**（Rust → Steam） | `CString::new(...).unwrap()`，77 处 panic 点 | **这是真缺口** |
 
 典型的读法（`src/friends.rs:64-68`）：
@@ -600,10 +603,10 @@ impl Drop for Inner {
 | ISteamParties | 12 | **锦上添花（中）** | Steam 原生日派对系统（可被 Matchmaking 绕开） |
 | ISteamMusic | 9 | **可选（低）** | Steam 音乐播放器集成（极少游戏用） |
 | ISteamVideo | 4 | **可选（低）** | Steam 视频播放器集成 |
-| ISteamController | 34 | **已取代（低）** | **注意**：已被 ISteamInput（src/input.rs 15+ 个方法）完全取代，缺失是主动选择 |
+| ISteamController | 34 | **已取代（低）** | **注意**：已被 ISteamInput（`src/input/` 九件，`type_surface` 复算 45 个 `pub fn`）完全取代，缺失是主动选择 |
 
 **关键发现**：
-- **ISteamController 不是真正的功能缺口**。头文件注释明言"已被 ISteamInput 取代"，Rust 侧用 Input 模块（src/input.rs 15+ 个方法）覆盖其核心功能（GetActionSetHandle、GetDigital/AnalogActionData 等）。Steamworks.NET 包含它可能是为了兼容性。
+- **ISteamController 不是真正的功能缺口**。头文件注释明言"已被 ISteamInput 取代"，Rust 侧用 Input 模块（`src/input/`，45 个 `pub fn`）覆盖其核心功能（GetActionSetHandle、GetDigital/AnalogActionData 等）。Steamworks.NET 包含它可能是为了兼容性。
 - **真正的必补缺口**是 Inventory（内购）和 HTTP（自建后端），这两个缺了会阻塞大量游戏开发。
 - **合规必需**是 ParentalSettings（家长控制），在某些区域上线必需。
 - **GameServer 全套**是给服务器开发者用的，不做服务器则低。
@@ -635,7 +638,8 @@ ISteamController 外**全部已封装并可从 `Client`/`Server` 取到**；Cont
 2. 表里 ISteamHTMLSurface 的方法数（37 严/39 宽）成立，但**不含 `RunFrame`**：本 SDK 版本的
    `steamworks-sys/lib/steam/public/steam/isteamhtmlsurface.h` 里搜不到 `RunFrame`（整文件 39 处
    `virtual`，`grep -n RunFrame` 为空）。所以包装层不能照搬"每帧调用一次"的客户端惯例，
-   `src/html_surface.rs` 也没有发明这个方法。
+   `src/html_surface/`（今天是 `mod.rs`+`browser.rs`+`keys.rs`+`callbacks.rs` 四个文件）
+   也没有发明这个方法：整目录 `grep -rn RunFrame src/html_surface/` 实测 0 命中，头文件同样 0 命中。
 
 **这把尺的盲区要一并说清**（否则会误读成"覆盖率 28/34＝82%"）：访问器函数只有 29 个 ≠ 接口只有 29 个。
 ISteamNetworkingMessages / ISteamNetworkingSockets / ISteamNetworkingUtils / ISteamClient 这几族没有
@@ -653,27 +657,28 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 
 | 接口 | 已调 | 绑定 | 接口 | 已调 | 绑定 |
 |------|-----:|-----:|------|-----:|-----:|
-| ISteamNetworkingUtils |   14 |  41 | ISteamHTTP |   22 |  25 |
+| ISteamNetworkingUtils |   16 |  41 | ISteamHTTP |   22 |  25 |
 | ISteamController |    0 |  34 | ISteamMatchmakingPlayersResponse |    0 |   3 |
 | ISteamClient |    0 |  33 | ISteamMatchmakingRulesResponse |    0 |   3 |
-| ISteamRemoteStorage |   26 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
-| ISteamInput |   44 |  48 | ISteamMatchmakingServers |   14 |  17 |
-| ISteamUser |   17 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
-| ISteamNetworkingSockets |   25 |  47 | ISteamUGC |   97 |  99 |
-| ISteamGameServer |   23 |  41 | ISteamNetworkingMessages |    5 |   6 |
-| ISteamNetworking |    6 |  22 | ISteamVideo |    3 |   4 |
-| ISteamFriends |   63 |  78 | ISteamGameServerStats |   10 |  10 |
+| ISteamRemoteStorage |   59 |  59 | ISteamMatchmakingServerListResponse |    0 |   3 |
+| ISteamInput |   44 |  48 | ISteamMatchmakingServers |   17 |  17 |
+| ISteamUser |   30 |  33 | ISteamMatchmakingPingResponse |    0 |   2 |
+| ISteamNetworkingSockets |   31 |  47 | ISteamUGC |   97 |  99 |
+| ISteamGameServer |   34 |  41 | ISteamNetworkingMessages |    6 |   6 |
+| ISteamNetworking |    6 |  22 | ISteamVideo |    4 |   4 |
+| ISteamFriends |   76 |  78 | ISteamGameServerStats |   10 |  10 |
 | ISteamRemotePlay |    7 |  20 | ISteamHTMLSurface |   37 |  37 |
-| ISteamUserStats |   31 |  44 | ISteamMusic |    9 |   9 |
-| ISteamMatchmaking |   28 |  38 | ISteamParentalSettings |    6 |   6 |
+| ISteamUserStats |   41 |  44 | ISteamMusic |    9 |   9 |
+| ISteamMatchmaking |   38 |  38 | ISteamParentalSettings |    6 |   6 |
 | ISteamUtils |   32 |  37 | ISteamParties |   12 |  12 |
 | ISteamApps |   29 |  33 | ISteamScreenshots |    9 |   9 |
 | ISteamInventory |   34 |  38 | ISteamTimeline |   18 |  18 |
-| ISteamNetworkingFakeUDPPort |    0 |   4 |  |  |  |
+| ISteamNetworkingFakeUDPPort |    4 |   4 |  |  |  |
 
-**总计 621 / 913**（33 个接口；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
+**总计 728 / 913**（33 个接口；2026-10-21 第七片补 `ISteamVideo` 的请求半 `GetOPFSettings` 3→4，**该接口首次到满**，并订正 `opf_string` 文档里"绑定层没有 OPF 结果回调"这一未测说法，见 §6.1d 末段第七片）；第六片补 `GetPublishedFileDetails` 58→59，`ISteamRemoteStorage` **首次到满**，见 §6.1d 末段第六片）；第五片再补五只 enumerate 53→58，见 §6.1d 末段第五片）；第四片再补两只 publish 51→53，先判掉注解矛盾，见 §6.1d 末段第四片）；第三片再补 7 只"答复点名物品"的异步面 44→51，见 §6.1d 末段第三片）；同日再补 4 只 call result 异步面 40→44"commit / UGCDownload / UGCDownloadToLocation / FileWriteAsync"，见 §6.1d 末段第二片）；同日补 ISteamRemoteStorage Workshop 更新同步面与 GetUGCDetails 31→40（`src/remote_storage/workshop_update.rs`，当时余 19 只全是 `STEAM_CALL_RESULT` 异步——同日的第二片已先补其中耦合最紧的 4 只，仍余 15 只，见 §6.1d 末段两片）；同日再加 ISteamRemoteStorage 缓存 UGC 面 26→30（`src/remote_storage/cached_ugc.rs`，见 §6.1d 末段）；ISteamFriends 好友分组 63→68、来源迭代 68→71、装备外观 71→74、历史昵称 74→75、协议注册 75→76（见 §6.1d 末段）；`ISteamMatchmakingServers` **17/17 首次到满**（`ServerQuery` 句柄 + `CancelServerQuery`，见 §6.1d 末段）；2026-10-20 补 ISteamUserStats 出参读面 31→37、全局成就百分位读面与本地写面 37→41，同日 `ISteamMatchmakingServers` 取消查询与观赏列表 14→16（见 §6.1d 末段）；同日 ISteamGameServer 状态面 + clan 关联两步 23→34（见 §6.1d）；ISteamMatchmaking 两步补到 **38/38 首次到满**——收藏服务器面 28→32、 lobby 控制面 32→38（见 §6.1d 末段）；2026-10-19 补 FakeIP 第四个入口、分类器与身份查询，`ISteamNetworkingSockets` 30→31、`ISteamNetworkingUtils` 14→16。顺带修掉两处抄在文档里的旧数：表里 Sockets 那行写 29 而台账在补之前已经是 30，总计行写 643 而台账实测 644 —— 表格是手抄的，台账才是尺；下面的 FakeIP 段是这一格的去处；2026-10-16 晚些时候再补 FakeIP 分配侧 26→28、读回侧 `GetFakeIP` 28→29（同一条 `FakeIpResult` 也进了回调流）与 `ISteamNetworkingMessages` 的 `CloseSessionWithUser`/`CloseChannelWithUser` 5→6（该接口首次到满），见下面的 FakeIP 段与 §6.1d；2026-10-15 先补 NetworkingUtils 诊断簇 3→14，再补 ISteamInput 手柄簇 18→35、
  glyph/origin 簇 35→43，再补 ISteamUser 14→17（五个账号状态谓词 + 时长管控状态 + 徽章等级 + 语音最佳采样率）
- 与 ISteamInput 设备回调 43→44）。这张表现在由 CI 的
+ 与 ISteamInput 设备回调 43→44；2026-10-16 再补 ISteamUser 的四个 `STEAM_CALL_RESULT` 异步调用 17→21
+ 与语音簇五个 21→26，再补两个出参协议件 26→28、两个词表未定件 28→30，见 §6.1d）。这张表现在由 CI 的
 `interface coverage stays at its registered ledger` 一步复算：尺子是
 `scripts/ci/api_coverage.py`，基线是 `scripts/ci/baselines/api_coverage.txt`，
 每个接口两条数（`declared` / `called`）**双向**判红 —— 少包一个函数、或 SDK 升级悄悄换了
@@ -683,19 +688,78 @@ grep -rhoE "SteamAPI_ISteam<Name>_[A-Za-z0-9_]+" src/ | sort -u | wc -l         
 四个 0 行要分两类说，别一概说成"不需要"：
 
 - **确实不该包**：`ISteamController` —— `isteamcontroller.h:2` 原文 "The older ISteamController
-  interface has been deprecated in favor of ISteamInput"，而 `ISteamInput` 本仓已包 18 个。
+  interface has been deprecated in favor of ISteamInput"，而 `ISteamInput` 本仓已调 44 个（`api_coverage` 台账 44/48；`type_surface` 另算 `Input` 的 45 个 `pub fn`，两把尺不同口径）。
   `ISteamClient` —— 绑定给它生成 33 个入口，本仓一个都不调：接口指针一律来自扁平 C API 的
   `SteamAPI_Steam<Name>_vNNN()` 全局函数（`lib.rs` 24 处 + `server.rs` 8 处，均带 null 守卫）。
-- **真缺口，不是结构性豁免**：`ISteamMatchmaking{Ping,Players,Rules,ServerList}Response`
+- **当时是真缺口，不是结构性豁免**：`ISteamMatchmaking{Ping,Players,Rules,ServerList}Response`
   （2~3 个入口各一）与 `ISteamNetworkingFakeUDPPort`（4 个）。判据是**内容尺而不是名字猜测**：
   `grep -rn "PlayersResponse\|PingResponse\|RulesResponse\|ServerListResponse" src/` 与
   `grep -rn "FakeUDPPort\|CreateFakeUDPPort" src/` 实测**零命中** —— 本仓连这些名字都没出现过，
   所以它们是没做，不是"做了但不占这些入口"的误读。
+  **2026-10-16 复算**：`ISteamNetworkingFakeUDPPort` 四个入口连同工厂已全部封进
+  `src/networking_sockets/fake_udp.rs`（`FakeUDPPort` 4/4、`ISteamNetworkingSockets` 25→26），
+  上面那句 `grep` 从今天起不再零命中，所以把它标成"当时"。四个 `*Response` 仍读 0，原因见下段
+  ——那是接收侧已实现、台账只数"本仓主动调用"的口径问题，不是缺口。
   需要区分的是：`matchmaking_servers.rs` 确实**实现了**这四类服务端回调 ——
   `matchmaking_servers_callback!`（该文件第 8 行）在 148 / 449 / 467 / 480 行以
   `ServerList` / `Ping` / `PlayerDetails` / `ServerRules` 实例化，手写 `extern "C"` vtable
   交给 Steam 回调进来。但那套实现**一次都没有调用**绑定给这四个接口生成的入口函数，
   所以台账读 0：这里 0 的含义是"入口没被调"，不是"接口不存在于本仓"。
+
+FakeIP 那一族四个入口都在 `isteamnetworkingsockets.h`。**2026-10-16 补掉三个**：
+`begin_async_request_fake_ip`（h:862）、`get_fake_ip`（h:867）与 `create_listen_socket_p2p_fake_ip`（h:878），
+落在 `src/networking_sockets/fake_ip.rs`，`ISteamNetworkingSockets.called` 26→29。
+分配那两个能在读不到完成消息的情况下封，靠的是头文件自己那句 h:875-877「you do not need to wait for the
+request to complete」；`bool` 不改成 `Result` 是因为 h:835-836 把 `false` 定义成「已有一个请求在跑」，两个答案都
+是正常状态。读回那个不接 `idxFirstPort` 参数：h:865 说它 "is currently reserved and must be zero"，所以封装
+固定传 0，而不是把只有一个合法值的旋钮摆到公开面上；h:866「Make sure and check
+`SteamNetworkingFakeIPResult_t::m_eResult`」则是它返回 `Result` 而非结构体的理由。四个失败码
+（`steamnetworkingfakeip.h:98-102`）各留自己的 `SteamError` 变体而不塌成 `Generic`，因为同一文件 `:104-105`
+把 `Busy` 单独挑出来当作轮询者唯一可以容忍的失败。本文件对 `steamnetworkingfakeip.h` 的七处行号引用现在
+由 `every_fakeip_header_citation_lands_on_the_sentence_it_quotes` 逐条对 vendored 头复算（这一把尺是补的：
+2026-10-16 对本提交的独立复量抓到其中三处偏了 2~6 行，都是按印象抄的而不是抄完再读一次），
+`a_fakeip_citation_point_at_the_wrong_line_is_red` 则钉住这把尺子本身会判红。
+**当时剩下两处的阻碍各不相同，而生成层那条已经不成立了**：`SteamNetworkingFakeIPResult_t` 原先确实被绑成空壳
+`_unused: [u8; 0]`，真定义在 `steamnetworkingfakeip.h:93`。2026-10-16 改了 `steamworks-sys/build.rs`：输入变成
+一个 bundle TU（`steam_api_flat.h` + `steam_gameserver.h` + `steamnetworkingfakeip.h`），因为该头不能单独解析
+（`steamnetworkingtypes.h:47` 的 `#error` 要求同 TU 内先由 `steamclientpublic.h` 定义 pack 宏，宏不跨 TU）；
+四个绑定文件由 `Rebuild bindings` 工作流在原生 runner 上重生成、按下 `commit_bindings` 才落盘（落在 `41cf3fb`），
+本机无 libclang（实测 `C:/Program Files/LLVM` 不存在）所以改完无法预览。落盘后它是实体：`windows_bindings.rs`
+的结构体在 27038-27046、`k_iCallback = 1223` 在 27053、`GetFakeIP` 的声明在 26011-26015。
+于是 `ISteamNetworkingUtils::SetGlobalCallback_FakeIPResult` **仍然不封，但原因换了**：不是版式认不出来，而是
+同一条完成消息已经作为 `FakeIpResult` 走本仓的 installed-callback 流到达，SDK 那个全局回调只收裸函数指针、
+没有地方放捕获，封它等于给同一条消息再开一条更弱的通路。
+`GetRemoteFakeIPForConnection`（h:895）**2026-10-19 补上**，卡它的不是生成层而是「FakeIP 要不要进
+公开类型面」这个设计决策，用户选了方案 3：地址照本仓其余地址 API 说 `std::net::SocketAddr`，
+同时把 Steam 的分类器也封成公开类型。方法落在 `NetConnection::remote_fake_ip()` 而不是
+`fake_ip.rs`，因为 `sockets` 与 `handle` 两个字段私有于 `connection.rs`，兄弟模块看不见——是可见性
+决定的位置，不是风格。两个失败码（h:892-894 只有 `k_EResultInvalidParam` 与 `k_EResultIPNotFound`）
+各留自己的 `SteamError` 变体，`the_two_remote_fake_ip_refusals_keep_their_names` 钉住这一点；这也是本
+文件里唯一一个不答 `InvalidHandle` 的拿句柄查询，因为 Steam 自己就用状态码回答坏句柄。
+地址解码被抽成纯函数 `socket_addr_from_octets`（`src/networking_types/addresses.rs`），理由是老规矩：
+凡是从 Steam 给的值上做判断，就得能在 CI 上判。它钉住的是四件事——IPv4 的判定是「十个 0 再加
+`ff ff`」这个前缀（`steamnetworkingtypes.h:226-231`），四个字节按写的顺序读（`:231`「As bytes, i.e.
+network byte order」），端口原样交出去（`:239`「Host byte order」），以及被 `Clear` 清零的那个结构体
+是 IPv6 的全零地址而不是 `0.0.0.0`（`:200`）。同一族分类器也一起补了：
+`ISteamNetworkingUtils::GetIPv4FakeIPType`（`isteamnetworkingutils.h:254`）封成
+`NetworkingUtils::ipv4_fake_ip_type(Ipv4Addr)`，返回新的公开枚举 `FakeIpType`——四个具名答案照
+`steamnetworkingtypes.h:185-188`，外加 `Unrecognized(i32)`。这一条兜底**今天真能命中**：
+`k_ESteamNetworkingFakeIPType__Force32Bit`（`:190`）是绑定里声明过的哨兵，测试直接拿它构造，所以不像
+§6.1c 那九处「要等上游更新才可达」的兜底那样只能登记没有测试。传给分类器的那个 `u32` 也抽成了
+本仓函数 `fake_ip_probe_argument`：写成 `ip.to_bits()` 再断言 `to_bits()` 等于自己，测的是 std 不是我的码。
+**门判不到的部分照旧登记**：`remote_fake_ip`、`ipv4_fake_ip_type` 与 `real_identity_for_fake_ip`
+各要一次真 FFI 往返，第一条还要一条用 FakeIP 建立的连接、第三条要一个 Steam 真分配过的地址；
+CI 判的是它们两侧的纯函数、表与前提，接线本身没有跑过。`fake_udp.rs` 里
+`create_fake_udp_port` 的文档仍指回这一段——「票从哪来」这条边界要有人看见，而不是被假装跳过。
+同一天再补最后一格：`ISteamNetworkingUtils::GetRealIdentityForFakeIP`（h:268）封成
+`NetworkingUtils::real_identity_for_fake_ip(SocketAddr) -> Result<NetworkingIdentity, SteamError>`，
+它就是 `fake_udp.rs` 里那条「消息里的 m_identity 永远是 FakeIP，去看 GetRealIdentityForFakeIP」的答复。
+两个拒绝码（h:259-260）一个是"你给的地址不是 FakeIP"、一个是"我们认不出这个 FakeIP"，
+`the_two_identity_lookup_refusals_keep_their_names` 要求两者各自可辨且互不相等；出参只在状态回答之后才读，
+因为没被写过的结构体留着 0，而 0 就是 `k_ESteamNetworkingIdentityType_Invalid`——
+这条前提是 `an_untouched_identity_struct_holds_the_type_that_is_nobody` 钉的（把绑定里那个判别式改成 7
+⇒ 该测试断言判红 `left: 7 / right: 0`，所以它不是装饰）。到这一步 `isteamnetworkingsockets.h` 与
+`isteamnetworkingutils.h` 里 FakeIP 一族的入口只剩 `SetGlobalCallback_FakeIPResult` 有意不封，理由不变。
 
 这张表的单位是**绑定里的可调用名字**（`grep -c "pub fn SteamAPI_ISteamUGC_"` 实测 99），不是头文件里的
 方法数：`CreateQueryAllUGCRequest` 和 `CreateQueryUGCDetailsRequest` 各有重载，绑定给它们加了
@@ -809,38 +873,692 @@ beta 分支（数量三元组、逐项 `BetaInfo`、`set_active_beta` 名字含�
 Steam 报回的字节数截到容量、文本截到第一个 NUL、UTF-8 非法走 lossy（不 panic）。
 ③ 发送侧内嵌 NUL 判 `Err(SteamError::InvalidParameter)`，与 Steam 自己的拒绝 `Ok(false)` 分两级。
 
-`ISteamUser` 补到 17/33 之后，剩下 16 个先按"判过不封"和"要先定契约"分开登记，判据一律指到 `isteamuser.h` 行号：
+`ISteamUser` 现在 30/33（2026-10-16 依次补进：四个 `STEAM_CALL_RESULT` 异步调用走
+`register_call_result`、语音簇五个进 `src/user/voice.rs`、两个出参协议件进 `src/user/buffers.rs`、
+最后两个"词表未定"件进 `src/user/passthrough.rs`，见下面第 4、6、7 段）。**剩下 3 个全部是
+"判过之后有意不封"，没有一个是漏项**，判据一律指到 `isteamuser.h` 行号：
 
 | 未封方法 | 判据 / 前置条件 |
 |---|---|
 | `GetHSteamUser`（h:24） | 头文件 h:22-23 明写 "this is only used internally by the API, and by a few select interfaces that support multi-user"。把内部句柄开放给游戏代码只加不安全面、不加能力，**有意不封** |
 | `InitiateGameConnection_DEPRECATED`（h:53） | h:51 "DEPRECATED! This function will be removed from the SDK in an upcoming version."，**有意不封**（与本仓 `RequestUGCDetails` 同一先例） |
 | `TerminateGameConnection_DEPRECATED`（h:60） | h:58 同上，**有意不封** |
-| `StartVoiceRecording`（h:72）/ `StopVoiceRecording`（h:77） | 无参 `void`，随时可封；归在语音簇一起判，因为单独封这两个只给半套 API（录制起来却读不到数据） |
-| `GetAvailableVoice`（h:83）/ `GetVoice`（h:106）/ `DecompressVoice`（h:114） | `EVoiceResult` + 出参式：`GetVoice(bWantCompressed, void *pDestBuffer, uint32 cbDestBufferSize, uint32 *nBytesWritten, …)`。要先定"缓冲谁分配多大、Steam 写了几个字节、缓冲不足回什么"，并按本仓既有纪律处理（不信 Steam 报回的计数、按有效变体起手，见 `clamped_entries` / `steam_out_string`）。这是**能写出 UB 的一类**，不给契就不封 |
-| `GetUserDataFolder`（h:69） | `bool GetUserDataFolder(char *pchBuffer, int cubBuffer)`，同上：调用方缓冲 + 长度语义未定 |
-| `GetEncryptedAppTicket`（h:173） | h:170-172 定义了一次调用两用的协议（返回 false 时 `*pcbTicket` 是所需大小；传 `pTicket=NULL, cbMaxTicket=0` 探长度）。要封就得同时给出"探长度"和"取数据"两条路，否则调用方只能裸指针玩 |
-| `RequestEncryptedAppTicket`（h:165）/ `GetMarketEligibility`（h:209）/ `GetDurationControl`（h:213）/ `RequestStoreAuthURL`（h:194） | 四个都带 `STEAM_CALL_RESULT(...)` 标注、返回 `SteamAPICall_t`，必须接 `register_call_result` 派发并加对应回调结构，不是单行转发 |
-| `AdvertiseGame`（h:159）/ `TrackAppUsageEvent`（h:65） | `AdvertiseGame(CSteamID, uint32 unIPServer, uint16 usPortServer)` 要先定 IP/端口的 Rust 表示（本仓有 `SteamIpAddr`，但那是 networking 那族的中转类型，别顺手复用错语义）；`TrackAppUsageEvent(CGameID, int eAppUsageEvent, const char *pchExtraInfo = "")` 的 `eAppUsageEvent` 在这份绑定里没有对应枚举，且有裸字符串入参（内嵌 NUL 要走 `InvalidParameter`，不能 `unwrap`） |
+
+同一张表原来的第 8 行（`RequestStoreAuthURL` h:194 / `RequestEncryptedAppTicket` h:165 /
+`GetMarketEligibility` h:209 / `GetDurationControl` h:213）**本轮已封**，登记在这里是为了留下判据：
+四个都返回 `SteamAPICall_t` 且带 `STEAM_CALL_RESULT(...)`，所以实现是"发调用→用 `register_call_result`
+按句柄登记一次性回调"，不是单行转发。落地时按该判据各自补齐的东西：
+`request_store_auth_url` 把 512 字节定长 `m_szURL` 交给 `steam_out_string`（截在缓冲内第一个 NUL，
+不越过 Steam 拥有的字节），入站 URL 内嵌 NUL 直接 `Err(InvalidParameter)` 且 `cb` 在返回前触发；
+`market_eligibility` 原样转发 `EMarketNotAllowedReasonFlags`（bindgen 给的是 `repr(transparent)` newtype
+加 `k_E…None/TemporaryFailure/AccountDisabled/AccountLockedDown/AccountLimited`＝0/1/2/4/8，
+是**会组合的位**，镜像成 Rust 枚举要么丢位要么把两个原因说成一个），时间戳保留 Steam 的
+`RTime32` 语义（0＝"没说"，不是 1970）；`duration_control` 的 `m_progress` 与 `m_notification`
+是两个不同的词表（`steamclientpublic.h` 里 `EDurationControlProgress` 把 0..2 定义为进度、3..5 定义为
+"该退出了"），因此没有合并成一个三选枚举，两边各带一个 `Unknown` 兜底臂；
+`request_encrypted_app_ticket` 只交付"就绪"信号，票本体走 `GetEncryptedAppTicket` 的出参协议——
+该行本轮也已被封（见下面第 6 段），空 `app_data` 也要给 Steam 一个非空指针，沿用 `write_file` 的
+`NonNull::<u8>::dangling()` 写法。`m_eResult` 一律经 `to_steam_result`，IO 失败回 `IOFailure`。
+两个兜底臂今天用现有头文件构造不出来（给 C 枚举造未声明的判别式是 UB，不是复现；实测这两个枚举
+Windows 绑成 `repr(i32)`、其余三个平台绑成 `repr(u32)`，两个方向结论一样），
+按既有纪律**只登记不写假测试**，兜底由 `no_panic_on_unknown_enum` 账本看着。
+
+同一张表原来的语音三行（`StartVoiceRecording` h:72、`StopVoiceRecording` h:77、`GetAvailableVoice`
+h:83、`GetVoice` h:106、`DecompressVoice` h:114）**本轮已封**，落地在 `src/user/voice.rs`。
+原来登记的前置条件——"要先定缓冲谁分配多大、Steam 写了几个字节、缓冲不足回什么"——是照签名逐条定的：
+
+1. deprecated 的 uncompressed 参数**一律不暴露**，永远传 `false`/null/0。头文件先说 most applications
+   该把它们留成 NULL/zero（h:96-97），再说取未压缩数据会让 `GetVoice` **丢弃剩余的压缩数据**
+   （h:90-92）：把它们开进 API 就是给调用方一条静默丢数据的口子。
+2. 读路径每帧都要跑（"at least once per frame, and preferably every few milliseconds"，h:100-102），
+   所以底层形状是**调用方给缓冲**（`read_compressed_voice_into` / `decode_voice_into`），
+   `Vec` 版（`read_compressed_voice` / `decode_voice`）建在同一把尺上，不是两套逻辑。
+3. **两条生长循环故意不一样**，因为头文件只给了一条的数量答案：`DecompressVoice` 明写缓冲不够时
+   `*nBytesWritten` 就是所需大小、建议从 20kb 起步（h:111-113），那一路把报回的数当**下限**
+   （`grow_for_decode`）；`GetVoice` 没有这个承诺，所以捕获那一路只能翻倍重试且次数封顶
+   （`grow_for_capture` + `CAPTURE_ATTEMPTS`），超过 `MAX_VOICE_BYTES`（1 MiB）就**报
+   `BufferTooSmall` 而不是继续分配**。
+4. 告诉 Steam 的长度**只降不升**地夹到 `u32`（`voice_len`）——反方向是截断，会让它以为缓冲比实际更大；
+   Steam 报回的字节数只信到"这把缓冲装得下"为止（`written_bytes`）。这两条各配一只变异实测判红。
+5. `StopVoiceRecording` 之后采集不会立刻停（h:74-76 "the system will keep recording for a little
+   bit"），所以它不返回"已经停了"，由读路径继续报 `NotRecording` 直到排空。
+`VoiceError` 逐个映射 `EVoiceResult` 的 9 个非 OK 码（`steamclientpublic.h:151-163`，判别式 0..9，
+那份声明本身不带注释，所以每个变体的中文说明读的是名字而不是头文件原文；有原文可引的地方都在
+方法文档里引了），
+`Unknown` 兜底臂同上：今天构造不出来，只登记不写假测试。`decode_voice` 故意不复用
+`decode_voice_into`——后者会丢弃字节数，而缓冲不够时那个数正是下一次分配的唯一输入。
+
+表里原来的 `GetUserDataFolder`（h:69）与 `GetEncryptedAppTicket`（h:173）两行**本轮已封**，落在
+`src/user/buffers.rs`。这两件当初登记的理由是同一句"调用方缓冲 + 长度语义未定"，而头文件只把
+**票**那一件说清楚了（h:167-172：返回 false 时 `*pcbTicket` 就是所需大小；传
+`pTicket=NULL, cbMaxTicket=0` 探长度，"if a ticket is available, *pcbTicket will contain the size
+needed, otherwise it will be zero"），`GetUserDataFolder` 的 `bool` **头文件从头到尾没解释 false
+是什么意思**。于是两件的契约分别这么定：
+
+1. `encrypted_app_ticket()` 照头文件走两遍：NULL/0 探一次 → 按报回的数分配 → 再取一次。
+   探到 0 就是"还没票"→ `InvalidState`（这既不是调用方的错也不该重试到永远）；报回的数超过
+   `MAX_TICKET_BYTES`（1 MiB）→ `InvalidParameter` 而**不是**照那个数分配；第二遍仍然 false →
+   `InvalidState`，写清楚"协议没收敛是 Steam 那边的事"。取回的字节数照语音簇同一把尺夹到缓冲
+   容量（共用 `voice::written_bytes`，不再写第二份）。
+2. `user_data_folder()` 的失败检测**不依赖 Steam 那个没定义的 bool**：本仓给一个 32 KiB 缓冲
+   （头文件自己举的例子 `C:\Program Files\Steam\userdata\<SteamID>\<AppID>\local` 远短于此，
+   32 KiB 也已是 Windows 260 字符路径上限的百倍），若整块缓冲被填满而**内部没有 NUL**，就判定被
+   截断并返回错误——因为截出来的字符串仍然"看着像一条路径"，静默交给调用方会让游戏把存档写到
+   它没选的地方。Steam 回 false 也一律报 `InvalidState`，不替它编造含义。
+3. `cubBuffer` 是 `int`，所以长度先过 `i32::try_from`；反方向（截断）会让 Steam 以为缓冲比实际更大。
+4. 路径按本仓读定长缓冲的既有口径 lossy 解码（`steam_out_string`），并**在文档里写明**不可解字节
+   会变成 U+FFFD、因此不保证字节级往返——而不是让调用方以为拿到的是原始字节。
+
+4 个测试、4 只变异（去掉 NUL 守卫、把 `int` 长度改成截断、把探到 0 当成大小、去掉票上限），
+每只都判到对应测试红、文件逐字节还原。
+
+**第 7 段：`AdvertiseGame`（h:159）与 `TrackAppUsageEvent`（h:65）本轮已封**，落在
+`src/user/passthrough.rs`，`ISteamUser` 因此到 30/33。这两件原来卡在"参数词表没定义"，处理办法
+是**照头文件与本仓既有口径把假设说出口，而不是替它造一个词表**：
+
+- `advertise_game(SteamId, Ipv4Addr, u16)`：h:156-158 对 `uint32 unIPServer` 只说 "the IP address
+  of the game server"，**从没讲字节序**。所以取的是本仓已经在两头用过、且能原样往返的那个约定：
+  出站 `MatchmakingServers::ping_server` 传 `ip.into()`（`src/matchmaking_servers.rs:632-649`），
+  入站服务器列表把 Steam 自己给的 `m_unIP` 用 `Ipv4Addr::from` 读回
+  （`src/matchmaking_servers.rs:279`）。实测这台小端机上 `u32::from(a) == a.to_bits()`，
+  即"首段octet 作高位"（`192.168.1.1` = `0xC0A80101`）——选它不是拼写二选一，而是 Steam 回给你的
+  就是这个形状。这个 Steam 调用返回 `void`，所以封它也不产生一条能被观测的成功/失败；要不同词序的
+  人可以直取 `sys::SteamAPI_ISteamUser_AdvertiseGame`，**故意的错比凭猜的 wrapper 好**。
+- `track_app_usage_event(GameId, i32, &str) -> Result<(), SteamError>`：`eAppUsageEvent` 在这份绑定里
+  是裸 `int`、**SDK 没有对应枚举**（h:63-64 整条注释只有 "used by only a few games to track usage
+  events"，且挂在头文件自己的 `// Legacy functions` 标题下）。因此**不**造一个 Rust 枚举——那会是一
+  张本仓无法核对的名字表，跟写方向占位值同一类错误；数字原样转发，唯一能失败的地方是入站字符串的
+  NUL，走 `c_string_arg` → `InvalidParameter`（不 `unwrap`、不静默截断）。
+
+两件都**没有配测试**，理由是既有的那条纪律而不是省事：`advertise_game` 是一行转发、无可分叉的判据，
+`track_app_usage_event` 唯一的分支要在有 `Client` 时才走得动，编一个假客户端去"测"它只会写出一只
+杀不死的断言（同 §6.1d 上面那五个账号谓词的处置）。真正的锁是覆盖账本：少调一个 FFI 就让
+`ISteamUser.called` 掉数，而那条判定双向判红。
+
 
 **这里也记一条判据教训**：上面这些"未封"里没有一个是用"名字看起来像旧的/内部用的"当理由的——
 `GetHSteamUser` 的不封依据是头文件那句话，两个 `_DEPRECATED` 的依据是 h:51/h:58 的原文，
-其余 13 个的障碍都在签名里看得见：9 个是出参/缓冲或 `STEAM_CALL_RESULT` 异步协议，
-2 个是参数表示未定（`AdvertiseGame` 的 IP/端口、`TrackAppUsageEvent` 那个没有对应枚举的
-`eAppUsageEvent`），剩下 2 个（`Start`/`StopVoiceRecording`）确实随时可封，不封的理由是不想
-单独给出半套语音 API。判"要不要封"读签名和头文件，不读命名。
+最后两个"参数表示未定"的也已在 `src/user/passthrough.rs` 封完（见第 7 段），所以这张表现在
+只剩 3 行、全是**有意不封**，没有一条是漏项。
+判"要不要封"读签名和头文件，不读命名。
 
 `ISteamInput` 补到 44/48（2026-10-15 加 `EnableDeviceCallbacks` + `DeviceConnected` /
 `DeviceDisconnected` 两个载荷，见 §6.1 下方实现）之后，剩下 4 个同样逐个判过：
 
 | 未封方法 | 判据（读绑定与头文件，不靠猜） |
 |---|---|
-| `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11771` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
-| `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11774`）——裸 C 函数指针回调，头文件 h:872 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
-| `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
+| `SetDualSenseTriggerEffect`（`isteaminput.h:1020`） | 参数是 `const ScePadTriggerEffectParam *`，而**绑定里这个类型是空壳**：`windows_bindings.rs:11770-11772` 生成的是 `pub struct ScePadTriggerEffectParam { _unused: [u8; 0] }`（SCE pad SDK 的定义不在随仓头文件里）。没有字段就无法安全构造一个 Steam 要读的结构体，自己复刻那套力反馈联合体布局属于凭猜定布局，传错是 UB。要封得先补上那份定义 |
+| `EnableActionEventCallbacks`（`isteaminput.h:874`） | 参数是 `SteamInputActionEventCallbackPointer = Option<unsafe extern "C" fn(*mut SteamInputActionEvent_t)>`（绑定 `windows_bindings.rs:11773-11774`）——裸 C 函数指针回调，头文件 h:872-873 明说它是"比标准 Steam 回调更低延迟"且"一次只支持一个回调"。要做就得加 extern "C" 蹦床 + 闭包注册表 + 单槽所有权规则，是另一件事，不是加一行转发 |
+| `Legacy_TriggerHapticPulse`（h:968）/ `Legacy_TriggerRepeatedHapticPulse`（h:972） | 头文件自己给了替代路径：h:966 "if you are approximating rumble you may want to use TriggerVibration instead"。按上一条那条判据教训，先核实替代品真在绑定与本仓里：`SteamAPI_ISteamInput_TriggerVibration` 与 `TriggerSimpleHapticEvent` 都已封（`src/input/effects.rs` 的 `trigger_vibration` / `trigger_simple_haptic_event`），且这两个 Legacy 只作用于 Steam Controller。所以是**已被覆盖**，不是漏项 |
 
-顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 `src/lib.rs:170` 的 `resize` 行为"里的
-`resize` 现在在 `src/lib.rs:308`（拆分后行号漂移，本轮按内容重测；原句描述的行为本身没变）。
+**同日补 `ISteamGameServer` 状态面 23→32**（`src/server/status.rs`）：`LogOff`、`BLoggedOn`、`BSecure`、
+`WasRestartRequested`、`GetPublicIP`、`UserHasLicenseForApp`、`SetRegion`、`SetSpectatorPort`、
+`SetSpectatorServerName`（h:65-75、:105-116、:136-137、:169-171、:184-187）。两处值得记的判据：
+
+- **`GetPublicIP` 返回的结构体里，两个族的字节序不一样**：`m_unIPv4` 是 "Host order"、
+  `m_rgubIPv6` 是 "Network order!"（`steamtypes.h:115-116`），所以解码必须按标签分两路，
+  写成 `address_from_steam_parts` 纯函数并各测一半（把 IPv4 的字 swap_bytes、或让 v6 标签走 v6 以外那一路，
+  都当场判红）。另一个坑是 `k_ESteamIPTypeIPv4 = 0`：全零结构体读出来就是 IPv4 `0.0.0.0`，
+  头文件没有"未知族"这个标签，所以文档明说这点而不是把它当成"没有地址"。
+- **复审改掉一处"两个 union 成员都读出来再看标签"**：`m_unIPv4` 声明成 `uint32`、`m_rgubIPv6` 声明成
+  `uint8[16]`（`steamtypes.h:115-116`），标签是 IPv4 时那 16 字节里有 12 字节没人写过——写错的不是
+  **值**（`address_from_steam_parts` 仍按标签选，报出来的地址是对的），是那次**读**：读未初始化
+  内存。现在 `public_address` 按标签只读选中的那一支。这一支选择要活着的 game server 才跑得动，
+  **登记为未覆盖**，纯函数那半照旧由各测一半钉住。
+- **两个接口问同一个问题，就只留一张表**：`User::user_has_license_for_app` 与
+  `Server::user_has_license` 原先各有一份许可证枚举（`user::UserHasLicense` 与这一轮新写的
+  `server::UserLicense`），现在都走 `user::answers.rs` 里的 `license_answer` 返回同一个
+  `UserHasLicense`；同时把兜底臂改名 `Unrecognized(i32)`，并给 `UserHasLicense`、`ServerAddress`
+  补上 `#[non_exhaustive]`——理由与 `LobbyType` 那条一样：往后 Steam 加值不该由我提前替调用方
+  决定"这算破坏性变更"。
+- **`UserHasLicense::Unrecognized` 今天是不可达兜底**（`ESteamIPType`/`EUserHasLicenseForAppResult`
+  在绑定里只有声明的那几个值，造第三个越界值就是 UB），所以它**没有测试**，
+  而且我专门跑了一只"把兜底改成返回 IPv4 零地址"的变异确认它**照绿**——
+  这条存活不是测试太弱，是那条臂本来就到不了；登记成登记，不写成锁。
+  反过来，具名的三个答案各有自己的变体，"没认证过"不塌成"没许可证"（把 `NoAuth` 折进
+  `DoesNotHaveLicense` 的变异由表测试判红）。
+
+**照旧登记不封的理由，并且都引头文件原句**：`GetGameplayStats` 与 `GetServerReputation` 就在
+"these two functions s are deprecated, and will not return results / they will be removed in a future
+version of the SDK"（h:178-179）这两行底下；`SendUserConnectAndAuthenticate_DEPRECATED`（:236）与
+`SendUserDisconnect_DEPRECATED`（:250）名字里就带 `_DEPRECATED`，整个尾部段落的标题是
+"Deprecated functions.  These will be removed in a future version of the SDK."（:259）。
+同日补掉 `AssociateWithClan`（:215）与 `ComputeNewPlayerCompatibility`（:219）——两个结果结构体
+（`AssociateWithClanResult_t` :374、`ComputeNewPlayerCompatibilityResult_t :381-387`）在绑定里都有，
+所以走 `register_call_result`，23→34。四只变异四只按断言消息判红：`io_error` 必须盖过载荷
+（没答上来的调用，结构体里 `m_eResult` 仍是 OK）、三个计数各归各位、候选者 id 不许丢、
+以及**只能读 64 位并集的低 32 位**这一刀。最后那刀第一次跑**照绿**，原因是夹具里的候选者 id 写的是 42
+——放得进 32 位，截断看不出来；换成真的 SteamID64（76561197960287930）才判红。
+⇒ 记一条口径：**"断言字段被原样送出"的测试，夹具必须大到截断/窄化会露出来**。
+**但 `RequestUserGroupStatus` 不封，而且理由不是"看起来麻烦"**：它自己的注释写"results returns async by
+GSUserGroupStatus_t"（:173），可是这个结构体在随仓 SDK 里**根本没有声明**——实测该名字只出现一次，
+就是那句注释，struct 定义为 0——绑定没有类型可回，封出来就是一个只有问题、没有答案出口的桩。
+剩下 `CreateUnauthenticatedUserConnection`/`BUpdateUserData` 仍留给下一轮（语义挂在那条废弃连接流程上）。
+
+**同日再补 lobby 控制面 32→38（该接口到满）并修掉一张缺号的表**（`src/matchmaking/mod.rs`、
+`queries.rs`）：
+
+- `LobbyType` 原来只有 4 个变体，而 `isteammatchmaking.h:18-28` 声明 5 个——
+  `k_ELobbyTypePrivateUnique`（`:26`，"private, unique and does not delete when empty"，并注
+  "can only create from webapi"）在本仓**根本没有名字**，于是 `set_lobby_type` 连封都封不完整。
+  补上该变体，并给枚举加 `#[non_exhaustive]`（与前两处同类改动一致：宁可让下游不带兜底的 `match`
+  当轮编译失败，也不要让它把第五个答案当成不存在）。原先写在 `create_lobby` 里的内联 `match`
+  抽成 `lobby_type_to_raw`，测试逐档对表并把五个判别式（0..4）单独钉成"前提断言"——
+  那种断言不可能被我方改动打红，所以文档里明说它是前提检查而不是判决（把绑定的
+  `k_ELobbyTypePrivate = 0` 临时改成 5 ⇒ 该断言判红，证明它不是装饰）。
+- 新封 5 个 bool  setter 与 1 个查询过滤器，每条文档只引它自己那一档的头文件原文：
+  `set_lobby_type`（:230-231 只有 public/invisible 且 joinable 的 lobby 会被搜索返回）、
+  `set_lobby_owner`（:244-246 两条前置与"完成后本用户不再是房主"）、`set_linked_lobby`
+  （:249-250 两个 lobby 都得是自己的）、`invite_user_to_lobby`（:153-154 "true" 只代表发出去了、
+  false 是本地未连 Steam；顺带登记 `LobbyInvite_t` 本仓不投递），`set_lobby_member_limit`
+  （:225-227，参数保持 `i32` 因为 Steam 就收签名整数——不接受一个交不出去的数字）。
+- `lobby_member_limit` 的读法改掉了：原来 `match count { 0 => None, _ => Some(count as usize) }`，
+  负数会被 cast 成 18446744073709551615；现在走 `member_limit`（`usize::try_from` + 只收 >0），
+  三条变异（max(0) 版、留 0 版、unsigned_abs 版）各自被同一条测试按断言消息判红。
+- **登记两条量出来的可疑，不在本轮动**：① `set_request_lobby_list_result_count_filter(count: u64)`
+  里是 `count as i32`（`src/matchmaking/queries.rs`），4294967296 会静默变成 0——这是"接受一个交不出去的
+  数字"的另一面，改法要么把参数换成 `i32`（破坏公开签名，与本轮 `set_lobby_member_limit` 同口径），
+  要么返回 `Result` 打断 builder 链；② `create_lobby` 的 `assert!(max_members <= 250)` 在
+  `isteammatchmaking.h:138` 里**找不到出处**（grep 该头无 250），250 这条上限来自 Steamworks 文档而不是随仓
+  头文件，而它现在是调用方喂参数就能触发的一次 abort。两处都要单独拍板，先记数字不动行为。
+  **→ 2026-10-20 两处都按方案「收 Steam 的那个宽度」落地**：①参数与 `LobbyListFilter::count`/`set_count`
+  一律 `i32`（头文件原句 "AddRequestLobbyListResultCountFilter( int cMaxResults )"，`:121`），`as i32`
+  那步没了＝截断**在类型层不再可表达**；②`create_lobby` 参数改 `i32`，250 那条断言删掉，超限走
+  `LobbyCreated_t.m_eResult` → 调用方回调里拿到 `Err`（本仓早就把 `m_eResult` 过 `to_steam_result`，
+  所以这不是新通道，是终于把已有通道让调用方看得见）。两处都**没配测试**，理由是诚实的：类型层的修复
+  只能测出"Rust 的整数是 Rust 的整数"；而"Steam 到底会不会拒一个过大的 cMaxMembers"要活客户端，
+  照旧登记为未证。可复算的是 `cargo check --locked --workspace --all-targets` rc=0——`src/`、测试、
+  `examples/` 没有一个调用点需要兼容垫片，破坏面只在下游。
+
+**2026-10-19 补 `ISteamMatchmaking` 收藏服务器面 28→32**（`src/matchmaking/favorites.rs`，四个入口在
+`isteammatchmaking.h:60-77`、两个列表位在 `:525-527`）。两处判断不属于头文件，记在这里：
+
+- `AddFavoriteGame` 的返回，头文件只说 "adds the game server to the local list; updates the time
+  played of the server if it already exists in the list"（h:73），**没说拒绝长什么样**。本仓把它读成
+  `Option<usize>`，规则是自己定的："负数不是列表里的位置"（`stored_favorite_slot`），文档里写明这是
+  我们的读法而不是 Steam 的说法，要原始数字的人直接调 `sys::SteamAPI_ISteamMatchmaking_AddFavoriteGame`。
+- `uint32` 地址的字节序头文件同样没说。沿用本仓**双向已经在用**的那套（出去 `u32::from(addr)`、
+  回来 `Ipv4Addr::from(bits)`，于是 `192.168.1.1` = `0xC0A80101`；论证与那两个对拍点写在
+  `User::advertise_game` 的文档里，不在新模块重讲一遍），但收成两个具名函数
+  `favorite_address_word` / `favorite_address_from_word`——因为上一轮刚吃过一次教训：断言
+  `ip.to_bits()` 等于自己测的是 std，**必须有我方能被打变异的那一层**。改 `from_le_bytes` 一刀当场判红。
+
+其余照本仓老规矩：`favorite_count` 夹负（`-1 as usize` 会变成 18446744073709551615，任何按它循环的
+代码都跑到表外面）、`favorite_index` 拒绝放不下 `c_int` 的下标（否则 `usize::MAX` 会变成 -1 递给 Steam）、
+`favorite_entry` 在 `false` 那一路一个出参都不读、未知的 flag 位保留原值（`from_bits_retain`，
+不是 `from_bits_truncate` 那种把 Steam 的答复悄悄改成 0）。8 只变异 8 只按断言消息判红；
+四个方法本身要活客户端，登记为未验证。
+
+顺带修正本文早前的一处复现行号：缺陷 #3 那句"镜像 resize 那一行"的行为，其 `resize`
+现在在 `src/lib.rs:323`（拆分与本行改动都让行号漂移过，本轮按内容重测；原句描述的行为本身没变）。
+
+**2026-10-20 补 `ISteamUserStats` 的出参读面 31→37（6 只，`src/user_stats/user_reads.rs`）**：
+`GetUserStatInt32`/`GetUserStatFloat`/`GetUserAchievement`/`GetUserAchievementAndUnlockTime`/两条
+`GetAchievementProgressLimits`。六只同形（Steam 返一个 `bool`、往出参里写数），所以这一轮的实质是**把形里
+的两处判定抽成纯函数**而不是抄六遍 `if`：`read_answer` 在 `false` 那一路**一个值都不出**（头文件没描述被拒
+时出参里该有什么，本仓也不替它编一个 0），`unlock_state` 把 (achieved, time) 的四格各自命名。第四格
+`UnachievedWithTime` 是登记过的取舍：Steam 的原句只管 achieved 那一半（`isteamuserstats.h:119`），没说不
+ achieved 却带时间是哪种情况，这一格**留着数**而不是折进 `NotAchieved`；测试钉的是**表是全函数**，至于
+Steam 会不会真写出这一格，要活客户端，登记为未证。六只方法本体同样未证（每只都要先真请求过某个用户的
+stats）。
+
+两处口径记下来免得下轮重新猜：① 拒绝时回 `SteamError::InvalidParameter` 不是新发明，是同形的兄弟接口
+`src/server_stats.rs` 早就这么答（`get_user_stat_i32`/`f32`/`get_user_achievement` 三处），两个接口因同
+一类原因拒绝却报不同错，才是需要解释的事；② 进度上下限原样 `(min, max)` 递出，不加 `min <= max` 检查
+（`isteamuserstats.h:297-299` 没这条约束），加了就是把本仓的意见当错误报回去。
+
+引用尺这一轮判红五处：两处引号落在所引范围外（那两句进度上限在 `isteamuserstats.h:297`/`:298`，我按 `:298`/`:299` 写、低了一行——空行算错的老毛病），另三处只带行号没带可核短语（`~undeclared` 这一列管的就是它），
+照旧改锚、不豁免。4 只测试、4 只变异全按断言消息判红（信出参、丢第四格、把 0 当日期、两格串起来各一刀）。
+
+**顺带量出下一轮该谈的一类债，不改行为**：`Result<_, ()>` 这种「只说失败、不说为什么」的公开签名还有
+26 个（**+1 是我自己添的**：2026-10-20 新写的 `cancel_query` 跟了同一类型另外五只方法的旧口径，没有另起
+一套混着两种错误类型的门面）、`Err(())` 写法 30 处，落在 6 个文件里——`src/user_stats/` 四个文件 18 个签名（`stats.rs` 6、
+`stats_io.rs` 6、`global_stats.rs` 4、`achievements.rs` 2），`src/matchmaking_servers.rs` 8 个，
+`src/matchmaking/mod.rs` 1 处 `Err(())`。把 `()` 换成 `SteamError` 是**破坏公开签名**的动作，与本仓已
+立的方向一致（builder 链那批就是这么改的），但一次动 26 个签名要用户点头才开工；未点头前本仓不动它，
+只把数写在这里。
+**→ 2026-10-20 用户回「全部处理」，按 A 全量还清**（`Result<_, ()>` 26 个签名表达式 + `Err(())` 30 处 →
+`SteamError`；其中 1 个签名表达式是 `gen_server_list_fn!` 的共同体，展开成五只方法，所以「26」是源码数
+不是方法数）。口径定死两条：**decline / 内部 nul / 下标越界 = `InvalidParameter`**（与本仓 `server_stats.rs`、
+`user_reads.rs` 早就给的答案同一条），**本仓自己对象的状态 = `InvalidState`**（`released` 之后没句柄可问；
+`GetNumAchievements` 给失败值 0，分不出「这 app 没成就」与「stats 还没请求过」）。`join_lobby` 不是替换而是
+换了形状：回调原来是 `Result<LobbyId, ()>`、判断是 `io_error || response != 1`，把「根本没答案」和
+「Steam 点了名」压成一个 `()`，而它点的名本来就有表（`ChatRoomEnterResponse`），现在走
+`JoinLobbyError{Transport(SteamError), Refused(ChatRoomEnterResponse)}`，判定抽在 `join_lobby_answer` 里测。
+3 处 doctest 尾部从 `# Err(())` 改 `# Ok(())`（`?` 现在要转 `SteamError`）。
+**新门把这笔债钉成 0 容忍**：`scripts/ci/erased_errors.py`（数公开签名、`Err(())`、`.ok_or(())?` 三种形状，
+复用 `api_coverage` 的 test-scoping 与 `cstring_unwraps` 的注释致空，不另写一套）+ 台账
+`erased_errors.txt`（空即通过，测量侧靠 `#scanned` 标记区分「没读到」）+ ci.yml 一步 +
+**9 条 canary（104→113）**：三种形状各出一条记录、散文里的旧形状不算、`#[cfg(test)]` 的失败臂不算、
+有债时尺子红、 comparator 把它的输出判红、`#scanned` 在、**且一棵干净的树必须通过**（否则"0 处"是一把自己
+对不上任何东西的尺子）。那 9 条第一遍就抓到我自己两个 bug：`measure()` 先把命中的文本替换掉再数，
+于是永远只能报 0；两条"不算"的 canary 逻辑写反了。本地门线从 28 条变 **29 条**（实测 `steps=29`、`RED_VERDICTS=0`）。
+变异 4 只：3 只断言消息判红；第 4 只（`store_stats` 就算 Steam 说不也回 `Ok`）**照绿**——那条路要活客户端，
+这里是拿存活结果**证明登记为未覆盖**这句话是真的，不是把它当锁。
+
+**同日 `ISteamMatchmakingServers` 17/17 首次到满**（`src/matchmaking_servers.rs`：新类型 `ServerQuery` +
+`CancelServerQuery`）：最后一只封不上，不是因为没写，而是因为它要的那个句柄被本仓扔了——
+`ping_server` / `player_details` / `server_rules` 原来返回 `()`，Steam 给的 `HServerQuery` 落地即丢，于是
+`CancelServerQuery` 没有任何可传的参数。头文件把为什么要取消写得很直白："before destructing a callback
+object that may have been passed"、"to avoid crashing when callbacks occur"（`isteammatchmaking.h:514-515`）
+——回调对象比这次调用活得久，所以取消是**义务**，不是可选卫生。
+
+- 形状选了 A（带 `cancel()` 的具名句柄），不是 B（裸 `i32` 再加一个 `cancel_server_query`）：`HServerQuery`
+  是 `typedef int`（`:377`），而 `HSERVERQUERY_INVALID = 0xffffffff` 存进 `c_int` 就是 **-1**（`:378`，
+  生成层实测 `pub const HSERVERQUERY_INVALID: c_int = -1`）——裸句柄最容易在这种「看起来是编号、其实是
+  哨兵」的地方踩空。`ServerQuery` 只暴露 `cancel()`，别的什么都做不了，这正是要的接口面。
+- 两条判定抽成纯函数各配一把锁：`query_id`（Steam 的「没有查询」标记**不包装成可取消的句柄**——那个号
+  可能已经发给别人的查询了）、`cancel_guard`（第二次 `cancel` 报 `InvalidState`，与 `ServerListRequest::release`
+  早已有的双释放护栏同一条形状）。另有 1 条 premise pin 钉住「INVALID 到 `c_int` 就是 -1」这个事实本身。
+- 3 只变异全按断言消息判红（放过标记、把标记判反、允许第二次取消）；`ServerQuery` 的 FFI 本体照旧登记
+  未验证（要真服务器）。公开形状变了：三只方法从 `()` 变 `SteamResult<ServerQuery>`；`Result` 是
+  `#[must_use]`，所以「调用完把返回值丢掉」这一种写法现在会出警告——这是刻意的：**丢掉查询是一个决定，
+  不是默认**。本仓 `src/`/测试/examples 里没有任何调用点需要改（`cargo check --locked --workspace
+  --all-targets` rc=0、无警告）。
+
+**同日再补 `ISteamUserStats` 全局成就百分位读面 37→41**（`src/user_stats/achievement_percents.rs` 新，
+另两只写落 `src/user_stats/stats_io.rs`）：本仓早就在发 `RequestGlobalAchievementPercentages`
+（`src/user_stats/achievements.rs:24`）却**没有读数口子**，这一格是空转的。三处判定抽成函数，各配一把锁：
+
+- `checked_capacity`——零长度缓冲装不下终止符，问 Steam 之前就先拒（`InvalidParameter`），否则它永远只能报空名。
+- `name_from_buffer`——名字要么整要么**不报**：全缓冲无终止符＝名字放不下，返回 `None` 而不是把前缀当名字
+  （前缀不是任何成就的 token，下游会当成数据问题）；非 UTF-8 也不做 lossy 转换，因为改过的名字没法再对比。
+- `iteration`——**只有负数是停，0 是合法迭代值**。头文件只点名 `-1`（`isteamuserstats.h:260`、`:265-266`），
+  这一格防的正是 `<= 0` 那种 off-by-one：它会在第一行之前就宣布走完。
+
+`-1` 一个值两种含义（"没数据"与"迭代到头"），`next_iterator: None` 只能说停了、说不出是哪种——
+**登记**，不猜。名字缓冲容量是**本仓的决定不是 Steam 的**：头文件对成就名长度没给上界（实测
+`isteamuserstats.h` 无相关常数），所以做成调用方参数并在两处方法文档里写明。
+`read_answer` 转成 `pub(crate)`，两只只返 `bool` 的写（`indicate_achievement_progress`、
+`update_avg_rate_stat`）以 `()` 作值走同一条规则——八条路径共用一把锁，但**八条路径本身仍无测可达**
+（都要活会话），照旧登记为未证。
+
+顺带两处口径按头文件原话写死：`IndicateAchievementProgress` 自己说 "triggers an AchievementProgress
+callback, that is all." 与 "Calling this w/ N out of N progress will NOT set the achievement"
+（`isteamuserstats.h:145-146`）——到上限**不解锁**，解锁仍要走 `AchievementHelper::set` + store；
+`UpdateAvgRateStat` 的 `f32`/`f64` 原样转，头文件没描述定义域，负时长或 NaN 不在本仓被改写成错误。
+
+变异 7 次：6 次按断言消息判红，另一次（lossy 那一刀）**第一次编不过**——编不过不算锁，重写成一版能编的
+才判红；还原逐字节核对通过。引用尺这轮没判红，差别在于行号是用 `awk NR` 从文件里连着号码一起读出来的，
+不再是盯一个 `sed` 窗口自己数（上一轮那两格 off-by-one 就是这么来的）。
+
+**同日再补 `ISteamMatchmakingServers` 14→16/17**（`src/matchmaking_servers.rs`：`cancel_query` 与
+`spectator_server_list`，两只都只加方法、不动任何已有签名）：
+
+- `CancelQuery`（`isteammatchmaking.h:481`）存在的理由与它的边界，头文件自己写完了：它是"before
+  destructing a callback object that may have been passed"给一个列表请求的回调对象时才该调的，"Not
+  doing so may result in a crash when a callback"打在已经没了的对象上（`:476-477`）；而 "Canceling a
+  query does not release the allocated request handle."、句柄"must be released using ReleaseRequest(
+  hRequest )"（`:479-480`）——所以顺序照头文件：先 cancel 再 `release`，两件事不混。
+- 过滤器长度那条从宏里搬进 `filter_pair_fits`：Steam 那两个字段是 `char m_szKey[ 256 ];` /
+  `char m_szValue[ 256 ];`（`matchmakingtypes.h:40-41`），它自己的构造函数拿 "strncpy( m_szKey, pchKey,
+  sizeof(m_szKey) )"（`:35`）填、再把最后一字节写成终止符（`:36`）——那是 **Steam 悄悄截断**；本仓选择
+  拒绝。对调用方行为一字未改，改的是这条规则从此可判：4 只变异（去掉 value 半边、`&&` 换 `||`、
+  `<= 256`、`< 255`）全按断言消息判红。
+- 那条布局前提 pin 的**红法要说清**：我是移动自己的期望值让它判红的（断言消息带上了它自己的说明句）。
+  真去缩生成层那一格会先撞**编译不过**——本仓的请求构造器往那字段里写的是 256 元素数组——而编译红不算
+  锁；所以它的真实触发条件是"布局以另一种方式变了"（补白、字段次序、元素宽度），不是字段宽度本身。
+- **`CancelServerQuery`（`:516`）不封，登记成缺陷**：`ping_server` / `player_details` / `server_rules`
+  （落地前：`src/matchmaking_servers.rs:632`、`:655`、`:680`）当时返回 `()`，把 Steam 给的 `HServerQuery`
+  **丢了**，调用方手里没有可取消的东西。探针实测（改完立刻逐字节还原，基线 `cargo check` 回 rc=0）：
+  把其中一只改成返回句柄，本仓只有**一处**编译错——FFI 调用末尾那个 `;`（`expected 'i32', found '()'`）——
+  `--all-targets` 里没有任何别的调用点或 example 受影响。差的不是工作量，是**公开形状谁来定**：
+  A 照着现成的 `ServerListRequest::release` 造一个带 `cancel()` 的 `ServerQuery` 句柄；B 直接回 `i32`
+  再加 `cancel_server_query`。风险顺带记一句：`HServerQuery` 是 `typedef int`（`:377`），而
+  `HSERVERQUERY_INVALID = 0xffffffff`（`:378`）——按 `i32` 读它就是 -1，裸句柄最容易在这种地方踩空。
+- **门禁自己的一处盲区，2026-10-20 已修**：`scripts/ci/type_surface.py` 数的是 `pub fn <标识符>`，看不见
+
+  `gen_server_list_fn!` 生成的方法 ⇒ 台账里 `MatchmakingServers` 记 **4** 个内在方法，真实 **9** 个
+  （写出来的 4 只：lan/ping/player_details/server_rules；宏生成 5 只）。双向判红当时仍然成立，
+  但它守的是 9 只里的 4 只。修法：**在调用点计数**——先扫出所有"体内写了 `pub fn $`"的 `macro_rules!`
+  名字，再把落在 inherent impl 里的每一次调用算一只方法。这样归属说的是真话：宏声明了但没展开 ⇒ 不增加
+  表面积；要新增一只生成方法，必须写一条新的调用行，而那正是 reviewer 会看到的行。
+  4 条 canary 钉住它（含 `generates_nothing!` 这种"调用了但不生成方法"的负例），并且**反证过**：
+  把尺子改回旧写法，canary 立刻红在 `exit=1 want=4` 上——正是当年那个盲区值。
+  台账现记 `MatchmakingServers 9`，83 型 / **912** 只方法。
+
+**2026-10-20 补 `ISteamRemoteStorage` 缓存 UGC 面 26→30（4 只，`src/remote_storage/cached_ugc.rs`）**：
+`isteamremotestorage.h:260-262` 的迭代对 + `:247` 的进度 + `:252-258` 的分块读。
+五个宽度与一次除法都做成纯函数（`cached_count`/`signed_bytes`/`cached_index`/`bytes_read`/
+`progress_fraction`），其中除法那条是**头文件自己警告的**："so be careful to check for that before
+dividing to get a percentage"（`:245-246`）——`expected==0` 时 `fraction()` 回 `None`，不回 `0.0`，
+因为 0.0 与"刚开始还没送东西"这两种状态必须能分开。`ugc_read` 的缓冲区**永远由调用方给**：
+头文件对大文件明文要求分块（"For especially large files (anything over 100MB) it is a requirement
+that the file is read in chunks"，`:257`），而拿 Steam 返回的数去给自己 alloc 缓冲，
+正是本仓这一年一直在消掉的那类"用被守护的东西来定守护规模"。
+🔴 **本轮最重要的一个是自纠**：初稿断言"随仓 SDK 没声明无效 `UGCHandle_t`"，因为我按
+`INVALID_UGCFILE` 去 grep（那是别的 SDK 版本的名字）。同一页其实写了
+`const UGCHandle_t k_UGCHandleInvalid = 0xffffffffffffffffull;`（`:45`），而且生成层带着它
+（`steamworks-sys/src/windows_bindings.rs:6587`）。⇒ 现由 `handle_or_none` 译 Steam 自己的标记。
+**坑的方向和平时相反**：把 `0` 当哨兵（照旁边 `k_PublishedFileIdInvalid = 0`，`:44` 的形状抄）会
+**丢掉真句柄、留下假的那个**；测试里既钉了"标记是 `u64::MAX`"这个前提，也把"比较式换成 `== 0`"
+这只变异打红。7 测试 / 7 变异各红在自己的断言上。
+登记未证：哪些内容真在缓存里、进度到多少、越界下标 Steam 答什么（本机无客户端）。
+
+**2026-10-20 结掉 #21-B：回调对象的所有权改造（`src/matchmaking_servers.rs`）**。
+`unsafe impl Send for ServerListRequest` 是一句**没人问过编译器**的承诺：四个 `*Callbacks` 用 `Rc`
+存闭包，而那个引用计数被两个线程碰——生成的 `extern "C"` 跳板为了"被调方把回调 drop 掉也还活着"
+会 clone 一份（现 `Arc::clone`），这跑在泵 Steam 回调的那条线程上；而释放请求、从而 drop 掉被 clone
+的那个闭包的，是持有请求的线程。**非原子计数在两线程下写同一个值**，这不是看字段清单能看出的洞。
+⇒ 闭包改成 `Arc<dyn Fn(..) + Send + Sync>`，承诺旁边放**编译期判定**
+（`mod thread_claims`：`assert_send::<ServerListRequest>()` + 四个回调类型各一只）。
+🔴 **公开形状代价（破坏性，四条）**：`Ping/PlayerDetails/ServerRules/ServerList Callbacks::new`
+现在收 `Box<dyn Fn(_) + Send + Sync>`——捕获非原子东西的闭包再也交不进服务器查询，这正是目的；
+Steam 自己那条警告说的就是这个窗口："crashing when callbacks occur"（`isteammatchmaking.h:514-515`）。
+**A 案（删 `unsafe impl Send`）此前实测证伪**：本仓代价 0，但它只让不 Sound 的代码不再通过类型检查，
+两线程写同一计数一字未改。
+新门 `scripts/ci/callback_threads.py`：每文件数「有承诺无判定」与「承诺同文件里还有 `Rc`」。
+第一列按**只许变短的债账**出货（实测 **11 文件 14 处**无判定；承诺共 **15** 处，`ServerListRequest` 那处已带判定），第二列 0 容忍——
+"允许 13 的门等于放行第 14 个"，但也不许把没还清的债写成已还清。canary +4（总 **126**），
+并钉住本门那条**故意例外**：不剥测试材料——判定就住在 `#[cfg(test)]` 里，剥了会把修好的文件报成坏的。
+正反例都真跑：无判定的承诺被吐出行、`Rc` 与承诺同文件被计数（`1 2`）、只有 `Rc` 不算、
+**注释里提到 `Rc` 不算引用计数**、全判定的树一行都不出。
+本仓早有这种写法（`static_assert_send` 在 `src/lib.rs:389`、`:424` 声称 `Client`），
+从前只是习惯，现在它是机器判定。本地门链加一步 ⇒ **30 项**。
+
+**#44-B 还债（2026-10-20 接上）**：`src/` 的 **15** 处 `unsafe impl Send` 每一处上面现在都有
+`// SAFETY:`，这变成尺子第三列、**0 容忍**。说明不是套话——每条写的是**删掉那一行、重编译全树**
+量出来的事实（逐处探针 `D:	mp6\probe_send_promises.py`，先自证基线绿）：
+**7 处树内真有人要**（`Browser` *mut ISteamHTMLSurface、`HttpResponse` *mut ISteamHTTP、
+`ServerListRequest` *mut ISteamMatchmakingServers 与它指向的回调对象、`SessionRequestBuilder`、
+`NetConnection`、`InnerSocket`、`ConnectionCallbackHandler`），**8 处本树没人要**
+（`NetworkingMessages`、`SessionRequest`、`FakeUDPPort`、`NetworkingSockets`、`NetPollGroup`、
+`NetworkingUtils`、`Server`、`UpdateWatchHandle`——删掉 `cargo check --all-targets` 仍绿，注释就这样写）。
+删掉那 8 处确实是更窄的公开面，但对"把句柄挪去别的线程"的下游是破坏性变更 ⇒ 选择保留承诺、
+把理由写下来让人可以反驳，而不是留一句沉默的 `unsafe impl Send`。
+第一列 `unclaimed` 当天就**退役**了（不是还清）：它要求「承诺旁边有 `assert_send::<T>`」，
+而实测它挑出来的 14 个类型，`Send` 正是同文件那句 `unsafe impl` 给的 ⇒ 它要求的断言被它要审的东西
+直接满足、永远不可能红。**一把只能被假证据满足的门，等于教人伪造它的绿。**
+台账现在是 `<promises> <hazards> <unexplained>`：危险类别从只数 `Rc` 扩到
+`Rc|RefCell|Cell|UnsafeCell`（12 个承诺文件实测 **0**，故按 0 容忍出），`Mutex`/`RwLock` 不入内
+（它们是让共享变合法的手段，不是危险）。一处险些被骗过去记在台账头里：早期为 `Mutex<...>` 写的
+词边界模式**一条都没匹配到**（结尾的 `\b` 在 `>` 前不成立），静默的 0 差点被当成清白，改用直接
+子串计数复核后才信这一列。canary **128→127**——判退役那一列的断言是删掉的，不是改写成能过的。
+改判后的夹具：`halfclear.rs 1 0 0`（有说明、无 `assert_send` ⇒ 两列各归位），正向控制要 6 个夹具全干净才不出行。
+🔴 **观察层又红给自己看**：生成注释的脚本把共享段首行的 `// ` 前缀漏了 ⇒ 12 个文件里出现
+**裸文本行**（编译不过），是 `cargo check` 先抓住的；补完前缀才看见说明列真的归零。
+
+**2026-10-20 再补云文件流的两处静默截断 + 缺的 cancel（`src/remote_storage/files.rs`，30→31/59）**。
+① `read()` 原先 `GetFileSize(...) as usize`：头文件给的是**有符号** `int32`（`isteamremotestorage.h:223`），
+而随仓 SDK **没声明任何哨兵**（实测整个 public 目录里没有 `INVALID_FILE_SIZE`）⇒ 负号被符号扩展成
+1.8e18 的"文件大小"，reader 永远走不到自己的结尾。`reader_size` 夹到 0，语义只写"没报回尺寸"，
+"文件在不在"仍由 `FileExists`（`:221`）回答。② `write()` 把 `buf.len() as _` 交给 Steam 的
+`int32 cubData`（`:216`）⇒ `chunk_fit` 改成在 `c_int::MAX` 处**写短一点并回报写了多少**
+（`std::io::Write` 明许少写，调用方循环即可），而不是在对端报出一个负长度。
+③ `FileWriteStreamCancel` 一直没封：以前半途而废的唯一出路是让 writer 落地，而 Drop 是 **close=提交**。
+现在 `cancel()` 回 Steam 的 bool，且**只有成功取消**才让 Drop 不再 close（`closes_on_drop` 是纯函数那半）；
+取消被拒时仍 close——留着一条活流不关才是漏。3 测试 / 4 变异各红在自己的断言上；
+登记未证：Steam 是否接受 cancel、以及 cancel 之后再 write 的行为。
+🔴 引用尺这一轮又抓到我两次：注释里写 extern 加 C 的两个直引号会让尺子按引号成对取短语，
+于是把我自己的散文配成一句"Steam 的原话"（unjudged）；另有三处我把自己的话加了引号。
+四条全部改成引头文件原句（"file operations that cause network IO"、"file information"）。
+
+**2026-10-20 补 `ISteamFriends` 好友分组读面 63→68（5 只，`src/friends/groups.rs`）**：
+声明在 `isteamfriends.h:228-238`（引号内是头文件原话：分组那一节开头写着 "friend grouping (tag) apis"，
+第一只是 "returns the number of friends groups"，索引越界那条是 "invalid indices return
+k_FriendsGroupID_Invalid"）。
+四条判断全部纯函数化，因此不需要活客户端就能进 CI：`group_index`（`usize` 装不进 `c_int` 就 `None`，
+不再 `as` 截断）、`group_id_or_none`（Steam 的 `k_FriendsGroupID_Invalid` 译成 `None`，不把 `-1`
+当组号发出去）、`count_or_zero`（负数不再环绕成 `usize::MAX`）、`name_or_none`（先验空指针再
+`CStr::from_ptr`）。
+**这一面刻意不做的两件事**：① 不按 Valve 的说法丢掉"排在末尾的无效用户"——成员表那条声明写着
+"if fewer exist than requested those positions' SteamIDs will be invalid"（`:237`），而能判这件事的
+`CSteamID::BValid()` 在绑定层**不存在**
+（`steamclientpublic.h:796` 只有 `BValidExternalSteamID`），替 Steam 发明"什么叫无效"正是本仓反复
+登记要避免的那类主张，所以原样交回 `FriendsGroupID` 与条数，让调用方拿去和自己的好友列表比；
+② 四个写入口（`CreateFriendGroup`/`DestroyFriendGroup`/`AddFriendToGroup`/`RemoveFriendFromGroup`）
+在生成层 **0 次出现**——不是"漏封"，是随仓 SDK 里根本没有可 call 的东西，登记而非硬造。
+4 只测试、4 只变异，各按**不同**断言消息判红（放行 `Some(-1)`、`as usize`、去掉空指针检查、
+`as c_int` 换掉 `try_from`）。台账随之重录：`api_coverage` Friends 68、`type_surface` Friends 48→53、
+`module_sizes`、`package_inventory` +1、`test_floor_lib` 292；`MIN_BASELINES` 抬到实测的 **15**，
+而第一次抬到 16（我自己数错）被那道门自己判红——地板真在承重。
+余下 10 个未调：来源服务器 3、跟随列表 1、历史昵称 1、装备外观 4、协议注册 1（清单见上面聊天簇那段）。
+
+**2026-10-20 同日再补 `ISteamFriends` 来源迭代面 68→71（3 只，`src/friends/sources.rs`）**：
+`isteamfriends.h:256-264` 那一节（"iterators for getting users in a chat room, lobby, game server or
+clan"）。三条判断里只有**一条是 Steam 定的**：`id_or_unset` 把返回值 `0` 当作"没有这个人"，依据不是
+头文件的某句承诺，而是 `CSteamID` 默认构造把**四个分量全部写零**（`steamclientpublic.h:491-497`），
+其中两个枚举的声明值就是 0（`k_EAccountTypeInvalid` `:230`、`k_EUniverseInvalid` `steamuniverse.h:17`）
+⇒ packed union 全零 = 64 位 0，这是 Steam 自己的编码。另两条是本仓的：`source_index` 拒绝交不出
+`int` 的席位号，`source_count` 把负数夹到 0 而不是环绕成循环上界。**登记为未证**：头文件只写
+"note that large clans that cannot be iterated by the local user"（`:257`），**没说**迭代不动时
+count 返回什么，所以这里既不承诺 0 也不承诺错误。3 测试 / 3 变异各红在自己的那条断言上。
+同轮**自纠一句**：groups.rs 原文暗示调用方对"末尾无效席位"没有任何可比的东西——不实，本仓的
+`SteamId::is_invalid`（`src/identity.rs`）解的就是同一个 account-type 分量；已改成"有这一个可比，
+但它不等于头文件的 `BValid()`"。**引用尺本轮从 46 文件 / 347 span 涨到 47 / 359，三列债仍 0-0-0**
+（新文件的三个块第一次交上去时 `~undeclared` 是 6，靠把三句头文件原话引进去还掉的——和前面几轮还
+`~undeclared` 债走的是同一条路）。ISteamFriends 余下 7 个未调：跟随列表 1、历史昵称 1、装备外观 4、
+协议注册 1。
+
+**2026-10-20 同日再补装备外观读面 71→74（3 只，`src/friends/profile_items.rs`）**：
+`isteamfriends.h:431-433` 三只同步读入口 + 两个枚举（槽位 5 个 `:154-158`、属性 12 个 `:162-173`）。
+本轮真正的缺陷在**属性那一列的注释**：每个属性后面写着 "string" 或 "uint32"，指明它属于哪只读函数，
+而 C 接口**什么都不拦**——拿 `GetProfileItemPropertyString` 去问 `AppID`（一个 uint32 属性）完全合法。
+`property_kind` 把那列注释变成表，两只读函数在**调用之前**按表拒错配（`InvalidParameter`）。
+`Unrecognized(i32)` 发不出去：生成层给这两个枚举**没有越界名**，所以没有合法值可造——
+和 UGC 那两个枚举当初的硬限制同一条（见上面 §6.1d 早段）。
+🔴 **本轮被尺子当场教了一次**：`MIN_PHRASE = 10`，而两个块只引了 "string"/"uint32"（6 个字符），
+于是 2 条 span 落进 `~undeclared`。还法是把头文件自己的句子（`:150`、`:427`）引进来，
+**不是把引用删掉**——引用没了，判据也没了。
+登记未证：这三只对着"从没请求过装备外观的用户"会返回什么——那要先走
+`RequestEquippedProfileItems`，它是 `STEAM_CALL_RESULT` 面，归回调那一批。
+ISteamFriends 余下 3 个未调：`RequestEquippedProfileItems`、`EnumerateFollowingList`（两只异步）、协议注册 1。
+
+**2026-10-20 同日再补历史昵称 74→75（1 只，`src/friends/history.rs`）**：头文件把**迭代终点放进调用本身**
+（"accesses old friends names - returns an empty string when their are no more items in the history"，
+`isteamfriends.h:219-220`），所以这只没有配对的 count，走到第一个 `None` 就该停。`history_name` 的
+`None` 盖三件事、且写明各是谁的判断：空串是 **Steam 自己声明的终点**；空指针是**头文件根本没提供**的答案
+（本仓不当它是终止符）；非 UTF-8 的缓冲区是**本仓拒绝**——lossy 会造出一个"看着像 handle、
+却比不中任何东西"的名字。`history_index` 拒绝交不出 `int` 的序号。3 测试 3 变异各红在自己的断言上。
+**登记未证**：Steam 会不会真返回空指针——本机无客户端，头文件两种说法都没有。
+
+**2026-10-20 同日再补协议注册 75→76（1 只，`src/friends/overlay.rs`）**：`ISteamFriends` **同步面到此全封**，
+余下 2 只都是 `STEAM_CALL_RESULT` 异步（`RequestEquippedProfileItems`、`EnumerateFollowingList`），归回调那一批。
+本轮唯一的判断是**字符串怎么走**：旁边四只 void 的 overlay  setter 都在第一个 nul 处截断，因为 `const char *`
+之后根本到不了 Steam、而且它们没有回报通道；这一只**返回 `bool`**，有通道，于是把两种拒绝分开——
+`Err(InvalidParameter)` 是本仓说"这个 scheme 我表达不出来"，`Ok(false)` 是 Steam 收下之后拒绝。
+在这里截断会**注册一个调用方没点名的 scheme 并报告成功**，正是 CString 债那一年清掉的那类失败。
+1 测试 1 变异（换成截断版）按断言消息判红。**一条自曝**：先写的第二个测试在提交前删掉了——它的两条断言
+只是第一条的重述，判不出新东西，留着会让"2 测试"这个数字虚报覆盖面。
+
+**2026-10-21 补 `ISteamRemoteStorage` Workshop 更新的同步面 31→40（9 只，`src/remote_storage/workshop_update.rs`）**：
+尺子（`api_coverage`）报这一族余 28 只。本轮先**分类**再动手，分类本身就是判据：
+
+- **9 只同步，已包**：`CreatePublishedFileUpdateRequest`（`isteamremotestorage.h:267`）、七只
+  `Update*` setter（`:268-273`、`:292`）、`GetUGCDetails`（`:250`）。前八只构成"一个更新请求"，
+  所以封成 `PublishedFileUpdate` 句柄：setter 全是 `virtual bool`，Steam 说不要就是
+  `Err(InvalidParameter)`，不再是 `assert!` 在调用方的进程里 panic；句柄的失效标记是**全 1**，
+  头文件原文 "const PublishedFileUpdateHandle_t k_PublishedFileUpdateHandleInvalid =
+  0xffffffffffffffffull;"（`:46`），**不是**隔壁 `k_PublishedFileIdInvalid` 的那个 0（`:44`）——
+  读反就是丢掉所有真请求、留下一个假句柄继续填。`GetUGCDetails` 是 bool + 四个出参：
+  `details_size` 把 signed `int32` 夹住（负数不是字节数，`as u64` 会符号扩展成 1.8e19），
+  `details_name` 对空串/空指针/非 UTF-8 一律 `None`（和本仓 `friends/history.rs` 同一口径），
+  `owner` 原样透传，判无效的谓词是 `SteamId::is_invalid`，不是本仓替 Steam 编一个。
+  5 测试 5 变异，全部按**断言消息**判红（不是崩溃红、不是编译红），含一条跨文件的：
+  把 `visibility.rs` 里 `Unknown => Err` 换成 `Public` 后，红的是本模块那只"发不出去"的测试。
+- **19 只异步，登记不做**：`isteamremotestorage.h:264-306` 这个 "publishing UGC" 块里返回
+  `SteamAPICall_t` 的 16 只，加块外 3 只——`FileWriteAsync`（`:202`）、`UGCDownload`（`:243`）、
+  `UGCDownloadToLocation`（`:312`）。🔴 **它们不是遗留面**：复算过，整个
+  `isteamremotestorage.h` 只有 `:354`、`:368` 两句写着 "deprecated! Do not reuse"，而两句都指
+  回调 id，**没有任何一句说这个块被谁取代**。所以登记成"每只做一只 call result 结构体才能做"，
+  **不写成"已被 ISteamUGC 取代"**——ISteamUGC 已包 97/99 是*并行的一面*，不是这块的替代品；
+  把没有的证据写进台账是本轮不做的两件事之一（另一件是给异步面造一个跑不到的假测试）。
+  对照：`isteamcontroller.h:2` 就**明写**了 "The older ISteamController interface has been
+  deprecated in favor of ISteamInput"，所以那 34 只是主动不接（上面 §6.1 已登记）。
+
+**2026-10-21 第二片：先补"不做就把已做的半面废掉"的那 4 只异步（`ISteamRemoteStorage` 40→44，仓总 708→712）**
+
+- 先手判据不是面的大小，是**耦合**：
+  ① `CommitPublishedFileUpdate`（`isteamremotestorage.h:275`，`STEAM_CALL_RESULT` 在 `:274`）——上一片封了
+  "建请求 + 七个 setter"，没有 commit 就是**填得完、发不出**；
+  ② `UGCDownload`（`:243`）与 `UGCDownloadToLocation`（`:312`）——`cached_ugc.rs` 只读"已经下好的"内容，
+  本仓此前**没有任何调用能把内容变成已下载**，句柄只能等别人产生；
+  ③ `FileWriteAsync`（`:202`）——同步写与流式写都在，异步写缺位。
+- 三条判定全部抽成纯函数，5 变异 5 红在各自断言消息上（`D:\tmp\a7\mut48.py`）：
+  `fixed_name` 读 `char m_pchFileName[k_cchFilenameMax];`（`:461`，容量是 Steam 自己的常数
+  "const uint32 k_cchFilenameMax = 260;" `:57`）。🔴 **填满 260 而不写终止符是合法形状**，`CStr::from_ptr`
+  会为了找终止符走出数组边界；扫描因此限制在拿到的切片内，无终止符就读那 260 字节。
+  `downloaded` 在 EResult 为 OK 之后仍然翻译 `k_UGCHandleInvalid`（`:45`）：Steam 同时说"成功"和
+  "没有这个句柄"时取悲观那一支（`IOFailure`），不把本仓其它路径一律拒绝的值当结果交出去。
+  `async_write_len`：异步写的尺寸字段是 `uint32`（`:202`），同步写是 `int32`（`:197`）——**两个天花板**，
+  所以两条路各有各的拒绝，不共用一把尺；超限是拒绝不是截断（截断会把少写报成成功）。
+  `write_file_async` 把字节复制一份交给 call result 闭包持有，直到答复到达：头文件从未说明 `pvData`
+  何时不再被读，让调用方的缓冲区先离开就是悬垂读。
+- **登记（不检查的理由）**：`SteamAPICall_t` 返回 0 是什么意思，随仓头文件里查不到（在 public 目录扫
+  `k_SteamAPICall` 与 `SteamAPICall_tInvalid` 均**零命中**）。本仓因此**不写**"0 就是没启动"的哨兵——
+  不替 Steam 编造它没说的常数；后果如实记为未证：若真出现 0，注册的回调不会触发。
+- 🔴 **顺带挖出同族旧缺陷，本片不改**：`src/ugc/update.rs:319` 的 `submit(change_note)` 用
+  `CString::new(v).ok()` 把含 nul 的变更说明**静默变成 null**，等于"发一份没有变更说明的更新并报告成功"，
+  正是本仓在 overlay 协议注册与 `ugc_download_to_location` 里拒绝的那类失败。修它要动公开签名（改返
+  `Result`），属破坏性，登记待用户点头，不偷偷改。
+
+**2026-10-21 第三片：Workshop 里"答复只点名物品"的 7 只（`ISteamRemoteStorage` 44→51，仓总 712→719）**
+
+- 这一组的共同形状是 `EResult` + 一个物品 id（`isteamremotestorage.h:378-379`、`:402-403`、`:434-435`、
+  `:562-563`），`SetUserPublishedFileAction` 多带一项"the action that was attempted"（`:592`）。
+  七只各用自己的结果类型，所以 FFI 读取按结构体各写一份（`item_and_status*` 四个 `fn` 指针），
+  **没有**合并成一个"它们都一样"的通用类型——那等于替 Steam 担保四个结构体今后一直同步。
+- 三条判定各是纯函数，4 变异 4 红在各自断言消息（`D:\tmp\a7\mut49.py`）：
+  `action_from_code` 认 Steam 的两个具名码（`"k_EWorkshopFileActionPlayed = 0,"` `:122`、
+  `"k_EWorkshopFileActionCompleted = 1,"` `:123`），第三个码留作 `Unrecognized(i32)`；
+  `action_to_sys` 在**发出去之前**拒 `Unrecognized`——生成层给这个枚举没有越界名（实测变体恰为 0、1），
+  所以没有合法值可造， substitute 成 `Played` 就是记录一件调用方没要求的事；
+  `vote_count` 把三个 `int32` 计数夹到非负（`:517-519` **整段没有注释**，"负数不是计数"是本仓的判定，
+  不是 Steam 的话）；`vote_details` 把 `m_unPublishedFileId`（`:516`）认回物品，答案里那个 id 是 Steam 的，
+  不是本仓还握着的那个入参。
+- 🔴 **两条如实的不好听**：① `GetPublishedItemVoteDetails`（`:294`）与 `UserPublishedItemVoteDetails`
+  （`:298`）被 `:293` 与 `:297` **标成同一个结果结构体**，而该结构体（`:512-520`）里没有"我这一票"的字段
+  ⇒ 后一只的名字比它能答的内容大，方法doc 明写这一点，不假装能读出用户的投票方向。
+  ② 每只调用配哪个结果结构体，是**照头文件的 `STEAM_CALL_RESULT` 注解抄的**，静态尺判不出来（编译期
+  `T` 由读函数指针定住，运行时才与 Steam 的答复对上）⇒ 记在未证栏，不编假测试。
+- 本块仍余 8 只未包：publish 2（`PublishWorkshopFile` `:266`、`PublishVideo` `:302`——注意它们的注解
+  是 `RemoteStoragePublishFileProgress_t`（`:265`、`:301`，字段只有 `double m_dPercentFile;` + `bool m_bPreview;`
+  `:613-614`），而头文件另有 `RemoteStoragePublishFileResult_t`（`:360`）**却没被任何调用注解**，这个矛盾归下一片判）、
+  enumerate 5、`GetPublishedFileDetails` 1（`:280`）。
+
+**2026-10-21 第四片：两只 publish（`ISteamRemoteStorage` 51→53，仓总 719→721）——先把注解矛盾判掉**
+
+- 🔴 **判据（写进 `src/remote_storage/workshop_publish.rs` 模块 doc）**：`PublishWorkshopFile`（`:266`）与
+  `PublishVideo`（`:302`）的 `STEAM_CALL_RESULT` 注解（`:265`、`:301`）指的是
+  `RemoteStoragePublishFileProgress_t`，而它全部字段是 "double m_dPercentFile;" + "bool m_bPreview;"
+  （`:613-614`）——既没有物品 id 也没有完成态。同一头文件另写
+  "Purpose: The result of a call to PublishFile()" 引出 `RemoteStoragePublishFileResult_t`（`:357-360`），
+  其 `k_iCallback` = `k_iSteamRemoteStorageCallbacks + 9`（`:362`），载荷是结果 + 新物品 id + 法条标志
+  （`:363-365`）。**取后者**：Purpose 行是照着这只调用写的、回调号也分了、载荷含调用方唯一能用来做事的
+  id；Progress 那两行是注解抄错的样子。两处出处（`:265`/`:301` 的注解 vs `:358`/`:362` 的声明）都写在代码里，
+  下一位读者会去核的就是这两处。🔴 **这条选择在真客户端上才算最终证实**，已进未证栏——不假装量到了。
+- `WorkshopVideoProvider` 是**只写不读**的词汇表，而且**不写** `Unrecognized` 臂：全 SDK 头文件里
+  `EWorkshopVideoProvider` 只出现在枚举本身（`:137-141`）与 `PublishVideo` 的参数（`:302`），
+  没有任何结果结构体把它带回来 ⇒ 读侧是"没有输入能走到"的死码。与 `WorkshopFileAction` 相反——那只
+  Steam 会答回来（`:592`），所以那边有 `Unrecognized(i32)` 与发送前的拒绝。
+- **一份提交文本要么全接受要么整体拒**：`encode_copy` 先把 title/description/tags/visibility 全过一遍，
+  最后才 `readable_path`（唯一碰文件系统的一步）。任一带 nul 的字段 ⇒ `Err(InvalidParameter)`，
+  **不发**半个"标题被吃掉的视频"。标签列表逐条转 `CString`，某一条失败就整单拒——只丢一条就是发了
+  调用方没批过的标签集。
+- **`SteamParamStringArray` 不能进闭包**：它持有 `*mut c_char`（不是 `Send`），而等待答复的闭包必须
+  `Send`。所以本片的标签保存为 `Vec<CString>`，进 FFI 前才现场借出 `SteamParamStringArray_t`
+  （`tag_array`），空列表 = 计数 0 + 悬垂但对齐的指针，Steam 不会去解引用。
+  所有指针指向的分配都由闭包持有到答复读过之后才释放。
+- **顺手去掉一份重复**：`PublishedFileCommit` 与 publish 的答复字段完全一样（`:445-447` vs `:363-365`），
+  合并成一个公开类型 `PublishedFileAnswer`；两个 FFI 读函数**仍然各自读自己的结构体**——合并安全类型
+  ≠ 替 Steam 担保两个结构体今后一直同步。`PublishedFileCommit` 是当天两个提交前才引入、从未打 tag，
+  所以改名对已发布用户不存在破坏面。
+- 5 变异 5 红在各自断言（`D:\tmp\a7\mut50.py` + `mut50b.py`）：丢一条标签继续发、`Unknown` 可见性
+  换成 `Public` 发出、预览路径不解析就发、两个 provider 折成同一个码、法条标志被丢成 `false`。
+- 🔴 **过程自曝（第三次踩同一个坑）**：用 heredoc 生成的补丁把测试里的 `"title\0"` 写成了**真 NUL 字节**
+  （文件一度成二进制、`grep` 报 binary）。按字节改回两字符转义后 `cargo` 才绿——这条已经记在记忆里，
+  本轮仍然发生，说明"生成含转义的源码"要直接用写文件工具而不是 heredoc。
+- 本块仍余 6 只：enumerate 5 + `GetPublishedFileDetails`（`:280`）——**同日第五片已补掉 enumerate 5，实余 1 只**。
+
+**2026-10-21 第五片：五只 enumerate（`ISteamRemoteStorage` 53→58，仓总 721→726）**
+
+- 四只结果形状一样：`EResult m_eResult;` + "int32 m_nResultsReturned;" + "int32 m_nTotalResultCount;"
+  盖在 `PublishedFileId_t m_rgPublishedFileId[ k_unEnumeratePublishedFilesMaxResults ]` 上
+  （`isteamremotestorage.h:389-392`、`:413-417`、`:499-503`、`:598-603`），容量是 Steam 自己的常数
+  "const uint32 k_unEnumeratePublishedFilesMaxResults = 50;"（`:55`）。
+  🔴 **这一族的真缺陷是"计数与数组同出一个不可信写者"**：`page_len` 因此同时受两端约束——负数=0 条
+  （不是 `as usize` 那样回绕成整页），超过 50 = 50（数组就这么长）。并行数组用**同一个长度**切片，
+  所以不会出现"这个 id 配了别人的时间/分数"。5 变异 5 红在各自断言（`D:\tmp\a7\mut51.py`）。
+- `m_nTotalResultCount` 与页长是两个数（`:390` vs `:391`），夹负后原样交出去：调用方靠它翻页翻到 total。
+- `WorkshopEnumeration` 七个次序**只写不读**（`RemoteStorageEnumerateWorkshopFilesResult_t` `:496-506`
+  里没有次序字段），所以照 `WorkshopVideoProvider` 的先例**不写** `Unrecognized`；测试也**不跟自己写的
+  数字比**，而是 `wrapper→binding` 与 `binding→头文件所列 0..6` 两段分别断言（比之前那版更强）。
+- `:417` 的 `m_rgRTimeSubscribed` 按 `u32` 原样交出（该行没有注释，头文件不说单位/纪元），沿用
+  `src/user/answers.rs:69-70` 已有的同条口径；不做 `SystemTime` 猜测。
+- 🔴 **引用尺抓到一处行号写错**：我把 `EnumeratePublishedFilesByUserAction` 的声明记成 `:307`，
+  而 `:307` 是 "// this method enumerates the public view of workshop files"，声明在 `:306` ⇒ 尺子报
+  WRONG-PLACE。这是本仓这条门又一次在我自己写数字时拦住我（不是第一次，也不会是最后一次）。
+- 🔴 **一片里的 `Send` 教训**：标签数组先前想跟着闭包活到答复，但 `Vec<*const c_char>` 不是 `Send` ⇒
+  编译期直接拒。改回本仓已有的口径（`src/ugc/update.rs:319-321` 的变更说明同样在调用返回时释放）：
+  **参数在本次调用里被 Steam 取走，不入闭包**；这条与 `FileWriteAsync` 里"数据缓冲区由闭包持有"是
+  刻意的不对称（那只头文件对 `pvData` 何时不再被读一字未提，取保守支），两处都在代码里写明。
+
+- 🔴 **本片同时补一处我自己造成的缺陷**（登记见 `CHANGELOG.md` 的 "four public types that no user could
+  name"）：`d36d64e` 那一片的 `workshop_publish` 忘了在 `remote_storage/mod.rs` 里写 `pub use`，于是
+  `NewWorkshopItem`/`VideoWorkshopItem`/`WorkshopVideoProvider`/`PublishedFileAnswer` 四个公开类型
+  **用户根本叫不出名字**，而门链全绿（方法本身可调用，`pub use` 不影响）。修法是补两行 `pub use` +
+  加一道常驻门 `reachable_from_the_root`：测试用 `use crate::{...}` 逐个点名，**glob 满足不了它**；
+  用删除探针（`D:\tmp\a7\probe_reachable.py`）实测：抽掉任一行 `pub use` 即
+  `E0432 unresolved imports` —— 名字可达性这类断言的判决形式就是"移除后编译拒"（与本仓对
+  `unsafe impl Send` 用的同一把标准）。
+
+**2026-10-21 第六片：`GetPublishedFileDetails` 补完，`ISteamRemoteStorage` 首次 59/59（仓总 726→727）**
+
+- 答复是 `struct RemoteStorageGetPublishedFileDetailsResult_t`（`:469-493`）20 个字段。判定仍只有三类，
+  全部可测：五个定长字符数组（`:476-477`、`:485`、`:487`、`:490`）走**切片边界内读取**那一把尺；
+  两个 `int32` 尺寸（`:488-489`）夹非负；两个 `UGCHandle_t`（`:478-479`）过 `k_UGCHandleInvalid`（`:45`）
+  翻成 `Option` —— **没有主文件的条目是正常形状**（合集、外链视频），所以是 `None` 而不是错误。
+- **标签列表带着自己的截断标志交出**：Steam 把标签写成 `m_rgchTags` 那一串
+  "comma separated list of all tags associated with this file"（`:485`），旁边另有
+  "whether the list of tags was too long to be returned in the provided buffer"（`:486`）。
+  拆函数只丢空段，**不猜截断与否**；`tags_truncated` 原样保留 —— 丢掉它就会把一份被剪短的标签表
+  读成完整的一份。3 变异 3 红在各自断言（`D:\tmp\a7\mut52.py`）。
+- `m_rtimeCreated` / `m_rtimeUpdated`（`:481-482`）按 `u32` 原样交出：那两行只说 time when ... created /
+  last updated，头文件从未给单位或纪元 ⇒ 不造 `SystemTime`（与 `RTime32` 在 `src/user/answers.rs` 同口径）。
+- 🔴 **新鲜度只有两档，第三档是查无此数**：`:276-277` 说了 `>0` 可用缓存、`0` 强制刷新；`:278` 又提到
+  "A value of k_WorkshopForceLoadPublishedFileDetailsFromCache will use cached data if it exists"。
+  复算：这个名字在 `steamworks-sys/` 全树**只出现一次、且只在注释里**（`grep -r` 实测 1 命中）⇒
+  没有任何可发的数字，本仓就**不提供**这一档，并把"为什么少一档"写在类型 doc 里。
+- 🔴 **同片修掉一处只有 CI 能看见的破坏（`b559e35` 的八处 E0793）**：这些结果结构体在 Windows 绑定里是
+  `#[repr(C)]`，在 Linux/macOS 绑定里是 `#[repr(C, packed(4))]`（实测 `linux_bindings.rs:7740`）⇒
+  对 packed 字段取引用（含 `x.f[..n]`、`x.f.len()` 这类自动借位）在 Windows 主机上**根本编不出错**，
+  本地一片绿、CI 六个 job 全红。修法是把数组先拷出来再切（`let ids = v.m_rgPublishedFileId;`），
+  并给复算链新增一步 `cargo check --locked --workspace --all-targets
+  --target x86_64-unknown-linux-gnu`（本机装有该 target 的 std），判决数 30→**31**。
+  ⚠️ **一度写了一把文本尺 `packed_borrows.py`，量过之后当场删掉**：它先因为 `packed(4)` 的括号写错
+  而全盲（`[^)]*` 停在第一个 `)`，对恰好害人的那段代码报 0），改成三种借位写法后又开始误报既有码
+  （`cb.m_unAppID.into()`、`m_nFileSize.max(0)` 是按值调用，完全合法）。一把既会漏又会误的门比没有更糟，
+  所以按 `callback_threads` 那列 `unclaimed` 的先例退役，改由交叉 target 的编译器当尺。
+
+**2026-10-21 第七片：`ISteamVideo` 的请求半补上，该接口首次 4/4（仓总 727→728），并撤掉两句没测过的说法**
+
+- 缺的那只一直是**请求半**：`GetOPFSettings( AppId_t unVideoAppID )`（`:40`）在这版绑定里被声明、
+  从未被 `src/` 调过（`api_coverage` 实测 `ISteamVideo.called 3`）。补上 ⇒ 4/4，仓总 728。
+- 🔴 **`opf_string` 原文写"本仓生成的绑定里没有 OPF 请求-结果回调"，这句从来没有被量过，而且是错的**：
+  `GetOPFSettingsResult_t` 在三份绑定里各命中 12 次，结构体在 `windows_bindings.rs:16582`，回调号
+  `k_iSteamVideoCallbacks + 24`（`isteamvideo.h:58-61`）。它就是 `GetOPFSettings` 的答复，字段只有
+  `m_eResult` 与 `m_unVideoAppID`。这句话把"我还没接"写成了"接不了"，后果是读侧被钉死成只能读缓存；
+  现在文档改陈实测事实，请求与就绪信号都能表达。
+- 🔴 **同一文件里第二句没测的说法**：`open_video_page` 原文写"Steam 自己的界面接管，这调用没有结果可报"。
+  `isteamvideo.h:32` 给的是 "Get a URL suitable for streaming the given Video app ID's video"，答复是
+  `GetVideoURLResult_t`（`:51-55`，`k_iSteamVideoCallbacks + 11`，带 `m_rgchURL[256]`）⇒ 有结果，而且
+  一直是唯一能把 URL 交回调用方的通道。方法名 `open_video_page` 保留（改名动公开签名，属 §待拍板那一档），
+  文档按实测重写，并新增 `GetVideoURLResult` 让 URL 真能到达调用方。
+- **两个回调类型走的是流注册那条严格路，不是债清单**：`CALLBACKS_NOT_IN_STREAM` 只许变短，
+  `every_callback_is_streamable_or_listed_as_debt` 会把"定义了但没进流、也没登记"的类型判红 ⇒
+  加类型必须同时加 `CallbackResult` 变体与 `from_raw` 分发臂，漏一半就红。
+- **判定面**：`m_eResult` 一律翻成 `Option<SteamError>`——`k_EResultFail` 落 `Generic`（`src/error.rs:24-26`），
+  没人写过的 0 是 `k_EResultNone`，**仍算错误**（一次没成功的取回不能读成成功）；`m_rgchURL` 无终止符时
+  以数组边界为长度，走 `utils::fixed_string` 的 lossy 解码，不再 `expect`。
+- 📐 **本片顺手把 packed 的边界量准了**（这是上一轮那把尺误报的根因）：`GetVideoURLResult_t` 与
+  `GetOPFSettingsResult_t` 在**三份绑定都是 `#[repr(C)]`**，不属 E0793 那一类；同接口的
+  `GetAppDependenciesResult_t` 在 Linux/macOS 确是 `#[repr(C, packed(4))]`，但它被借的 `m_rgAppIDs`
+  是 4 字节 `AppId_t`——**align 恰等于 packing 值，所以取引用合法**。⇒ 规则是"`packed(N)` 只对
+  对齐需求 **> N** 的字段构成危害"（8 字节的 `PublishedFileId_t`/`UGCHandle_t` 才是雷），不是"packed
+  结构体的任何字段都不能借"。这条只有交叉 target 的编译器能判红，本机复算链第 31 条就是它。
+- 本接口仍余 2 只，且都是**有主登记**而非漏：`RequestUGCDetails`（`:290`，头文件 `:227` 自己写明
+  "the RequestUGCDetails call is deprecated and replaced with this"）与 `GetAppDependencies`（`:383`，
+  `answers.rs:242-245` 已明确拒用 one-shot 闭包形状，因为多页答复用 `FnOnce` 会把第一页当成整张表）。
 
 ### 6.1e `ISteamUGC` 39 个未调方法的分类（2026-10-14 实测登记，Tier 2 开工前的地图）
 
@@ -1188,7 +1906,7 @@ apicall_result.resize(size as usize, 0u8);
 
 ### 本地代码现状
 
-`src/lib.rs:133-140` 已是拆分后的结构（即 #259 的修复已在代码中）：
+`src/lib.rs:148-155` 已是拆分后的结构（即 #259 的修复已在代码中）：
 
 ```rust
 struct Callbacks {
@@ -1208,7 +1926,7 @@ struct Callbacks {
 
 ### 补充实测：场景 E（`repro/call_result_chain_deadlock_test.rs`）——四种残余之外的第五种
 
-深挖（见 `defect-02-deadlock-deep-dive.md`）发现上表不完整。`run_callbacks_raw` 的 call_result 分支（`src/lib.rs:180-185`）**在 `call_results` 锁守卫作用域内执行用户闭包**：
+深挖（见 `defect-02-deadlock-deep-dive.md`）发现上表不完整。`run_callbacks_raw` 的 call_result 分支（今天的坐标 `src/lib.rs:336-344`，2026-10-10 记录当时为 180-185）**曾在 `call_results` 锁守卫作用域内执行用户闭包**：
 
 | 场景 | 持有的锁 | 需要的锁 | 结果 |
 |------|---------|---------|------|
@@ -1259,9 +1977,82 @@ struct Callbacks {
 - miri test                      # UB 检测（FFI 用 mock 替代）
 ```
 
+上面这段是 2026-10-11 的规划稿，`deny`/`miri` 至今没进链（记在这里是为了别把它当成已存在）。
+**实际在跑的是 `quality` 作业的 21 个 step（其中 18 个具名，2026-10-18 按 YAML 复数：`- name:` 18 条、
+`- ` 步 21 条）**，
+外加 `features`/`workflows`/`packaging`/`vendored` 四个作业；本地用同一序列逐字复跑，出 26 项判定
+（`RED_VERDICTS` 是累计的，最后一行的 rc 不代表整条链）。
+2026-10-18 新增的是「句柄包装必须同时持住 client」这一步（`scripts/ci/handle_owners.py` +
+`baselines/handle_owners.txt`，目标 0）：实测 169 个 `pub struct` 里 44 个持裸
+`*mut sys::ISteam*`，其中 7 个过去不带 `Arc<Inner>`，于是 `Client` 一掉、`SteamAPI_Shutdown` 就在它们
+还活着的时候发生，而其中四个类型的 `Drop` 自己还要调 Steam。
+2026-10-16 新增的是其中一步：
+
+- `SDK-header citations in code docs land on the text they quote`（`scripts/ci/header_citations.py`
+  ＋ `baselines/header_citations.txt`）。它判的是**代码注释里对 vendored SDK 头文件的行号引用**。
+  实测规模：17 个文件、99 个注释块、**124 处引用**——115 处写全名（`isteamuser.h:168-172`）、
+  7 处缩写（`h:910-911`）、6 处续引（`:866`）；只认全名的原型数到 119，于是把"这里没引用"和
+  "引用按散文的写法出现"混成了一回事。四类判红：越界、整段空行、短语确实属于被引头文件但落在本块
+  所有 span 之外、短语属于另一个本块没引的头文件。其余（引号里是本仓自己的转述，或本块没有可核对的
+  短语）按文件登记成 `~unjudged` 债，**首跑登记 44 条**（同一天两次修正后为 21，见下面两条），只能变短。
+  判决以注释块为单位做并集，不做"引用↔短语"配对：原型按最近短语配对时，一个三引用一短语的块会把
+  同一条判三次——那是启发式的失败伪装成文档的失败。多头文件共有的通用短语（"not allowed" 在四个头
+  文件里逐字出现）算债不算违规：首版把它判红，一条就占了当时全部违规的 1/4，而爱哭狼的门没人信。
+  首跑抓到 9 条、分布在 7 个位置，其中 6 处是文档写错。最重的一条在 `src/matchmaking/chat.rs`：
+  引 `isteammatchmaking.h:961`，并把 "Flags describing how a users lobby state has changed" 当成
+  Steam 原文——**该头文件只有 886 行**，那句话在整个 vendored SDK 里逐字不存在，它是本仓自己的注释
+  戴了引号和一个不存在的行号。反证 10 条断言进 `canaries.py`（总数 33→43）：命中 span、偏一行、
+  整段空行、越过 EOF、`h:` 缩写两种结局、跨头文件误引、纯转述记 1 条债、无源目录退出 2。
+- **同一条门的第三列与被否证的第二种尺**（同日，`26da7e1` 之后）。124 处里有 **39 处所在注释块根本
+  没有引号**——既没被判、也不在债里，属于"看起来像覆盖"的静默区。现按 `<path>~undeclared` 登记，
+  同样只能变短。
+  把 39 自动转正的最自然做法是"块里点了 Steam 的符号名 ⇒ 符号必须落在被引 span 内"。**量了两次就否掉
+  了**：松版（含 CamelCase、子串归属）67 次主张 20 条判红；紧版（整词归属、只认 `k_E*`/`ISteam*`/
+  `SteamAPI_*`/`*_t`）26 次主张 7 条判红——7 条逐个复核，**一条真错都不是**。根因是本仓引用**习惯指向
+  头文件的文档注释行而不是声明行**，且邻近散文常提下一句才用到的符号。精确率 0 的判据就是爱哭狼，
+  于是这条以"负结果"写进尺子自己的 docstring，不改判据；覆盖靠笨办法挣：给 `src/user/voice.rs`、
+  `src/user/mod.rs` 的 **14 处**补上它们本来在引的句子。
+
+  同日又否掉**第二条自动锚**：未锚定的块里有几条把 Steam 的原文放在**反引号**里（`fake_udp.rs` 引
+  `ReceiveMessages` 那句就是逐字的），于是"将反引号里的多词短语也当锚"看起来很划算。量过之后是
+  **1 条真命中 vs 22 条假**——那 22 条是尺子读错自己的语法：一个反引号对从上一个 code span 开到下一个，
+  会把中间的散文一起吞进来当"原文"。1 条真例换一类伪造的债不值，所以**引号仍是唯一锚**，覆盖只能笨笨地挣：
+  `src/networking_sockets/{fake_ip,fake_udp}.rs` 又补了 **9 处**，把 "warns they are neither ordered nor
+  contiguous"、"explains is needed because" 这类转述换成被引 span 里的逐字句。
+  **现值：127 span / 0 违规 / 21 无逐字对应 / 16 无可核对短语**（span 从 125 涨到 127 是因为把裸写的
+  `:123-125` 写成全名才可计数——那是覆盖浮现，不是漂移）。
+- **同日第三把：把 `~undeclared` 清到 0，清的过程又逮到一条指错文件的引用。** 再补 14 处（跨
+  `input/{effects,session}.rs`、`networking_sockets/fake_ip.rs`、`user/{answers,duration,passthrough,buffers}.rs`、
+  `networking_messages.rs`、`networking_utils.rs`），**16 → 0**：`src/` 里每个带引用的注释块现在要么被 judged、
+  要么至少有一条门尝试过的短语。价值当场兑现——`src/networking_utils.rs` 把两个 ping 哨兵记成
+  `isteamnetworkingutils.h:139-146`（那是 `EstimatePingTimeFromLocalHost` 的注释），实际声明在**另一个文件**
+  `steamnetworkingtypes.h:1089-1090`。文件错＋行号错，而且**任何按引号工作的规则都看不见它**，因为那个块
+  根本没有引号；跟两条提交前那次 `chat.rs` 编造同源、路径不同，两者能被发现的唯一原因都是"把隐形集变成数字"。
+  现值：**129 span / 0 违规 / 21 无逐字对应 / 0 无可核对短语**（登记总量 27862 → 27874）。
+  剩下的 21 条是"戴引号的转述"，那是下一步要还的债，不是可以留着当覆盖的东西。
+  Steam 自己拼错的地方照抄并注明是原文：`isteaminput.h:829` "data was recievied before the timeout expires"。
+- **同日第四把：两列债清零，代价是承认尺子自己有两处近似。** 21 条按性质拆开：**8 条是强调**（"nil value"、
+  "not yet" 这种一两个词的引号，既不主张整句也定不了行号）⇒ 短于 `MIN_PHRASE` 的引号现在**既不算 judged 也不算
+  债**，`~unjudged` 因此才真的表示"一次失败的主张"；**4 条是门的错**——Steam 注释里带内层引号
+  （`// deprecated - "you've been playing for 3 hours; take a break"`），而 `"..."` 这种定界法装不下它，
+  于是 `norm` 两边一起丢 `"`，这 4 条从债变成被判，而不是从散文里删掉；剩下 9 条确实是本仓自造的说法戴了引号，
+  要么换成头文件原句（`effects.rs` 现在引 "nFlags is a bitmask of values from ESteamInputLEDFlag - 0 will
+  default to setting a color"），要么把引号摘掉。
+  过程里自己犯的两处，都写进 CHANGELOG：① 把 paraphrase 修成引用时把 **color 写成了 colour**——正是这一整套
+  要禁掉的"顺手改平"，被门当最后一条债报出来才发现；② 摘引号会让引用从 `~unjudged` **横向挪进 `~undeclared`**
+  （9→1 而 0→4），两列债台账里这是假好转，所以那四处每处都补回真引号，做到"引号摘了、引用仍在判"。
+  **终值：130 span / 0 违规 / 0 无逐字对应 / 0 无可核对短语**——`src/` 里每一条 SDK 行号引用都对得上它点名的头。
+  此后保持为真的是判红那一列：改一行让引用离开它的句子 = 判红；空债列从"上限"变成"应有状态"。
+  这一批还翻出尺子自己的一个观察层缺陷：它按原样拼接头文件的行，`//` 留在句中，于是**任何跨行原文永远
+  匹配不上**——单引用块里 93 条引号有 **25 条**只在剥掉注释符后才匹配，跨行的 WRONG-PLACE 判红也一并被
+  压掉（`user_stats/stats.rs` 引 `:134` 却引了 135-137 那句，就是这么露出来的）。发现方式是账的方向
+  不对劲：我补了 12 条逐字引用，`~unjudged` 反而 **+5**。反证加两条（`canaries.py` 43→46）。
+  ⚠ 附带清掉一条"被洗成风格规则"的缺陷：`fake_ip.rs`/`fake_udp.rs` 手写引用表要求每条短语落在**单行**内，
+  注释还写着"跨行会因错误的原因失败"——那是在绕这个 bug，不是问题本身的性质。
+
 ### 7.2 测试策略
 
-现状问题：20 个测试中 `basic_test`（src/lib.rs:780）依赖真实 Steam 客户端，无 Steam 的 CI 必然 panic，导致该测试实际无法在 CI 运行——14 个模块因此零覆盖。
+现状问题：20 个测试中 `basic_test`（原在 `src/lib.rs`，拆分后在 `src/lib_tests.rs:12`）依赖真实 Steam 客户端，无 Steam 的 CI 必然 panic，导致该测试实际无法在 CI 运行——14 个模块因此零覆盖。
 
 方案：三层测试
 1. **纯逻辑层**（无需 Steam）：SteamId 位运算、错误映射、字符串转换 → 可 100% 覆盖
@@ -1332,7 +2123,7 @@ client.user_stats().set_stat("kills", 100).await?;   // Result + 零分配 + asy
 
 | 修复项 | 对应缺陷 | 证据脚本 | 状态 |
 |--------|---------|---------|------|
-| 死锁：call_result 处理器内链式调 API（场景 E，守卫作用域收缩） | #2 | `call_result_chain_deadlock_test.rs` + `..._fixed.rs`（A/B） | **已实施**（`src/lib.rs:180-194`，+8 行，零签名破坏；build/test/clippy/fmt 四门禁同尺复测无回归；已拆独立分支 `fix/call-result-handler-self-deadlock` commit `20b800a`，只含本修复） |
+| 死锁：call_result 处理器内链式调 API（场景 E，守卫作用域收缩） | #2 | `call_result_chain_deadlock_test.rs` + `..._fixed.rs`（A/B） | **已实施**（`src/lib.rs:336-344`，当日坐标 180-194；+8 行，零签名破坏；build/test/clippy/fmt 四门禁同尺复测无回归；已拆独立分支 `fix/call-result-handler-self-deadlock` commit `20b800a`，只含本修复） |
 | 死锁残余场景修复（回调内 `register_callback` / 嵌套派发 / 丢弃 `CallbackHandle`，场景 B/C/D） | #2 | `post_fix_deadlock_test.rs` + 在树 `callback_multi_registration_tests` 四个重入测试 | ✅ 2026-10-10：分支 `fix/callback-dispatch-reentrancy` @ `ebd1183`（**基于 #1 分支尖端 `5d2bcc9` 的依赖分支**，未推送——put-back 设计建立在 #1 的 `(seq, Box)` 表上，上游按后续 PR 排序）；派发改为 **put-back + 墓碑**：整桶取出→放锁调用→按 seq 归并回插，`pending_removal` 墓碑集让「回调内丢自己句柄/回调内替换注册」在在途期间依然生效（⭐在树测试抓到「桶被重入注册重建、条目仍在途」的墓碑盲区——判据必须按「seq 表中缺失」而非「桶缺失」）；零公开 API 变更 ⇒ 不再依赖 #253 方向拍板（上游若偏好 `Arc<dyn Fn>` 属实现替换、语义等价）；回调 panic 从毒化锁改为丢弃在途条目（行为变更已记档）；3 文件 +192/−7；门禁同尺（对 base `5d2bcc9`）：fmt 0 / build 0 / clippy kind 多重集逐项同（122/122）/ 串行 **16-11-2** = 12-11-2 + 4 新测（超时包装防挂死：回归变成断言失败而非吊死套件）/ 并行 10×0 异常 |
 | 同类型多回调注册支持（Vec 值，消除静默覆盖） | #1 | `callback_multi_registration_tests`（lib.rs 内 5 测，离线） | ✅ 2026-10-10：分支 `fix/callback-multi-registration` @ `5d2bcc9`（基点 `6e4a2bc`，未推送）；表改 `Vec<(seq, Box)>` + Handle 持 seq 修陈旧误杀 + `register_replacing_callback` 保 3 处文档化替换语义（5 个 mem::forget 站点的句柄泄漏同时消除；sockets get_or_create 走 Weak 缓存零改动）；6 文件 +277/−42；门禁同尺：fmt 0 / build 0 / clippy kind-diff 0/0 / 串行 12-11-2 = 基线 7-11-2 + 5 新测 / 并行 10×0 segv；详见 defect-01 实施记录 |
 | CString panic 零破坏降级（58 处；19 处 builder 归 #6） | #5 | `cstring_nul_degrade_tests`（lib.rs + remote_storage.rs 共 12 测，离线） | ✅ 2026-10-10：分支 `fix/cstring-nul-panic` @ `5bf2336`（基点 `6e4a2bc`，未推送；⭐原 `e7f3775` 因脚本把 `"\x00"` 写成**原始 NUL 字节**→git 判二进制→EOL 清洗停用→python CRLF 入库，diffstat 曾虚胖为 +1637/−1283，规范化+转义后 amend 定稿，**真 diffstat 16 文件 +424/−70**，指纹 19-11-2 与修前逐字同）；`pub(crate) cstring()` helper + 按返回通道降级（bool→false / Option→None / Result→既有 Err / 句柄→0 / 结构体名→空 / 回调→cb(Err(IOFailure))）；门禁同尺：fmt 0 / build 0 / clippy kind-diff 0/0 / 串行 test 19-11-2 同（11 失败全为本机 NoSteamClient 环境性）/ 并行 10×0 segv；详见 defect-05 实施记录 |
@@ -1555,7 +2346,7 @@ SuperSteam 的价值主张需相应收敛：**不是「做一个更快的绑定�
 已在 https://github.com/Noxime/steamworks-rs/issues/253#issuecomment-6093232733 发布补充评论（账号 `bfxh`），内容为：
 
 1. 核实 #259 对当前 `master` 的实际效果（主场景确已修复）
-2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:133-140` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
+2. 报告 B/C/D 三种残余死锁，附 `src/lib.rs:148-155` 当前代码作证（注：E 场景系本轮深挖新发现，尚未追评，待用户确认）
 3. 指出维护者倾向的方案 4 可消除 B 和 C，但 **D 在方案 4 下依然存在**（`process_callbacks` 用户同样会在回调内丢弃 handle）
 4. 表示愿意提 PR，但先确认方向
 
@@ -1587,7 +2378,7 @@ let ptr = unsafe { sys::SteamAPI_SteamFriends_v018() };
 let ptr = NonNull::new(ptr).ok_or(SteamError::NotInitialized)?;  // release 同样生效
 ```
 
-`src/lib.rs:501-780` 与 `src/server.rs` 共 **33 处** `debug_assert!(!x.is_null())` 全部属于此类。
+`src/lib.rs`（24 处）与 `src/server/interfaces.rs`（文本 9 处、活代码 8 处，多的那处在 `apps` 的块注释里）共 **33 处** `debug_assert!(!x.is_null())` 文本命中，全部属于此类。（2026-10-16 复测：旧坐标是 lib.rs 的 501-780 行段与 server.rs 单文件，两者已随目录化漂移；尺 = 先剥掉 `/* */` 块再匹配 `debug_assert(!..is_null())`，文本总数与原文一致。）
 
 **计数更正**：本行此前写的是「61 处、其中 23 处 null 检查、lib.rs 17、server.rs 6」，那是拆文件之前的旧尺。按当前源码逐行重测（`grep -c debug_assert src/**/*.rs` 加 `grep -c "debug_assert.*null"`）：
 
@@ -1605,10 +2396,9 @@ lib.rs 的 24 处守卫每一处都紧贴一行接口指针获取（`let x = sys
 
 先说清影响面的确切口径。23 处是**检查点**，对应的**公开方法**是 23 个：
 
-- `src/lib.rs:351-547` 共 **17 个**：`utils` / `matchmaking` / `matchmaking_servers` / `networking` / `apps` / `friends` / `input` / `user` / `user_stats` / `remote_play` / `remote_storage` / `screenshots` / `ugc` / `timeline` / `networking_messages` / `networking_sockets` / `networking_utils`
-- `src/server.rs:534-593` 共 **6 个**：`ugc` / `utils` / `networking` / `networking_messages` / `networking_sockets` / `apps`
-
-若按「改成 `Result`」的直觉处理，会变成 `pub fn friends(&self) -> Result<Friends, SteamError>`——**这是对全部 23 个方法的破坏性变更**，所有调用方都要加 `?`。我在阶段 0 表里把 #4 标为「中风险（改公开 API 返回类型）」就是这个意思。
+- `src/lib.rs:349-545` 共 **17 个**：`utils` / `matchmaking` / `matchmaking_servers` / `networking` / `apps` / `friends` / `input` / `user` / `user_stats` / `remote_play` / `remote_storage` / `screenshots` / `ugc` / `timeline` / `networking_messages` / `networking_sockets` / `networking_utils`
+- `src/server/interfaces.rs` 今天实测 **8 个**：`ugc` / `http` / `inventory` / `stats` / `utils` / `networking` / `networking_messages` / `networking_sockets`。原文记 6 个（坐标 server.rs:534-593）：其中 `apps` 至今困在块注释里、不是活代码，而 `http` / `inventory` / `stats` 三个是 `a64a7c7` 之后才加的
+若按「改成 `Result`」的直觉处理，会变成 `pub fn friends(&self) -> Result<Friends, SteamError>`——**这是对全部 23 个方法的破坏性变更**（原文按 17 + 6 = 23；今天两条分别实测 23 与 8，共 **31** 个 getter），所有调用方都要加 `?`。我在阶段 0 表里把 #4 标为「中风险（改公开 API 返回类型）」就是这个意思。
 
 **但这个代价可以完全避免**，因为同一文件里已有零破坏的现成方案：
 
@@ -1653,7 +2443,7 @@ pub fn set_timeline_game_mode(&self, mode: TimelineGameMode) {
 
 这个案例也说明：**先查仓内是否已有同类问题的正确处理方式，能显著降低修复成本**。我最初直接跳到 `Result` 方案，是因为没注意到 `timeline` 已经是另一套做法。
 
-**一个有力的内部对照**：同一文件里的 `timeline` 接口（`src/lib.rs:512-518`）用了**运行时**判空：
+**一个有力的内部对照**：同一文件里的 `timeline` 接口（`src/lib.rs:764-773`，判空那一行是 `:770` 的 `disabled: timeline.is_null()`）用了**运行时**判空：
 
 ```rust
 Timeline {

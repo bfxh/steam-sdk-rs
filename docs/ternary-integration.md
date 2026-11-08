@@ -73,10 +73,10 @@ grep -rnE "^\s*Unknown[,\(]"     --include=*.rs src | wc -l   # 19
 
 ### 2.2 仓里已经出现过三种互不兼容的 `X`
 
-1. **具名变体**：`src/user.rs:571` 的 `UserHasLicense` 有 `HasLicense` / `DoesNotHaveLicense` /
+1. **具名变体**：`src/user/answers.rs:13` 的 `UserHasLicense` 有 `HasLicense` / `DoesNotHaveLicense` /
    `NoAuth` / `Unknown`，这是 Steam 自己的 `EUserHasLicenseForAppResult` 的忠实投影——
-   **Steam 本来就在回答三值**（`src/user.rs:185`）。
-2. **`Option`**：`src/remote_storage.rs:202` 的 `quota()`，其文档明写
+   **Steam 本来就在回答三值**（`src/user/answers.rs:36`）。
+2. **`Option`**：`src/remote_storage/api.rs:138` 的 `quota()`，其文档明写
    `None` 表示"Steam 答不上来（云存档关闭）"，而不是"剩余 0 字节"。
 3. **直接吞掉**：§2.1 的 99 个 `bool`。
 
@@ -87,9 +87,9 @@ grep -rnE "^\s*Unknown[,\(]"     --include=*.rs src | wc -l   # 19
 ### 2.3 状态被强行塞进二值通道的典型
 
 `InventoryResult` 有三态：未完成 / 成功 / 失败。类型上只有两态——
-`src/inventory.rs:152` 的 `status()` 走 `src/lib.rs:99` 的 `to_steam_result`，
+`src/inventory/result.rs:37` 的 `status()` 走 `src/lib.rs:99` 的 `to_steam_result`，
 而 `k_EResultPending` 在 `src/error.rs:157` 有具名变体，于是"未完成"被放进了 `Err` 通道。
-后果不是 panic（这点是好的），而是调用方必须先用 `src/inventory.rs:141` 的 `is_ready()`
+后果不是 panic（这点是好的），而是调用方必须先用 `src/inventory/result.rs:26` 的 `is_ready()`
 再调 `status()`，**两次调用才能还原一个三态**。任何只写 `if let Err(e) = status()`
 的调用方都会把"还在加载"当成错误处理。
 
@@ -101,8 +101,10 @@ Steam 运行期可能返回比 vendored 头文件更新的枚举值，兜底臂�
 这条门守住的是**枚举层的 `X`**。三值要做的，是把同一条原则从"枚举层"推广到"谓词层"：
 `X` 不只是某个枚举的一个变体，而是一个能参与 `∧ ∨ ¬ ⇒` 的值。
 
-顺带说一个同一原则还没覆盖的洞：`src/networking_types/mod.rs:191` 在
-`ESteamNetworkingAvailability` 的兜底臂上仍然是 `panic!`。它的 `_[..]` 分支不该活着。
+顺带说一个同一原则后来补上的洞：旧 `networking_types/mod.rs`（拆分前）的
+`ESteamNetworkingAvailability` 兜底臂曾是 `panic!`；master 已改成
+`NetworkingAvailabilityError::Unrecognized(i32)`（`src/networking_types/state.rs:368`），
+未知值现在是一个可读的答案，而不是调用方帧里的 abort。
 
 ---
 
@@ -167,7 +169,7 @@ impl From<UserHasLicense> for Ternary { .. }   // Has→True, DoesNotHave→Fals
 ### 3.2 落点 B（有限）：批量谓词的紧凑表示
 
 **场景.** "我的 1000 个好友里，谁同时在线且拥有 DLC X"、库存里"可交易且未消耗且未移除"
-（`src/inventory.rs:141` 一类谓词的批量版）。这类问题的自然表示是每个元素一个三值，
+（`src/inventory/result.rs:26` 一类谓词的批量版）。这类问题的自然表示是每个元素一个三值，
 而 Rust 的直觉写法 `Vec<Option<bool>>` 已经是 1 B/元素。
 
 **本机实测（可复跑）.**
@@ -284,7 +286,7 @@ rustc -O repro/ternary_bulk_bench.rs -o /tmp/tbench && /tmp/tbench
 
 ### 3.5 落点 E（窄，但确实存在）：冲突而不是覆盖
 
-`src/remote_storage.rs:276` 的 `LocalFileChangeKind` 只有 `Invalid/Updated/Deleted`，
+`src/remote_storage/changes.rs:8` 的 `LocalFileChangeKind` 只有 `Invalid/Updated/Deleted`，
 而"本地和云端都变了"这件事在 Steam 的云同步里是真实存在的状态。同理还有
 "缓存说拥有、实时许可证查询说没有"（家庭共享被撤销、退款）。
 

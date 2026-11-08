@@ -1,0 +1,313 @@
+# SDK-header line citations, per file. Three keys per file that cites a header:
+#   <path>                findings the gate judges red -- target 0, and it must stay 0
+#   <path>~unjudged       quoted phrases the cited header does not contain, that are long enough to
+#                         be a claim and unique enough to attribute. Debt: shrink-only.
+#   <path>~undeclared     citation spans in blocks carrying no checkable phrase at all. Debt: shrink-only.
+# Recorded 2026-10-16 by scripts/ci/header_citations.py; its summary reads: 17 files cite the SDK,
+# 130 spans, 0 judged wrong, 0 unjudged phrases, 0 spans with nothing to check. Both debt columns are
+# empty, so every citation in src/ is now checked against the header it names: the remaining work is
+# keeping them true as files are edited, which the red column is for.
+# Re-recorded 2026-10-18: 22 files cite the SDK, 147 spans, still 0/0/0. The +17 spans are the memory
+# and panic guards added with the sandbox audit (each one cites the header line that documents the
+# state it refuses to act on), and the +5 files are the modules those guards landed in. The growth in
+# coverage is deliberate; the three debt columns did not move, and the ruler judged one of my new
+# citations wrong on the first try (`steamnetworkingtypes.h:1785` for a sentence that is at 1787),
+# which is the only reason to trust a number like 147.
+# History of this ledger on its first day: 124/44/39 at the run that shipped the gate, then 125/21/25
+# after a joiner fix (header `//` markers had been left in the joined text, hiding 25 verbatim quotes),
+# 129/13/0 after the anchoring batches, 130/0/0 after the last paraphrases were either replaced by the
+# header's own words or had their quotation marks taken off. Emphasis quotes shorter than MIN_PHRASE
+# ("nil value", "not yet") are counted as neither: 8 such phrases were dropped from the debt column
+# when that distinction was made.
+# Re-recorded 2026-10-18 for the batched-receive merge: 27 files cite the SDK (was 26) and 168
+# spans (was 166), still 0/0/0. The four ReceiveMessages* callers used to hold two clamps and two
+# un-clamped `set_len` calls of a signed count; they now share `messages_received` in
+# src/networking_sockets/mod.rs, so the two header sentences that license the cut (the -1 answer at
+# isteamnetworkingsockets.h:320-321 and the poll group inheriting it at :552-553) moved from
+# poll_group.rs into that one block, and two new files started citing (mod.rs, and
+# networking_messages.rs for isteamnetworkingmessages.h:86 -- the channel receive had no clamp at
+# all). poll_group.rs now cites nothing, which is why its three rows left the ledger.
+# Re-recorded again the same day for the two FFI-edge byte decisions (http.rs header value,
+# networking_sockets/connection.rs debug string): 28 files (was 27), 171 spans (was 168), 0/0/0.
+# The three new spans are isteamhttp.h:75 and :82 for what the reported size does and does not
+# promise, and isteamnetworkingsockets.h:191 for the `const char *pszDebug` parameter that decides
+# where a debug string ends.
+# Re-recorded a third time the same day for the SteamFileReader unit: 29 files (was 28), 172 spans
+# (was 171), 0/0/0. One span, isteamremotestorage.h:206, is the `FileReadAsyncComplete` parameter
+# list that makes the reported byte count also the size of the copy Steam is about to make -- which
+# is why the count is clamped before it is used. src/remote_storage/files.rs joins the ledger.
+# Re-recorded again for the browser placeholder guard: 30 files (was 29), 173 spans (was 172),
+# 0/0/0. The one new span is isteamhtmlsurface.h:47, whose parameter list is what makes 0 a
+# sentinel of ours rather than a handle Steam issued.
+# Re-recorded once more for connection_name: 179 spans (was 172) across the same 30 files, still
+# 0/0/0. The seven new spans are isteamnetworkingsockets.h:191 and 225-229 (the debug-string and
+# name signatures, quoted as the ruler requires), steamnetworkingtypes.h:663 and
+# matchmakingtypes.h:21 (the two ceilings the crate's own 256 is measured against), and the
+# isteamremotestorage.h:206 joiner fix. The ruler judged two of my new citations wrong on the
+# first try -- a quote that sits at line 228 while the span said 229, and four cited spans in a
+# block carrying no phrase at all -- which is the only reason the 179 is worth anything.
+# Re-recorded 2026-10-19 for the FakeIP address unit: 36 files cite the SDK (was 35) and 222 spans
+# (was 194), still 0/0/0. The new rows are src/networking_types/addresses.rs, which took its first
+# header citations with the mapped-address decode, and the citations in networking_utils.rs and
+# networking_sockets/connection.rs for the classifier enum and `GetRemoteFakeIPForConnection`. The
+# ruler judged three of my new citations wrong on the first try and the gate caught all three: two
+# spans of `[::]:0` read as a citation of line 0 (the short `:N` form has no way to know a socket
+# literal is not a line number), and one paraphrase of my own sat inside quotation marks. Both were
+# reworded rather than exempted, which is why the three debt columns are still empty.
+# Re-recorded again the same day for the FakeIP identity lookup: 36 files, 227 spans (was 222),
+# still 0/0/0. The five new spans are isteamnetworkingutils.h:259-260 (the two refusals this wrapper
+# keeps tellable apart), :262-263 and :265-266 (how long an answer stays available), which joined the
+# file that already cited :251-252. The ruler judged two of them wrong on the first try -- both quoted
+# line 258 ("On failure, returns:") while the sentence they quote sits at 259 and 260 -- so the off-by-one
+# is fixed in the prose, not exempted here.
+# Re-recorded again the same day for the `networking_utils` split: 37 files cite the SDK (was 36) and
+# the same 227 spans. `src/networking_utils.rs` left the ledger and `src/networking_utils/{fake_ip,
+# ping,relay}.rs` joined it -- the spans moved with the text, none were added, which is what the
+# `split_witness.py` reading of that commit is for.
+# Re-recorded again for the favorites unit: 38 files cite the SDK (was 37), 239 spans (was 227).
+# src/matchmaking/favorites.rs joins with four blocks; the spans came with the header sentences this
+# module had to quote to say what its own readings are, and the ruler judged none of them wrong --
+# the first time in three attempts, which is not evidence the ruler got weaker: its canary still bites.
+# Re-recorded once more the same day for the lobby-control unit: 39 files cite the SDK (was 38) and
+# 256 spans (was 239). `src/matchmaking/mod.rs` grew the citations behind the lobby-type table and the
+# five lobby setters. Debt columns still 0 -- but only after the ruler judged one citation wrong
+# ('no limit is defined' quoted in a block that cited :225-226 while the sentence is at :227) and
+# flagged one of my own sentences inside quotation marks, which is the second time this week the gate
+# caught the author wording rather than Steam's.
+# Re-recorded again for the game-server status unit: 40 files cite the SDK (was 39), 275 spans
+# (was 256), still 0/0/0. src/server/status.rs joined; two of its citations were off by one line and
+# two of its phrases were my own wording inside quotation marks -- the ruler judged all four, which is
+# the only reason the 275 means anything.
+# Re-recorded again for the clan-association unit: 40 files, 283 spans (was 275), still 0/0/0.
+# Two of the new citations were judged wrong on the first try by the same ruler -- a phrase from
+# :380 cited at 381-387, and one of my own sentences inside quotation marks -- and both were fixed in
+# the prose rather than exempted.
+# Re-recorded 2026-10-20 with the ISteamUserStats out-parameter read face (`src/user_stats/user_reads.rs`,
+# 6 wrappers): 41 files cite the SDK, 304 spans, still 0 judged wrong / 0 unjudged / 0 undeclared. The +17
+# spans are that module's own citations. The ruler judged five of them red on the first pass and all five were
+# re-anchored instead of exempted: two quoted phrases sat outside the spans cited (the two progress-limit
+# sentences are at `isteamuserstats.h:297` and `:298`, not `:298` and `:299` -- an off-by-one inherited from
+# counting a blank line), and three citation blocks carried line numbers with no checkable phrase, which is
+# what the `~undeclared` column exists for. One near-miss worth keeping: a prose reference to a line of
+# `src/server_stats.rs` inside a module doc parsed as a line-number pointer into the SDK headers, so an
+# in-crate file:line reference does not belong in the same sentence as a header citation.
+# Re-recorded 2026-10-20 again with the global-achievement-percentage face (`achievement_percents.rs`, 2
+# iterators) and the two local writes in `stats_io.rs`: 43 files cite the SDK, 314 spans, still 0 judged wrong
+# / 0 unjudged / 0 undeclared. The +10 spans are those two files. Nothing was judged red this time -- the
+# difference is that the line numbers were read out of the header with the line number printed (awk NR) before
+# writing them, instead of from an earlier sed window I had counted by eye; the previous re-record's off-by-one
+# came from exactly that.
+# Re-recorded 2026-10-20 with the lobby width decisions (`#31`): 45 files cite the SDK, 329 spans,
+# 0/0/0. The +2 files are `src/matchmaking/filters.rs` and `src/matchmaking/queries.rs`, which cited no
+# header before this round; `queries.rs` entered with its first own sentence ("sets how many results to
+# return, the lower the count the faster...", `isteammatchmaking.h:120`). One near-miss repeated and was
+# fixed the same way as before: a Steam declaration put inside backticks is NOT a citation to this ruler
+# (it needs double quotes), which is the second time that exact mistake cost a `~undeclared` span.
+# Re-recorded 2026-10-20 with the friend-group read face (`src/friends/groups.rs`, 5 wrappers): 46 files
+# cite the SDK, 347 spans, 0/0/0. The new file entered with 13 spans and clean citations on its first
+# pass except two blocks and two quotes of mine, which the ruler named before the commit: my own wording
+# inside double quotes (a `~unjudged` pair) and two citation blocks with no checkable phrase, fixed by
+# quoting Steam's declarations -- "typedef int16 FriendsGroupID_t", "returns the number of friends
+# groups" -- instead of paraphrasing them.
+# 2026-10-20 friend sources face (src/friends/sources.rs): 3 more comment blocks cite the SDK,
+# so 47 files / 359 spans, and the three debt columns are still 0-0-0. Rows below are the fresh
+# measurement; the history above is kept by merging, never by overwriting this file.
+# 2026-10-20 profile-item face (src/friends/profile_items.rs): 48 files / 371 spans, debt
+# still 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10)
+# and were anchored with a Steam sentence of their own, not by dropping the citation.
+# 0-0-0. Two blocks first landed in ~undeclared (quotes shorter than MIN_PHRASE = 10) and were
+# anchored with a Steam sentence of their own, not by dropping the citation.
+# 2026-10-20 persona-history face (src/friends/history.rs): 49 files / 376 spans, debt 0-0-0;
+# two blocks first landed in ~undeclared and were anchored with the header's own sentence.
+# 2026-10-20 overlay protocol face (src/friends/overlay.rs): 50 files / 379 spans, debt 0-0-0.
+# 2026-10-20 cached-UGC face (src/remote_storage/cached_ugc.rs): 51 files / 408 spans, debt 0-0-0.
+# 2026-10-20 #21-B callback ownership (src/matchmaking_servers.rs): Rc -> Arc<dyn Fn + Send + Sync>;
+# the file's Send promise now carries a compile-time claim, and the span count moves with its doc.
+# 2026-10-20 #44-B: SAFETY lines added above all 15 Send promises (files grew by those lines).
+# 2026-10-20 stream cancel + two silent casts fixed in src/remote_storage/files.rs: 51 files /
+# 420 spans, debt 0-0-0. The file grew a cancel(), a chunk_fit, a reader_size and a test
+# module; three doc sentences were re-anchored onto Steam's own header wording instead of my
+# paraphrase. (The previous version of this note lost those names to shell command
+# substitution -- backticks inside a double-quoted argument -- which is why they are written
+# out here without them.)
+# 2026-10-21 +3 rows for src/remote_storage/workshop_update.rs, all columns zero: its 33 spans each sit in a block that carries a verbatim header phrase, so the debt columns did not move.
+# 2026-10-21 (second slice) +3 rows for src/remote_storage/download.rs at zero debt; workshop_update.rs spans 33 -> 40, still 0-0-0. Both files paid their debt before this re-record rather than having it registered as debt.
+# 2026-10-21 (third slice) +3 rows for src/remote_storage/workshop_answers.rs at zero debt (46 spans). The debt was paid before the re-record: two phrases I had put in quotation marks were my own words, and six spans sat in blocks with no verbatim phrase at all.
+# 2026-10-21 (fourth slice) +3 rows for src/remote_storage/workshop_publish.rs at zero debt (21 spans); workshop_update.rs spans 40 -> 35 with the removed struct. Ten spans arrived unanchored in the first draft and were paid before this re-record, not registered as debt.
+# 2026-10-21 (fifth slice) +3 rows for src/remote_storage/workshop_enumerate.rs at zero debt (25 spans). It arrived with 7 unanchored spans and one WRONG line number the ruler caught: a declaration was cited at :307, which is the public-view comment; the call is :306.
+# 2026-10-21 (sixth slice) +3 rows for src/remote_storage/published_details.rs at zero debt (34 spans). It arrived with 14 unanchored spans and one quote-pairing break caused by writing an empty `""` in prose -- two quote characters to the ruler.
+# 2026-10-21 +src/video.rs cites isteamvideo.h (58 files, 608 spans, debt 0-0-0): four spans anchored verbatim, and the gate judged red on all four until the line numbers were re-read (:31 is the GetVideoURL purpose comment, :38 the STEAM_CALL_BACK annotation, :39-40 the request next to its reader).
+src/http.rs 0
+src/http.rs~unjudged 0
+src/http.rs~undeclared 0
+src/matchmaking_servers.rs 0
+src/matchmaking_servers.rs~unjudged 0
+src/matchmaking_servers.rs~undeclared 0
+src/networking_messages.rs 0
+src/networking_messages.rs~unjudged 0
+src/networking_messages.rs~undeclared 0
+src/video.rs 0
+src/video.rs~unjudged 0
+src/video.rs~undeclared 0
+src/friends/callbacks.rs 0
+src/friends/callbacks.rs~unjudged 0
+src/friends/callbacks.rs~undeclared 0
+src/friends/groups.rs 0
+src/friends/groups.rs~unjudged 0
+src/friends/groups.rs~undeclared 0
+src/friends/history.rs 0
+src/friends/history.rs~unjudged 0
+src/friends/history.rs~undeclared 0
+src/friends/overlay.rs 0
+src/friends/overlay.rs~unjudged 0
+src/friends/overlay.rs~undeclared 0
+src/friends/profile_items.rs 0
+src/friends/profile_items.rs~unjudged 0
+src/friends/profile_items.rs~undeclared 0
+src/friends/sources.rs 0
+src/friends/sources.rs~unjudged 0
+src/friends/sources.rs~undeclared 0
+src/html_surface/browser.rs 0
+src/html_surface/browser.rs~unjudged 0
+src/html_surface/browser.rs~undeclared 0
+src/input/core.rs 0
+src/input/core.rs~unjudged 0
+src/input/core.rs~undeclared 0
+src/input/effects.rs 0
+src/input/effects.rs~unjudged 0
+src/input/effects.rs~undeclared 0
+src/input/origins.rs 0
+src/input/origins.rs~unjudged 0
+src/input/origins.rs~undeclared 0
+src/input/session.rs 0
+src/input/session.rs~unjudged 0
+src/input/session.rs~undeclared 0
+src/matchmaking/chat.rs 0
+src/matchmaking/chat.rs~unjudged 0
+src/matchmaking/chat.rs~undeclared 0
+src/matchmaking/favorites.rs 0
+src/matchmaking/favorites.rs~unjudged 0
+src/matchmaking/favorites.rs~undeclared 0
+src/matchmaking/filters.rs 0
+src/matchmaking/filters.rs~unjudged 0
+src/matchmaking/filters.rs~undeclared 0
+src/matchmaking/mod.rs 0
+src/matchmaking/mod.rs~unjudged 0
+src/matchmaking/mod.rs~undeclared 0
+src/matchmaking/queries.rs 0
+src/matchmaking/queries.rs~unjudged 0
+src/matchmaking/queries.rs~undeclared 0
+src/networking_sockets/connect.rs 0
+src/networking_sockets/connect.rs~unjudged 0
+src/networking_sockets/connect.rs~undeclared 0
+src/networking_sockets/connection.rs 0
+src/networking_sockets/connection.rs~unjudged 0
+src/networking_sockets/connection.rs~undeclared 0
+src/networking_sockets/fake_ip.rs 0
+src/networking_sockets/fake_ip.rs~unjudged 0
+src/networking_sockets/fake_ip.rs~undeclared 0
+src/networking_sockets/fake_udp.rs 0
+src/networking_sockets/fake_udp.rs~unjudged 0
+src/networking_sockets/fake_udp.rs~undeclared 0
+src/networking_sockets/listen.rs 0
+src/networking_sockets/listen.rs~unjudged 0
+src/networking_sockets/listen.rs~undeclared 0
+src/networking_sockets/mod.rs 0
+src/networking_sockets/mod.rs~unjudged 0
+src/networking_sockets/mod.rs~undeclared 0
+src/networking_types/addresses.rs 0
+src/networking_types/addresses.rs~unjudged 0
+src/networking_types/addresses.rs~undeclared 0
+src/networking_types/config.rs 0
+src/networking_types/config.rs~unjudged 0
+src/networking_types/config.rs~undeclared 0
+src/networking_types/identity.rs 0
+src/networking_types/identity.rs~unjudged 0
+src/networking_types/identity.rs~undeclared 0
+src/networking_types/message.rs 0
+src/networking_types/message.rs~unjudged 0
+src/networking_types/message.rs~undeclared 0
+src/networking_types/state.rs 0
+src/networking_types/state.rs~unjudged 0
+src/networking_types/state.rs~undeclared 0
+src/networking_utils/fake_ip.rs 0
+src/networking_utils/fake_ip.rs~unjudged 0
+src/networking_utils/fake_ip.rs~undeclared 0
+src/networking_utils/ping.rs 0
+src/networking_utils/ping.rs~unjudged 0
+src/networking_utils/ping.rs~undeclared 0
+src/remote_storage/api.rs 0
+src/remote_storage/api.rs~unjudged 0
+src/remote_storage/api.rs~undeclared 0
+src/remote_storage/cached_ugc.rs 0
+src/remote_storage/cached_ugc.rs~unjudged 0
+src/remote_storage/cached_ugc.rs~undeclared 0
+src/remote_storage/download.rs 0
+src/remote_storage/download.rs~unjudged 0
+src/remote_storage/download.rs~undeclared 0
+src/remote_storage/files.rs 0
+src/remote_storage/files.rs~unjudged 0
+src/remote_storage/files.rs~undeclared 0
+src/remote_storage/published_details.rs 0
+src/remote_storage/published_details.rs~unjudged 0
+src/remote_storage/published_details.rs~undeclared 0
+src/remote_storage/workshop_answers.rs 0
+src/remote_storage/workshop_answers.rs~unjudged 0
+src/remote_storage/workshop_answers.rs~undeclared 0
+src/remote_storage/workshop_enumerate.rs 0
+src/remote_storage/workshop_enumerate.rs~unjudged 0
+src/remote_storage/workshop_enumerate.rs~undeclared 0
+src/remote_storage/workshop_publish.rs 0
+src/remote_storage/workshop_publish.rs~unjudged 0
+src/remote_storage/workshop_publish.rs~undeclared 0
+src/remote_storage/workshop_update.rs 0
+src/remote_storage/workshop_update.rs~unjudged 0
+src/remote_storage/workshop_update.rs~undeclared 0
+src/server/status.rs 0
+src/server/status.rs~unjudged 0
+src/server/status.rs~undeclared 0
+src/ugc/answers.rs 0
+src/ugc/answers.rs~unjudged 0
+src/ugc/answers.rs~undeclared 0
+src/user/answers.rs 0
+src/user/answers.rs~unjudged 0
+src/user/answers.rs~undeclared 0
+src/user/buffers.rs 0
+src/user/buffers.rs~unjudged 0
+src/user/buffers.rs~undeclared 0
+src/user/duration.rs 0
+src/user/duration.rs~unjudged 0
+src/user/duration.rs~undeclared 0
+src/user/mod.rs 0
+src/user/mod.rs~unjudged 0
+src/user/mod.rs~undeclared 0
+src/user/passthrough.rs 0
+src/user/passthrough.rs~unjudged 0
+src/user/passthrough.rs~undeclared 0
+src/user/voice.rs 0
+src/user/voice.rs~unjudged 0
+src/user/voice.rs~undeclared 0
+src/user_stats/achievement_percents.rs 0
+src/user_stats/achievement_percents.rs~unjudged 0
+src/user_stats/achievement_percents.rs~undeclared 0
+src/user_stats/achievements.rs 0
+src/user_stats/achievements.rs~unjudged 0
+src/user_stats/achievements.rs~undeclared 0
+src/user_stats/leaderboard.rs 0
+src/user_stats/leaderboard.rs~unjudged 0
+src/user_stats/leaderboard.rs~undeclared 0
+src/user_stats/stats.rs 0
+src/user_stats/stats.rs~unjudged 0
+src/user_stats/stats.rs~undeclared 0
+src/user_stats/stats_io.rs 0
+src/user_stats/stats_io.rs~unjudged 0
+src/user_stats/stats_io.rs~undeclared 0
+src/user_stats/user_reads.rs 0
+src/user_stats/user_reads.rs~unjudged 0
+src/user_stats/user_reads.rs~undeclared 0
+src/utils/strings.rs 0
+src/utils/strings.rs~unjudged 0
+src/utils/strings.rs~undeclared 0
+src/utils/text_input.rs 0
+src/utils/text_input.rs~unjudged 0
+src/utils/text_input.rs~undeclared 0

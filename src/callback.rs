@@ -1,5 +1,6 @@
 use super::*;
 use crate::networking_messages::*;
+use crate::networking_sockets::FakeIpResult;
 use crate::networking_types::*;
 use crate::networking_utils::*;
 use crate::screenshots::*;
@@ -32,7 +33,9 @@ pub enum CallbackResult {
     GamepadTextInputDismissed(GamepadTextInputDismissed),
     GameRichPresenceJoinRequested(GameRichPresenceJoinRequested),
     GetAppDependenciesResult(GetAppDependenciesResult),
+    GetOPFSettingsResult(GetOPFSettingsResult),
     GetUserItemVoteResult(GetUserItemVoteResult),
+    GetVideoURLResult(GetVideoURLResult),
     GlobalStatsReceived(GlobalStatsReceived),
     LobbyChatMsg(LobbyChatMsg),
     LobbyChatUpdate(LobbyChatUpdate),
@@ -40,6 +43,7 @@ pub enum CallbackResult {
     LobbyDataUpdate(LobbyDataUpdate),
     LobbyEnter(LobbyEnter),
     MicroTxnAuthorizationResponse(MicroTxnAuthorizationResponse),
+    FakeIpResult(FakeIpResult),
     NetConnectionStatusChanged(NetConnectionStatusChanged),
     NetworkingMessagesSessionFailed(NetworkingMessagesSessionFailed),
     NetworkingMessagesSessionRequest(NetworkingMessagesSessionRequest),
@@ -78,6 +82,7 @@ pub enum CallbackResult {
 impl CallbackResult {
     pub unsafe fn from_raw(discriminator: i32, data: *mut c_void) -> Option<Self> {
         Some(match discriminator {
+            FakeIpResult::ID => Self::FakeIpResult(FakeIpResult::from_raw(data)),
             NetConnectionStatusChanged::ID => {
                 Self::NetConnectionStatusChanged(NetConnectionStatusChanged::from_raw(data))
             }
@@ -187,6 +192,10 @@ impl CallbackResult {
             GetAppDependenciesResult::ID => {
                 Self::GetAppDependenciesResult(GetAppDependenciesResult::from_raw(data))
             }
+            GetOPFSettingsResult::ID => {
+                Self::GetOPFSettingsResult(GetOPFSettingsResult::from_raw(data))
+            }
+            GetVideoURLResult::ID => Self::GetVideoURLResult(GetVideoURLResult::from_raw(data)),
             GetUserItemVoteResult::ID => {
                 Self::GetUserItemVoteResult(GetUserItemVoteResult::from_raw(data))
             }
@@ -291,7 +300,7 @@ pub(crate) unsafe fn register_call_result<C, F>(
 ) where
     F: for<'a> FnOnce(&'a C, bool) + 'static + Send,
 {
-    inner.callbacks.call_results.lock().unwrap().insert(
+    crate::utils::mutex_guard(&inner.callbacks.call_results).insert(
         api_call,
         Box::new(move |param, failed| {
             let value = param.cast::<C>().read_unaligned();
@@ -474,6 +483,20 @@ mod stream_coverage {
                 "{name} is streamed now; the debt list entry is stale"
             );
         }
+    }
+
+    #[test]
+    fn the_fake_ip_result_reaches_the_stream() {
+        // The chat-family test below proves this shape of check; this one pins the payload added with
+        // `get_fake_ip`, where the risk is real: a `CallbackResult` variant written without its
+        // `from_raw` arm compiles, and the events simply never arrive.
+        let payload = [0u8; 64];
+        let decoded =
+            unsafe { CallbackResult::from_raw(FakeIpResult::ID, payload.as_ptr() as *mut c_void) };
+        assert!(
+            matches!(decoded, Some(CallbackResult::FakeIpResult(_))),
+            "FakeIpResult's callback id is not dispatched by CallbackResult::from_raw"
+        );
     }
 
     #[test]

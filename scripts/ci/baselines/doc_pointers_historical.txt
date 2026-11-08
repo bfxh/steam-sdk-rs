@@ -4,9 +4,18 @@
 # shrinks -- `doc_pointers.py` judges an entry nobody cites as red.
 # <doc> <token-as-cited>
 CHANGELOG.md src/friends.rs
+CHANGELOG.md src/inventory.rs
 CHANGELOG.md src/networking_sockets.rs
 CHANGELOG.md src/networking_types.rs
 CHANGELOG.md src/ugc.rs
+CHANGELOG.md src/matchmaking.rs
+CHANGELOG.md src/user.rs
+CHANGELOG.md src/user_stats.rs
+CHANGELOG.md src/html_surface.rs
+CHANGELOG.md src/server.rs
+CHANGELOG.md src/input.rs
+CHANGELOG.md src/utils.rs
+CHANGELOG.md src/remote_storage.rs
 docs/SuperSteam-Design.md src/friends.rs
 docs/SuperSteam-Design.md src/friends.rs:124
 docs/SuperSteam-Design.md src/friends.rs:412/433/454
@@ -17,8 +26,12 @@ docs/SuperSteam-Design.md src/ugc.rs:933
 docs/SuperSteam-Design.md src/ugc.rs:933-1050
 docs/SuperSteam-Design.md src/ugc.rs:974
 docs/SuperSteam-Design.md src/ugc.rs:986-997
+docs/SuperSteam-Design.md src/server.rs:551
+docs/SuperSteam-Design.md src/server.rs
 docs/ci-local-evidence-2026-10-13.md src/ugc.rs
 docs/ci-local-evidence-2026-10-13.md src/ugc.rs:1028
 docs/defect-04-null-guard-deep-dive.md src/friends.rs
 docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs
 docs/defect-06-ugc-builder-deep-dive.md src/ugc.rs:927-1128
+CHANGELOG.md src/networking_utils.rs
+docs/SuperSteam-Design.md src/networking_utils.rs

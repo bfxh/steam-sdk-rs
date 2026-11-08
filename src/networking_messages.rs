@@ -23,6 +23,7 @@
 //! you may find the symmetric connection mode of ISteamNetworkingSockets useful.
 //! (See k_ESteamNetworkingConfig_SymmetricConnect.)
 // TODO: examples here
+use crate::networking_sockets::messages_received;
 use crate::networking_types::{
     NetConnectionInfo, NetConnectionRealTimeInfo, NetworkingConnectionState, NetworkingIdentity,
     NetworkingMessage, SendFlags,
@@ -40,6 +41,14 @@ pub struct NetworkingMessages {
 }
 
 unsafe impl Sync for NetworkingMessages {}
+// SAFETY: nothing in this crate's tree needs `Send` for this type today (measured: this
+// line deleted, `cargo check --all-targets` stays green). The promise is kept because
+// the type is public and a caller may move it to the thread that pumps callbacks.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for NetworkingMessages {}
 
 impl NetworkingMessages {
@@ -108,7 +117,12 @@ impl NetworkingMessages {
 
     /// Reads the next message that has been sent from another user on the given channel.
     ///
-    /// `batch_size` is the maximum number of messages that can be received at once.
+    /// `batch_size` is the maximum number of messages that can be received at once, and it is also
+    /// the bound the answer is trusted to: "Returns number of messages returned into your list."
+    /// (`isteamnetworkingmessages.h:86`) is a count of what Steam wrote, not a length this side has
+    /// to believe, so the number goes through `messages_received` before `set_len` sees it. Without
+    /// that, the answer was cast straight through -- and a negative one becomes ~1.8e19, which is
+    /// `set_len` describing a `Vec` far longer than the `batch_size` slots that were allocated.
     ///
     /// # Example
     /// ```no_run
@@ -140,7 +154,7 @@ impl NetworkingMessages {
                 buffer.as_mut_ptr(),
                 batch_size as _,
             );
-            buffer.set_len(message_count as usize);
+            buffer.set_len(messages_received(message_count, batch_size));
         }
 
         buffer
@@ -268,6 +282,52 @@ impl NetworkingMessages {
 
         (state, connection_info, quick_status)
     }
+
+    /// Call this when you are done talking to a user, to free the resources Steam holds for the
+    /// session immediately.
+    ///
+    /// A plain `bool` is returned because that is all Steam gives and the header does not define
+    /// what `false` means: `isteamnetworkingmessages.h:103-105` says only "Call this when you're
+    /// done talking to a user to immediately free up resources under-the-hood. If the remote user
+    /// tries to send data to you again, another SteamNetworkingMessagesSessionRequest_t callback
+    /// will be posted", and `:107-108` adds that sessions which go unused for a few minutes are
+    /// timed out automatically. So this call decides *when* the resources come back, not whether
+    /// they ever would -- and mapping `false` onto an error would be this wrapper inventing a
+    /// failure Steam never described.
+    ///
+    /// [`SessionRequest::reject`] reaches the same Steam function for a session that was never
+    /// accepted; this is the one for a session you have been using.
+    pub fn close_session_with_user(&self, identity_remote: &NetworkingIdentity) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(
+                self.net,
+                identity_remote.as_ptr(),
+            )
+        }
+    }
+
+    /// Like [`close_session_with_user`](Self::close_session_with_user), but closes a single channel.
+    ///
+    /// `isteamnetworkingmessages.h:110-113`: "Once all open channels to a user have been closed, the
+    /// open session to the user will be closed, and any new data from this user will trigger a
+    /// SteamSteamNetworkingMessagesSessionRequest_t callback" -- so a later packet reopens the
+    /// session as a request. The
+    /// number is the same routing channel [`send_message_to_user`](Self::send_message_to_user)
+    /// takes, and the header's own advice for apps that do not route by channel applies here too --
+    /// use 0.
+    pub fn close_channel_with_user(
+        &self,
+        identity_remote: &NetworkingIdentity,
+        local_channel: i32,
+    ) -> bool {
+        unsafe {
+            sys::SteamAPI_ISteamNetworkingMessages_CloseChannelWithUser(
+                self.net,
+                identity_remote.as_ptr(),
+                local_channel,
+            )
+        }
+    }
 }
 
 /// A helper for creating SessionRequests.
@@ -279,6 +339,14 @@ struct SessionRequestBuilder {
     inner: Weak<Inner>,
 }
 
+// SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
+// this line, which makes `cargo check --all-targets` fail with
+// `*mut ISteamNetworkingMessages` cannot be sent between threads safely.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for SessionRequestBuilder {}
 unsafe impl Sync for SessionRequestBuilder {}
 
@@ -287,7 +355,7 @@ impl SessionRequestBuilder {
         self.inner.upgrade().map(|inner| SessionRequest {
             remote,
             messages: self.message,
-            accepted: false,
+            answered: false,
             _inner: inner,
         })
     }
@@ -320,14 +388,22 @@ impl_callback!(cb: SteamNetworkingMessagesSessionFailed_t => NetworkingMessagesS
 pub struct SessionRequest {
     remote: NetworkingIdentity,
     messages: *mut sys::ISteamNetworkingMessages,
-    /// Keep track if connection should be rejected on drop
-    // This is used instead of `std::mem::forget` to properly clean up other
-    // resources. Is it even wise to automatically reject the connection?
-    accepted: bool,
+    /// Whether this request has been answered -- by `accept`, by `reject`, or by `Drop`.
+    /// It was called `accepted` and only `accept` ever set it, so a request that had been rejected
+    /// still looked unanswered here and `Drop` closed the session a second time.
+    answered: bool,
     _inner: Arc<Inner>,
 }
 
 unsafe impl Sync for SessionRequest {}
+// SAFETY: nothing in this crate's tree needs `Send` for this type today (measured: this
+// line deleted, `cargo check --all-targets` stays green). The promise is kept because
+// the type is public and a caller may move it to the thread that pumps callbacks.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for SessionRequest {}
 
 impl SessionRequest {
@@ -336,9 +412,26 @@ impl SessionRequest {
         &self.remote
     }
 
+    /// Records that this request has been answered, and reports whether Steam is still owed a close.
+    ///
+    /// The first caller gets `true`, everybody after it gets `false`. That is the entire point of this
+    /// function: `CloseSessionWithUser` is "Call this when you're done talking to a user to
+    /// immediately free up resources under-the-hood.  If the remote user tries to send data to you
+    /// again, another SteamNetworkingMessagesSessionRequest_t callback will be posted."
+    /// (`isteamnetworkingmessages.h:103-105`), and the header promises no idempotency -- a second
+    /// close is not a no-op, because anything that re-established a session in between gets torn down
+    /// with it, and sending implicitly accepts a pending session ("Calling SendMessageToUser() will
+    /// implicitly accepts any pending session request to that user.", `:100`). Until now only
+    /// `accept()` marked the request, so `reject()` closed once and `Drop` closed again.
+    fn mark_answered(&mut self) -> bool {
+        let owed = !self.answered;
+        self.answered = true;
+        owed
+    }
+
     /// Accept the connection.
     pub fn accept(mut self) -> bool {
-        self.accepted = true;
+        self.mark_answered();
         unsafe {
             return sys::SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser(
                 self.messages,
@@ -354,6 +447,9 @@ impl SessionRequest {
 
     /// Reject the connection without consuming self, useful for implementing [`Drop`]
     fn reject_inner(&mut self) {
+        if !self.mark_answered() {
+            return;
+        }
         unsafe {
             sys::SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(
                 self.messages,
@@ -365,8 +461,66 @@ impl SessionRequest {
 
 impl Drop for SessionRequest {
     fn drop(&mut self) {
-        if !self.accepted {
-            self.reject_inner();
+        // Unconditional, on purpose: `reject_inner` owns the decision about who is owed a close, so
+        // the rule is stated once instead of being restated here from a flag only one path set.
+        self.reject_inner();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! `mark_answered` is the whole double-close guard and it is pure state, so it can be judged
+    //! without a client -- unlike the FFI call it gates, which needs Steam.
+    use super::*;
+    use crate::{Callbacks, Manager, NetworkingSocketsData};
+    use std::sync::Weak;
+
+    fn fresh_request() -> SessionRequest {
+        SessionRequest {
+            remote: NetworkingIdentity::default(),
+            messages: std::ptr::null_mut(),
+            answered: false,
+            _inner: Arc::new(Inner {
+                manager: Manager::Client,
+                callbacks: Callbacks::new(),
+                networking_sockets_data: std::sync::Mutex::new(NetworkingSocketsData {
+                    sockets: Default::default(),
+                    independent_connections: Default::default(),
+                    fake_udp_ports: Default::default(),
+                    connection_callback: Weak::new(),
+                }),
+            }),
         }
+    }
+
+    /// Rejecting used to close the session and then leave `Drop` to close it a second time, because
+    /// the flag that suppressed `Drop` was only ever set by accepting.
+    #[test]
+    fn the_first_answer_owes_the_close_and_no_later_one_does() {
+        let mut request = fresh_request();
+        assert!(
+            request.mark_answered(),
+            "an unanswered request owes Steam exactly one close"
+        );
+        assert!(
+            !request.mark_answered(),
+            "a second answer must not close the session again"
+        );
+        assert!(!request.mark_answered(), "and neither must a third");
+    }
+
+    /// The behaviour that was correct before must survive the refactor: a request nobody answered is
+    /// still rejected when it goes out of scope, once.
+    #[test]
+    fn an_ignored_request_is_still_rejected_exactly_once() {
+        let mut request = fresh_request();
+        assert!(
+            request.mark_answered(),
+            "dropping an ignored request owes one close"
+        );
+        assert!(
+            !request.mark_answered(),
+            "and the drop path must not add a second one"
+        );
     }
 }

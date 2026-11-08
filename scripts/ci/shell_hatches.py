@@ -18,19 +18,41 @@ WORKFLOW_DIR = ".github/workflows"
 PATTERNS = ("|| true", "||:", "2>/dev/null", "1>/dev/null 2>&1 || true", "--no-verify")
 
 
+def count_hatches(text):
+    """Count pattern occurrences on lines that are code, not prose.
+
+    Measured 2026-10-18: of the 9 hatches registered then, **4 were comment text** -- this file's
+    own docstring quoting ``|| true`` to explain why it is bad, and ``release.yml`` and
+    ``quality-extra.yml`` each describing the switch they no longer use. So "the count may only go
+    down" was being enforced on vocabulary: rewording a comment moved the ledger, and a hatch
+    written out for the reader counted as many times as it was mentioned. Lines whose first
+    non-space character is ``#`` are skipped; a hatch still counts when it sits in a trailing
+    comment after code, because that line is code the runner executes.
+    """
+    total = 0
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        total += sum(line.count(pattern) for pattern in PATTERNS)
+    return total
+
+
 def main():
-    if not os.path.isdir(WORKFLOW_DIR):
-        print(f"::error {WORKFLOW_DIR} is missing -- cannot count anything", file=sys.stderr)
+    # The optional argument exists for the canary fixtures; CI runs it with none, on the real
+    # workflow directory.
+    workflow_dir = sys.argv[1] if len(sys.argv) > 1 else WORKFLOW_DIR
+    if not os.path.isdir(workflow_dir):
+        print(f"::error {workflow_dir} is missing -- cannot count anything", file=sys.stderr)
         return 2
     rows = []
     total = 0
-    for name in sorted(os.listdir(WORKFLOW_DIR)):
+    for name in sorted(os.listdir(workflow_dir)):
         if not name.endswith((".yml", ".yaml")):
             continue
-        path = os.path.join(WORKFLOW_DIR, name).replace(os.sep, "/")
+        path = os.path.join(workflow_dir, name).replace(os.sep, "/")
         with open(path, encoding="utf-8") as handle:
             text = handle.read()
-        count = sum(text.count(pattern) for pattern in PATTERNS)
+        count = count_hatches(text)
         rows.append((path, count))
         total += count
     for path, count in rows:

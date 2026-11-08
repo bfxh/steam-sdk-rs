@@ -1,32 +1,40 @@
-Friends 48
+# 2026-10-21 RemoteStorage 14 -> 16 (create_published_file_update_request, ugc_details) and +PublishedFileUpdate 7, the seven field setters of the update request.
+# 2026-10-21 (second slice) RemoteStorage 16 -> 19 (ugc_download, ugc_download_to_location, write_file_async) and PublishedFileUpdate 7 -> 8 (commit).
+# 2026-10-21 (third slice) RemoteStorage 19 -> 26: the seven call-result methods. PublishedItemVoteDetails and WorkshopFileAction add no rows of their own -- this ruler counts pub fn per type, and those two carry fields and variants only.
+# 2026-10-21 (fourth slice) RemoteStorage 26 -> 28: publish_workshop_file and publish_video.
+# 2026-10-21 (fifth slice) RemoteStorage 28 -> 33: the five enumerate methods. The page types (WorkshopPage, SubscribedPage, WorkshopActionPage, WorkshopSearchPage) carry fields only, so they add no rows -- this ruler counts pub fn per type.
+# 2026-10-21 (sixth slice) RemoteStorage 33 -> 34: get_published_file_details.
+# 2026-10-21 Video 3 -> 4: +get_opf_settings, one inherent method. The two new callback types add no methods, so they do not move this ledger.
+Friends 61
+Server 49
 Input 45
-Server 38
+Matchmaking 38
 UGC 37
+RemoteStorage 34
+UserStats 34
 Browser 33
 QueryHandle 33
+User 33
 Apps 29
 Client 29
-Matchmaking 28
 Utils 28
-UserStats 24
 UpdateHandle 22
 Inventory 21
 QueryResults 21
+NetworkingUtils 18
 Timeline 18
-User 18
-NetConnection 16
-NetworkingUtils 16
+NetConnection 17
+NetworkingSockets 16
 Friend 14
 NetworkingMessage 14
 NetConnectionRealTimeInfo 13
 NetworkingIdentity 12
-NetworkingSockets 12
 Parties 12
 HttpRequest 11
 GameServerStats 10
-RemoteStorage 10
 SteamFile 10
 SteamIpAddr 10
+MatchmakingServers 9
 Music 9
 Networking 9
 SafeUgcUpdate 9
@@ -34,30 +42,31 @@ Screenshots 9
 AchievementHelper 8
 HttpResponse 8
 InventoryResult 8
+PublishedFileUpdate 8
 AppNetConnectionEnd 7
+NetworkingMessages 7
+ServerListRequest 7
 SteamId 7
 HtmlSurface 6
 InventoryUpdateHandle 6
 LobbyListFilter 6
 ParentalSettings 6
-ServerListRequest 6
 Ternary 6
 NetConnectionInfo 5
-NetworkingMessages 5
 RelayNetworkStatus 5
 RemotePlaySession 5
 ConnectedEvent 4
 ConnectionRequest 4
+FakeUDPPort 4
 ListenSocket 4
-MatchmakingServers 4
 NetConnectionRealTimeLaneStatus 4
 NetworkingConfigEntry 4
+Video 4
 DisconnectedEvent 3
 GameId 3
 Http 3
 ItemDetail 3
 SessionRequest 3
-Video 3
 AccountId 2
 AppIDs 2
 BeaconId 2
@@ -71,11 +80,15 @@ LobbyKey 2
 RemotePlay 2
 RemotePlaySessionId 2
 TimelineEventHandle 2
+FakeIpType 1
 FileDetails 1
 Leaderboard 1
 NetPollGroup 1
 NetworkingConfigValue 1
 PingEstimate 1
+ServerQuery 1
 SessionRequestBuilder 1
 SteamAPIInitError 1
+SteamFileWriter 1
+UgcDownloadProgress 1
 UpdateWatchHandle 1

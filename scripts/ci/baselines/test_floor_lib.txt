@@ -1,1 +1,1 @@
-138  # lib tests reached with --all-features, measured 2026-10-15 with the fallible query builder (1 test added)
+292  # lib tests reached with --all-features, measured 2026-10-20 with the friend-group read face (4 tests added)

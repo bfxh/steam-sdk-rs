@@ -39,7 +39,25 @@ def strip_comments(text):
     return "\n".join(line.split("//")[0] for line in text.splitlines())
 
 
+# A file that is itself test material: this crate keeps its bigger suites out of line
+# (`src/lib_tests.rs`, `src/ugc/ugc_tests.rs`), where no `#[cfg(test)]` sits inside the file -- the
+# attribute is on the `mod` declaration -- so `strip_test_modules` cannot see them. Naming is the
+# rule, and `main` refuses rather than skipping when such a file calls a Steam interface.
+TEST_MATERIAL = re.compile(r"(^|_)(tests?|probe)\.rs$")
+
+
+def is_test_material(path):
+    return bool(TEST_MATERIAL.search(path.name))
+
+
 def strip_test_modules(text):
+    """Blank file-scope `#[cfg(test)]` module bodies, **keeping one output line per input line**.
+
+    Blanking instead of dropping is load-bearing for every ruler that reports `path:line`: a line
+    number counted on text with lines removed points at the wrong source line, and it is wrong only
+    in the files that have a test module -- exactly where a reviewer stops trusting the report. The
+    set of names this yields is unchanged either way, so coverage counts do not move.
+    """
     lines = text.splitlines()
     kept = []
     skip_until_close = False
@@ -48,16 +66,65 @@ def strip_test_modules(text):
         if skip_until_close:
             if line == "}":
                 skip_until_close = False
+            kept.append("")
             continue
         if pending:
             pending = False
             if re.match(r"^mod \w+\s*\{$", line):
                 skip_until_close = True
+                kept.append("")
                 continue
         if line.strip() == "#[cfg(test)]":
             pending = True
         kept.append(line)
     return "\n".join(kept)
+
+
+FN_HEAD = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:const\s+)?(?:unsafe\s+)?fn\s+\w+")
+
+
+def strip_test_fns(text):
+    """Blank the bodies of `#[test]` functions written straight in a file, keeping line numbers.
+
+    The scoping this crate already has catches two forms: `is_test_material` drops whole test files
+    (`src/lib_tests.rs`), and `strip_test_modules` drops `#[cfg(test)] mod name { .. }`. A third form is
+    in use here and neither sees it -- a bare `#[test]` fn at file scope, gated by nothing, because rustc
+    only builds it for the test harness. Measured on this tree: **38 of the 79** panic-capable
+    expressions found with the first two rules alone sat in that form -- `src/remote_storage/mod.rs` by
+    itself accounts for 12 (`test_one_shot_cloud_io`, `test_cloud`) -- so a ruler built on those two
+    rules reports a production figure 1.9x its real size and sends the next unit after the wrong number.
+
+    Brace counting rather than indentation, because this is a lexical ruler like the rest here: an
+    attribute line is followed by its `fn`, and the body ends where its own braces balance.
+    """
+    lines = text.splitlines()
+    out = list(lines)
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped.startswith("#[test]") or stripped.startswith("#[ignore"):
+            head = index
+            while head < len(lines) and not FN_HEAD.match(lines[head]):
+                if lines[head].strip() in ("}", "}]"):
+                    break
+                head += 1
+            if head < len(lines) and FN_HEAD.match(lines[head]):
+                depth = 0
+                started = False
+                cursor = head
+                while cursor < len(lines):
+                    depth += lines[cursor].count("{") - lines[cursor].count("}")
+                    started = started or "{" in lines[cursor]
+                    out[cursor] = ""
+                    cursor += 1
+                    if started and depth <= 0:
+                        break
+                for blank in range(index, cursor):
+                    out[blank] = ""
+                index = cursor
+                continue
+        index += 1
+    return "\n".join(out)
 
 
 def code_only(text):
@@ -102,10 +169,9 @@ def main(bindings_path=BINDINGS, source_root=SOURCE_ROOT):
     called = {interface: set() for interface in declared}
     for path in sorted(source_root.rglob("*.rs")):
         raw = path.read_text(encoding="utf-8", errors="replace")
-        # A file that is itself test material (`ugc_tests.rs`, `lib_tests.rs`, `tests.rs`) is
-        # not a wrapper, so it is skipped whole. `test_only_calls` above cannot see those: they
-        # carry no `#[cfg(test)]` inside, because the attribute sits on the `mod` declaration.
-        if re.search(r"(^|_)(tests?|probe)\.rs$", path.name):
+        # `test_only_calls` above cannot see those files: they carry no `#[cfg(test)]` inside,
+        # because the attribute sits on the `mod` declaration in the parent module.
+        if is_test_material(path):
             if CALLED.search(strip_comments(raw)):
                 print(
                     f"::error:: {path} is test material but calls a Steam interface -- decide "

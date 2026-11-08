@@ -382,3 +382,99 @@ impl From<ESteamNetConnectionEnd> for NetConnectionEnd {
         (end as i32).into()
     }
 }
+
+#[cfg(test)]
+mod end_code_tests {
+    //! The table that turns Steam's plain `int` end code into a variant. It matters that the table is
+    //! `From` and not `TryFrom`: `m_eEndReason` arrives as a number Steam chose, so every input has to
+    //! produce an answer, and the last arm has to be a real variant rather than an abort. Nothing in
+    //! the crate judged that table before, and a reader of
+    //! `NetConnectionInfo::end_reason` could easily believe the conversion can fail.
+    use super::{AppNetConnectionEnd, ESteamNetConnectionEnd, NetConnectionEnd};
+
+    #[test]
+    fn zero_is_the_sentinel_steam_names_it() {
+        assert_eq!(
+            NetConnectionEnd::from(ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_Invalid as i32),
+            NetConnectionEnd::Invalid
+        );
+    }
+
+    /// 1xxx and 2xxx are the application families, and the number is the payload -- so a code in either
+    /// range must come back as the same number, not as a neighbouring variant at the boundary.
+    #[test]
+    fn both_application_ranges_keep_their_own_number() {
+        let app_min = ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_App_Min as i32;
+        let app_max = ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_App_Max as i32;
+        let exc_min = ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_AppException_Min as i32;
+        let exc_max = ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_AppException_Max as i32;
+        for code in [app_min, app_max, exc_min, exc_max] {
+            let expected = if code <= app_max {
+                AppNetConnectionEnd::normal(code)
+            } else {
+                AppNetConnectionEnd::exception(code)
+            };
+            assert_eq!(
+                NetConnectionEnd::from(code),
+                NetConnectionEnd::App(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn a_named_system_code_becomes_the_variant_it_names() {
+        assert_eq!(
+            NetConnectionEnd::from(
+                ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_Remote_Timeout as i32
+            ),
+            NetConnectionEnd::RemoteTimeout
+        );
+    }
+
+    /// A code nobody has defined is not a crisis: it is kept as `Other`, which is why the conversion can
+    /// be total and why no caller of `end_reason` should be handed a panic for it.
+    #[test]
+    fn an_undefined_code_survives_as_other() {
+        assert_eq!(NetConnectionEnd::from(4242), NetConnectionEnd::Other(4242));
+        assert_eq!(NetConnectionEnd::from(-7), NetConnectionEnd::Other(-7));
+        assert_eq!(
+            NetConnectionEnd::from(i32::MAX),
+            NetConnectionEnd::Other(i32::MAX)
+        );
+    }
+
+    /// Round trip over the whole classification: sentinel, both app boundaries, a system code, and a
+    /// code from each side of every family. `from` then `into` must return the number Steam sent.
+    #[test]
+    fn every_family_round_trips_through_its_number() {
+        let codes = [
+            0,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_App_Min as i32,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_App_Max as i32,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_AppException_Min as i32,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_AppException_Max as i32,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_Remote_Timeout as i32,
+            ESteamNetConnectionEnd::k_ESteamNetConnectionEnd_Misc_Generic as i32,
+            999,
+            3000,
+            4242,
+            -7,
+        ];
+        for code in codes {
+            assert_eq!(
+                i32::from(NetConnectionEnd::from(code)),
+                code,
+                "code {}",
+                code
+            );
+        }
+    }
+
+    /// Anti-vacuity for the total-conversion claim above: `i32::MAX` is not a code in any family, and if
+    /// the fallback arm were ever dropped the compiler -- not a test -- would be what refuses it.
+    #[test]
+    fn the_conversion_is_a_from_not_a_try_from() {
+        let total: NetConnectionEnd = 4242.into();
+        assert_eq!(total, NetConnectionEnd::Other(4242));
+    }
+}

@@ -38,12 +38,35 @@ fn cstr(value: &str) -> Result<CString, SteamError> {
     CString::new(value).map_err(|_| SteamError::InvalidParameter)
 }
 
+/// The header value Steam wrote into the buffer, cut where the value actually ends.
+///
+/// `GetHTTPResponseHeaderSize` says only that it "returns the size of the header value if present"
+/// (`isteamhttp.h:75`) and says nothing about a terminator, and `GetHTTPResponseHeaderValue` (`:82`)
+/// is the same. So the buffer may hold exactly the value, or the value plus a nul, and nothing on this
+/// side observes which. This is the one rule true under both readings: stop at the first nul, keep
+/// every byte when there is none. A header value cannot legally contain a nul, so cutting at one loses
+/// nothing that was meant to be read.
+///
+/// The code this replaces dropped the last byte unconditionally, which silently truncates the value in
+/// the reading where the size is exact -- and the asymmetry is visible in this same file: `body()`
+/// asks for the reported size and returns all of it, with no byte removed.
+fn header_value_bytes(buffer: &[u8]) -> &[u8] {
+    let end = buffer
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(buffer.len());
+    &buffer[..end]
+}
+
 /// A cookie container shared by several requests.
 ///
 /// Dropping it releases the underlying Steam handle.
 pub struct CookieContainer {
     http: *mut sys::ISteamHTTP,
     handle: sys::HTTPCookieContainerHandle,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    _inner: Arc<Inner>,
 }
 
 impl CookieContainer {
@@ -92,8 +115,19 @@ pub struct HttpResponse {
     http: *mut sys::ISteamHTTP,
     handle: sys::HTTPRequestHandle,
     status: u16,
+    // Declared last so it is released last: this wrapper's own `Drop` calls Steam, and the
+    // client's `SteamAPI_Shutdown` runs when the last `Arc<Inner>` goes (`src/lib.rs`).
+    _inner: Arc<Inner>,
 }
 
+// SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
+// this line, which makes `cargo check --all-targets` fail with
+// `*mut ISteamHTTP` cannot be sent between threads safely.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for HttpResponse {}
 unsafe impl Sync for HttpResponse {}
 
@@ -189,8 +223,7 @@ impl HttpResponse {
             ) {
                 return Err(SteamError::IOFailure);
             }
-            buf.truncate(buf.len().saturating_sub(1));
-            let value = String::from_utf8_lossy(&buf).into_owned();
+            let value = String::from_utf8_lossy(header_value_bytes(&buf)).into_owned();
             if value.is_empty() {
                 Ok(None)
             } else {
@@ -398,10 +431,11 @@ impl HttpRequest {
         // Ownership of the Steam handle transfers to HttpResponse, which
         // releases it; forgetting here avoids a double release.
         std::mem::forget(self);
-        let response = HttpResponse {
+        let mut response = HttpResponse {
             http,
             handle,
             status: 0,
+            _inner: inner.clone(),
         };
         unsafe {
             let mut call: sys::SteamAPICall_t = 0;
@@ -418,17 +452,16 @@ impl HttpRequest {
                 &inner,
                 call,
                 move |v, io_error| {
+                    // The response is the answer, not a placeholder for it: `self` was forgotten
+                    // above so the handle ownership moved here, and filling in the status keeps the
+                    // closure's capture a whole `HttpResponse` -- which is `Send` by assertion, while
+                    // capturing `http`/`handle` separately would not be.
                     let result = if io_error || !v.m_bRequestSuccessful {
-                        // Release the request even on failure, since `self` was
-                        // forgotten and no caller-visible handle survives. Dropping
-                        // the Send-asserted response keeps this closure `Send`.
-                        std::mem::drop(response);
+                        // Release the request even on failure, since no caller-visible handle survives.
                         Err(SteamError::IOFailure)
                     } else {
-                        Ok(HttpResponse {
-                            status: v.m_eStatusCode as u16,
-                            ..response
-                        })
+                        response.status = v.m_eStatusCode as u16;
+                        Ok(response)
                     };
                     callback(result);
                 },
@@ -461,6 +494,7 @@ impl Http {
         Ok(CookieContainer {
             http: self.http,
             handle,
+            _inner: self._inner.clone(),
         })
     }
 
@@ -519,6 +553,30 @@ mod tests {
             cstr("https://example.com/\0exploit"),
             Err(SteamError::InvalidParameter)
         ));
+    }
+
+    #[test]
+    fn header_value_keeps_every_byte_when_steam_wrote_no_terminator() {
+        // The reading Steam's own words allow: the reported size is the size of the *value*.
+        // Dropping the last byte here deleted a real character of every header.
+        assert_eq!(
+            header_value_bytes(b"application/json"),
+            &b"application/json"[..]
+        );
+        assert_eq!(header_value_bytes(b"a"), b"a");
+    }
+
+    #[test]
+    fn header_value_stops_at_a_terminator_when_there_is_one() {
+        assert_eq!(header_value_bytes(b"gzip\0"), b"gzip");
+        assert_eq!(header_value_bytes(&[b'x', 0, b'y', 0]), b"x");
+    }
+
+    #[test]
+    fn an_all_nul_buffer_reads_as_no_value() {
+        // A size Steam reported but never filled must not become four junk characters.
+        assert_eq!(header_value_bytes(&[0, 0, 0, 0]), b"");
+        assert_eq!(header_value_bytes(&[]), b"");
     }
 
     #[test]

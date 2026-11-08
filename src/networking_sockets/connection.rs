@@ -5,6 +5,7 @@
 //! method list grows independently of the listener and poll-group plumbing next door.
 
 use super::*;
+use crate::utils::c_string_prefix;
 
 pub struct NetConnection {
     pub(crate) handle: sys::HSteamNetConnection,
@@ -17,6 +18,14 @@ pub struct NetConnection {
     is_handled: bool,
 }
 
+// SAFETY: a use site in this crate needs `Send` for this type -- measured by deleting
+// this line, which makes `cargo check --all-targets` fail with
+// `*mut ISteamNetworkingSockets and *mut SteamNetworkingMessage_t` cannot be sent between threads safely.
+// The type holds a raw Steam interface pointer, plain-copy handles, and the owning `Arc<Inner>`;
+// it carries no non-atomic reference count, which is the one hazard a `Send` claim here cannot
+// see -- `scripts/ci/callback_threads.py` counts `Rc` tokens beside every promise and ships at
+// zero for exactly that reason. Moving the value therefore moves sole ownership of the pointer;
+// nothing reads the same state through two threads because of the move itself.
 unsafe impl Send for NetConnection {}
 unsafe impl Sync for NetConnection {}
 
@@ -45,10 +54,7 @@ impl NetConnection {
         inner: Arc<Inner>,
     ) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
-        inner
-            .networking_sockets_data
-            .lock()
-            .unwrap()
+        crate::utils::mutex_guard(&inner.networking_sockets_data)
             .independent_connections
             .insert(handle, sender);
         let callback =
@@ -101,6 +107,41 @@ impl NetConnection {
         } else {
             Err(InvalidHandle)
         }
+    }
+
+    /// The FakeIP address Steam knows this connection's peer by.
+    ///
+    /// Only a connection made through the FakeIP system has an answer, and which of the two kinds
+    /// Steam reports is its own choice: if the peer "had a global FakeIP at the time the connection
+    /// was established" that is the one returned, and otherwise Steam allocates one "unique locally"
+    /// from its own address space (`isteamnetworkingsockets.h:880-885`). The second kind is why two
+    /// connections to the same host can differ: "since the namespace is limited, this cannot be
+    /// guaranteed" (`:890`), Steam only tries to be consistent (`:887-889`).
+    ///
+    /// The answer is a [`std::net::SocketAddr`] because that is the shape every address in this
+    /// crate speaks; Steam's out parameter is the general `SteamNetworkingIPAddr`, which carries
+    /// IPv4 in its mapped form, and the decode is `crate::networking_types`' own.
+    ///
+    /// Both refusals come back as [`SteamError`] instead of as an empty address, and this is the one
+    /// handle-taking query here that does not answer [`InvalidHandle`]: Steam reports a bad handle as
+    /// a status -- "k_EResultInvalidParam: invalid connection handle" -- while the ordinary case of a
+    /// connection that was never made through the FakeIP system is its own code,
+    /// "k_EResultIPNotFound: This connection wasn't made using FakeIP system" (`:892-894`). A caller
+    /// that treats the two alike will read a closed connection as merely a non-FakeIP one.
+    pub fn remote_fake_ip(&self) -> SteamResult<SocketAddr> {
+        // Zero-filled before the call so the struct is initialised bytes whatever Steam does with
+        // it: on the error paths below nothing is read out of it, and on the success path every byte
+        // this wrapper reads is a byte Steam wrote.
+        let mut raw = std::mem::MaybeUninit::<sys::SteamNetworkingIPAddr>::zeroed();
+        let code = unsafe {
+            sys::SteamAPI_ISteamNetworkingSockets_GetRemoteFakeIPForConnection(
+                self.sockets,
+                self.handle,
+                raw.as_mut_ptr(),
+            )
+        };
+        crate::to_steam_result(code)?;
+        Ok(SteamIpAddr::from(unsafe { raw.assume_init() }).to_socket_addr())
     }
 
     /// Clear the poll group for a connection.
@@ -197,11 +238,10 @@ impl NetConnection {
         debug_string: Option<&str>,
         enable_linger: bool,
     ) -> bool {
-        let debug_string = debug_string.map(|x| CString::new(x).unwrap());
-        let debug_string_ptr = match debug_string {
-            None => std::ptr::null(),
-            Some(s) => s.as_ptr(),
-        };
+        let held = debug_string_prefix(debug_string);
+        let debug_string_ptr = held
+            .as_ref()
+            .map_or(std::ptr::null(), |string| string.as_ptr());
         self.handle_connection();
         unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_CloseConnection(
@@ -251,7 +291,7 @@ impl NetConnection {
 
     /// Set a name for the connection, used mostly for debugging
     pub fn set_connection_name(&self, name: &str) {
-        let name = CString::new(name).unwrap();
+        let name = c_string_prefix(name);
         unsafe {
             sys::SteamAPI_ISteamNetworkingSockets_SetConnectionName(
                 self.sockets,
@@ -313,9 +353,26 @@ impl NetConnection {
         }
     }
 
-    /// Fetch connection name.  Returns false if handle is invalid
-    pub fn connection_name(&self) -> Result<(), InvalidHandle> {
-        unimplemented!()
+    /// The connection's debug name, as Steam last heard [`Self::set_connection_name`].
+    ///
+    /// This used to be `unimplemented!()`, so every call panicked -- the name a wrapper can set, no
+    /// wrapper could read. Steam's side is "Set a name for the connection, used mostly for debugging"
+    /// and "Fetch connection name.  Returns false if handle is invalid"
+    /// (`isteamnetworkingsockets.h:225-229`); the fetch takes the buffer *and its size* from the
+    /// caller, and the headers give no maximum for the name itself -- `k_cchSteamNetworkingMaxConnectionAppName`
+    /// is the app name, not this one. So `CONNECTION_NAME_BYTES` is this crate's ceiling, not Steam's:
+    /// a name set longer than 256 bytes comes back cut at 256, and nothing in the answer says so.
+    pub fn connection_name(&self) -> Result<String, InvalidHandle> {
+        let mut buffer = [0 as std::os::raw::c_char; CONNECTION_NAME_BYTES];
+        let ok = unsafe {
+            sys::SteamAPI_ISteamNetworkingSockets_GetConnectionName(
+                self.sockets,
+                self.handle,
+                buffer.as_mut_ptr(),
+                CONNECTION_NAME_BYTES as ::std::os::raw::c_int,
+            )
+        };
+        name_answer(ok, &buffer)
     }
 
     /// Flush any messages waiting on the Nagle timer and send them
@@ -342,6 +399,12 @@ impl NetConnection {
     }
 
     /// Internal function used by `receive_messages` and `receive_messages_noalloc`.
+    ///
+    /// Steam's documented answer for an invalid handle is -1 ("If the connection handle is invalid,
+    /// -1 is returned." -- `isteamnetworkingsockets.h:321`), which is why this one reports
+    /// `InvalidHandle` instead of reading zero messages; the upper bound comes from
+    /// `messages_received`, the same clamp the poll group and the Fake UDP port use, so a count above
+    /// the slots offered cannot widen the buffer past what the caller reserved.
     fn receive_messages_internal(&mut self, batch_size: usize) -> Result<usize, InvalidHandle> {
         debug_assert!(self.message_buffer.capacity() >= batch_size);
         self.message_buffer.clear();
@@ -356,10 +419,11 @@ impl NetConnection {
         if message_count < 0 {
             return Err(InvalidHandle);
         }
+        let count = messages_received(message_count, batch_size);
         unsafe {
-            self.message_buffer.set_len(message_count as usize);
+            self.message_buffer.set_len(count);
         }
-        Ok(message_count as usize)
+        Ok(count)
     }
 
     /// Fetch the next available message(s) from the connection, if any.
@@ -523,14 +587,134 @@ impl Drop for NetConnection {
             };
 
             if self.socket.is_none() {
-                self.inner
-                    .networking_sockets_data
-                    .lock()
-                    .unwrap()
+                crate::utils::mutex_guard(&self.inner.networking_sockets_data)
                     .independent_connections
                     .remove(&self.handle)
                     .expect("internal connection was removed before being dropped");
             }
         }
+    }
+}
+
+/// The debug string handed to Steam: the bytes up to the first nul, which is where a C string ends.
+///
+/// `CString::new(value).unwrap()` used to sit at the top of `close()`, and `value` is a
+/// caller-supplied `Option<&str>`, so pasting a log line with a nul inside crashed the crate from safe
+/// code. The rule is `crate::utils::c_string_prefix`, shared with the other fire-and-forget setters;
+/// Steam's parameter is "const char *pszDebug" (`isteamnetworkingsockets.h:191`), so the nul already
+/// ended the string as far as Steam was concerned and everything after it was never going to be read.
+///
+/// `None` for `None`, and an empty string keeps its own terminator: the caller asked for an empty
+/// debug string, not for no debug string.
+fn debug_string_prefix(value: Option<&str>) -> Option<CString> {
+    Some(c_string_prefix(value?))
+}
+
+/// How much room this crate hands `GetConnectionName` for the connection's debug name.
+///
+/// Steam sets the name with "void SetConnectionName( HSteamNetConnection hPeer, const char *pszName )"
+/// (`isteamnetworkingsockets.h:226`) and reads it back with "char *pszName, int nMaxLen"
+/// (`:229`) -- the buffer and its size come from the caller, and the vendored headers state no limit
+/// for the name itself. The only comparable ceilings are for other strings:
+/// "k_cchSteamNetworkingMaxConnectionAppName = 32" (`steamnetworkingtypes.h:663`) and
+/// "k_cbMaxGameServerName = 64" (`matchmakingtypes.h:21`). So this number is ours, set well above
+/// both, and a name longer than it comes back truncated with no signal that anything was cut.
+const CONNECTION_NAME_BYTES: usize = 256;
+
+/// Steam's answer to a name fetch, turned into a Rust one.
+///
+/// The header gives one bit -- "Fetch connection name.  Returns false if handle is invalid"
+/// (`isteamnetworkingsockets.h:228`). Everything else is read out of the buffer by `fixed_string`,
+/// which stops at the first nul and lossy-decodes -- the same rule every other fixed-size Steam text
+/// field uses here. A buffer with no nul anywhere is the truncated case: Steam filled all of it, and
+/// what it held is all this side gets.
+fn name_answer(ok: bool, buffer: &[std::os::raw::c_char]) -> Result<String, InvalidHandle> {
+    if !ok {
+        return Err(InvalidHandle);
+    }
+    Ok(crate::utils::fixed_string(buffer))
+}
+
+#[cfg(test)]
+mod connection_tests {
+    //! Pure half of `close()`: which bytes Steam is handed. The FFI call itself needs a live
+    //! connection, so only this decision can be judged here; the wiring is stated, not tested.
+    use super::debug_string_prefix;
+    use super::name_answer;
+    use super::InvalidHandle;
+    use std::ffi::CString;
+    use std::os::raw::c_char;
+
+    fn name_buffer(text: &str, bytes: usize) -> Vec<c_char> {
+        let mut buffer = vec![0 as c_char; bytes];
+        for (slot, byte) in buffer.iter_mut().zip(text.as_bytes()) {
+            *slot = *byte as c_char;
+        }
+        buffer
+    }
+
+    #[test]
+    fn a_refused_fetch_is_an_invalid_handle() {
+        // `Err(InvalidHandle)` in pattern position binds a *variable* (rustc warns it is unused), so the
+        // braces are load-bearing: without them this asserted nothing about which error came back.
+        assert!(matches!(
+            name_answer(false, &name_buffer("lobby-7", 16)),
+            Err(InvalidHandle { .. })
+        ));
+    }
+
+    #[test]
+    fn the_name_ends_where_steam_put_a_terminator() {
+        assert_eq!(
+            name_answer(true, &name_buffer("lobby-7\0rest", 16)).unwrap(),
+            "lobby-7"
+        );
+        // A buffer Steam left zeroed is a connection with no name set, not a name made of nuls.
+        assert_eq!(name_answer(true, &vec![0 as c_char; 8]).unwrap(), "");
+    }
+
+    /// The truncated case, and the reason the ceiling is documented: Steam filled the whole buffer and
+    /// the name went on past it. Nothing in the answer says so, so the caller gets the prefix.
+    #[test]
+    fn a_name_that_filled_the_buffer_comes_back_as_what_fit() {
+        assert_eq!(
+            name_answer(true, &name_buffer("abcdefghijklmnop", 16)).unwrap(),
+            "abcdefghijklmnop"
+        );
+    }
+
+    #[test]
+    fn no_debug_string_stays_no_debug_string() {
+        assert!(debug_string_prefix(None).is_none());
+    }
+
+    #[test]
+    fn a_plain_string_is_handed_over_unchanged() {
+        assert_eq!(
+            debug_string_prefix(Some("peer said bye")).as_deref(),
+            Some(CString::new("peer said bye").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("")).as_deref(),
+            Some(CString::new("").unwrap().as_c_str())
+        );
+    }
+
+    /// The panic this replaces: `CString::new("a\0b").unwrap()` aborts the caller's frame on a value
+    /// the caller chose. Steam reads a `const char *`, so "a" is the whole string to it anyway.
+    #[test]
+    fn an_interior_nul_truncates_instead_of_panicking() {
+        assert_eq!(
+            debug_string_prefix(Some("a\0b")).as_deref(),
+            Some(CString::new("a").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("\0first")).as_deref(),
+            Some(CString::new("").unwrap().as_c_str())
+        );
+        assert_eq!(
+            debug_string_prefix(Some("clean\0")).as_deref(),
+            Some(CString::new("clean").unwrap().as_c_str())
+        );
     }
 }

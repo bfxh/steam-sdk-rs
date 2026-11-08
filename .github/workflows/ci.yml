@@ -70,7 +70,36 @@ jobs:
       - name: clippy (no -D warnings)
         run: cargo clippy --locked --all-targets $EXAMPLES $FEATURES --message-format short
 
-      - name: check (all targets)
+      # rustc 的 warning 在这道 step 里是判定，不是提示：实测本仓手写代码 `--all-targets` 下 rustc
+      # 只有 2 条，而它们恰好是一条**空断言**——测试里 `matches!(x, Err(InvalidHandle))` 因为该类型
+      # 没 import，被当成"绑定一个变量"，于是那条测试对错误类型什么都没断言，只有 rustc 知道。
+      #
+      # 为什么写成这一步的 `RUSTFLAGS` 而不是 `src/lib.rs` 里的 `#![deny(warnings)]`（两个版本都试过，
+      # 都是实测）：
+      #   1. 保证必须在 `cargo check` 这一路上，因为 clippy 那一路不能 -D：`deny(warnings)` 写在
+      #      crate 里时 clippy 也会吃到它（clippy 的 lint 就是 rustc 的 lint），上面那条 clippy step
+      #      会因 style 组的 99 条直接判红——本仓刻意把 clippy 分成两档：correctness/suspicious 由
+      #      `scripts/ci/clippy_gate.py` 零容忍，其余只提示（见上面 step 的注释）。放在 `RUSTFLAGS`
+      #      上就只约束 rustc 自己的 lint，不改变 clippy 那一档。
+      #   2. `RUSTFLAGS` 会传给同一次调用里构建的依赖，而 `steamworks-sys` 是工作区成员（cargo 对
+      #      成员不施加 `--cap-lints allow`），所以生成物里的 `dead_code` 也算到这里。第一版因此判红：
+      #      三个 1.80.0 作业全红、stable 全绿，红在 `struct ISteamContentServer is never constructed`
+      #      （本仓另外还报过 `obstack`；本机 windows-gnu 1.80.0 只复现前者）。改成 `-p steamworks`
+      #      没用——包筛选只决定给谁建，不决定 flags 传给谁。正确的落点是 `steamworks-sys/src/lib.rs`
+      #      里一条写明理由的 `#![allow(dead_code)]`：bindgen 为每个 C vtable 出一个 struct，而这层
+      #      只把 `*mut ISteamX` 交回 Steam，从不构造它们。A/B 是同一命令、同一工具链、只改那一行：
+      #      没有 allow 时 rc=101，有 allow 时 rc=0。
+      # 覆盖面：这一步编的是根包 `steamworks` 与它的同调用依赖；`$EXAMPLES` 一直是未定义变量
+      # （展开为空）。examples 那四个成员不在这里，它们由下面独立的 `examples (workspace members)`
+      # 作业用 `--workspace --features steamworks/futures` 编译，不带这条 -D。刻意没有把 -D 加到
+      # 那一行：实测它在 stable 下确实 0 warning，但那条命令会把 fontdue 等第三方依赖一起拖进
+      # `RUSTFLAGS` 的射程（同一作业在 1.80.0 下连 fontdue 都编不过：`integer_sign_cast` 是后来
+      # 才稳定的）。花"每个依赖以后都不许有新 warning"换四个示例包，不值。
+      # `scripts/ci/workflow_inputs.py` 盯住形状：-D 只能出现在 check 那一步，clippy 那一步不许出现，
+      # 整条 workflow 一条都不许少。
+      - name: check (all targets, rustc warnings denied)
+        env:
+          RUSTFLAGS: -D warnings
         run: cargo check --locked --all-targets $EXAMPLES $FEATURES
 
       - name: doc
@@ -127,6 +156,60 @@ jobs:
           python3 scripts/ci/no_panic_on_unknown_enum.py src > "$RUNNER_TEMP/panic_sites.txt"
           python3 scripts/ci/compare_baseline.py scripts/ci/baselines/no_panic_sites.txt "$RUNNER_TEMP/panic_sites.txt"
 
+      # 公开包装持着裸 Steam 接口指针、却不持 `Arc<Inner>` ⇒ `Client` 一掉就 `SteamAPI_Shutdown`，
+      # 而这些包装自己的方法（含四个 `Drop` 里的 FFI）还拿着那个指针。实测 169 个 `pub struct` 里
+      # 44 个持裸指针，其中 7 个没有 owner（Browser/CookieContainer/HttpResponse/InventoryResult/
+      # InventoryUpdateHandle/ServerListRequest/FileWriteBatch）；这 7 个现在都补了 owner，台账目标 0。
+      # 空台账靠尺子自带的 `#scanned <N>` 自证读过了源码，否则"没扫到"和"扫到但都合规"同形。
+      # `CString::new(x).unwrap()` 在 x 含内嵌 NUL 时失败 —— x 是调用方给的话，这就是安全代码能从仓外
+      # 触发的 panic。2026-10-18 建门时实测 66 处可失败转换、10 处是无空字节转义的字面量（不可能失败故不算债），
+      # 余 **56 处 / 23 个文件**；同日五批付款还清（56→44→31→22→13→0），所以这条门现在与 panic 尺同性质：
+      # **空台账就是达标**，而"达标"与"没扫"的区分靠尺子自己打的 `#scanned <N>` 标记（没有它比较器退出 2）。
+      # 字面量、`.expect` 同罪、`unwrap_or_default` 不算 panic 这些分类理由都写在尺子 docstring。
+      - name: fallible CString conversions stay counted as debt
+        run: |
+          python3 scripts/ci/cstring_unwraps.py src > "$RUNNER_TEMP/cstring_unwraps.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/cstring_unwraps.txt "$RUNNER_TEMP/cstring_unwraps.txt"
+
+      # 锁中毒在本仓是一个决定，不是一行写法：所有锁都在回调派发里取，用户回调 panic 就会毒掉它，
+      # 而"下一次取锁的人"是另一个调用方、另一段时间。2026-10-19 实测的旧形状：**23 处取锁，三种政策并存**——
+      # **18 处直接让下一个取锁方 panic**（`utils/warning.rs` 那两处还在 `extern "C"` 边界上，panic 越过 C
+      # 不是"红"而是 UB），**4 处（`networking_sockets/fake_udp.rs`）已经各自写了
+      # `unwrap_or_else(PoisonError::into_inner)`**，**1 处（`Callbacks::remove_handler`，在 Drop 里）用
+      # `match` 当场决定"报告并跳过"**。现在决定只在 `src/utils/locks.rs`（四个 helper），23 个调用点全走它。
+      # 尺子判五件事，前五件都套不上的一处取锁请求 ⇒ **拒答**（退出 2，不是绿）。第 5 条是自我修正：
+      # 上线的那版只认 abort，那个 `match` 站点当时就在树里，门一路打印 0——它是我去核对自己写在
+      # CHANGELOG 里的数字时才露出来的，不是门报的。政策文件本身也不许 abort；缺任一类 guard 或整个
+      # 文件不见了同样退出 2（否则"没人违规"与"规则被删了"同形）。
+      - name: lock poisoning recovers in exactly one place
+        run: |
+          python3 scripts/ci/lock_poisons.py src > "$RUNNER_TEMP/lock_poisons.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/lock_poisons.txt "$RUNNER_TEMP/lock_poisons.txt"
+
+      # `Result<T, ()>` 说得出「会失败」说不出「为什么失败」：调用方没法分支、没法记日志，只能自己编。
+      # 2026-10-20 还清（26 个公开签名 + 30 处 `Err(())`，六个文件；`join_lobby` 另得 JoinLobbyError，
+      # 因为那里的 `()` 把「答案根本没来」和「Steam 点名了原因」压成一个值）。目标 0，不是上限——
+      # 允许 26 的门等于放行下一个。尺子自带正反例（canaries.py），文档里的旧形状不算违规点。
+      - name: no error-erasing Result remaining
+        run: |
+          python3 scripts/ci/erased_errors.py src > "$RUNNER_TEMP/erased_errors.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/erased_errors.txt "$RUNNER_TEMP/erased_errors.txt"
+
+      # `unsafe impl Send` 是一句承诺：类型里没有任何跨线程不Sound的东西。2026-10-20 之前这句承诺
+      # 没人问过编译器——`ServerListRequest` 声称 Send，而它指向的回调对象用 `Rc` 数引用，
+      # 计数在 Steam 回调泵线程上 clone、在持有请求的线程上 drop（同一值两处非原子写）。
+      # 现在改成 `Arc<dyn Fn + Send + Sync>`，并在同文件放 `assert_send::<T>` 让编译器裁决。
+      # 第二列目标 0；第一列是**只许变短的债账**（建门时实测 11 文件 13 处承诺无判定）。
+      - name: every Send promise states its evidence
+        run: |
+          python3 scripts/ci/callback_threads.py src > "$RUNNER_TEMP/callback_threads.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/callback_threads.txt "$RUNNER_TEMP/callback_threads.txt"
+
+      - name: interface handles keep the client alive
+        run: |
+          python3 scripts/ci/handle_owners.py src > "$RUNNER_TEMP/handle_owners.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/handle_owners.txt "$RUNNER_TEMP/handle_owners.txt"
+
       # 本仓的文档是**证据文件**：论断靠 `src/某.rs:行号` 支撑，读者据此复核。三次目录化拆分
       # （`src/friends.rs`、`src/ugc.rs` 变目录，`src/lib.rs` 瘦身）把这些指针冲掉了而没有任何
       # 一步变红——指针烂掉的文档读起来就像编的，这条门把它钉成判定。
@@ -141,6 +224,24 @@ jobs:
       # "违规数=0"可能只是它在看别的东西。
       - name: documented source pointers resolve
         run: python3 scripts/ci/doc_pointers.py
+
+      # 文档指针管的是 `src/某.rs:行`，这条管的是另一头：**代码注释里对 vendored SDK 头文件的行号引用**。
+      # 建这条门的原因是本仓连着两个单元都在这上面出错：`fake_ip.rs` 三处偏 2~6 行、`fake_udp.rs` 两处
+      # 偏 1 行，全是"读过一遍就抄下来、抄完没再读"。当时只有这两个文件因为自带手写引用表而侥幸，
+      # 其余 15 个文件没人看。首跑实测：**17 个文件、124 处引用、99 个注释块**，其中 115 处写全名
+      # （`isteamuser.h:168-172`）、7 处缩写（`h:910-911`）、6 处续引（`:866`）——只认全名的尺子会数出
+      # 119 处，把"这里没有引用"和"引用按散文的写法出现"混成一回事。
+      # 判据（每条都有 canary 反证，`canaries.py` 里 10 条断言）：越界 / 整段空行 / 引号里的原文确实属于
+      # 被引头文件但落在本块所有被引 span 之外 / 原文属于另一个头文件而本块没引它 —— 四类判红；
+      # 引号里是本仓自己的转述（头文件里逐字找不到）则计入 **debt**，按文件登记、只能变短。
+      # 判决在注释块级别做并集，不做"引用↔短语"配对：原型按最近短语配对时，一个块里三处引用共用一条
+      # 短语会把同一条判三次——那是启发式的失败伪装成文档的失败。
+      # 多头文件都能匹配上的通用短语（"not allowed"）算 debt 不算违规：首版把它当判红，一条就占了
+      # 当时全部违规的四分之一，而误报的门没人信。
+      - name: SDK-header citations in code docs land on the text they quote
+        run: |
+          python3 scripts/ci/header_citations.py > "$RUNNER_TEMP/header_citations.txt"
+          python3 scripts/ci/compare_baseline.py scripts/ci/baselines/header_citations.txt "$RUNNER_TEMP/header_citations.txt"
 
       # `cargo test` 在"一个测试都没匹配到"时仍然退出 0 并打印 `test result: ok. 0 passed`。
       # 这条门读实际跑到的用例数，为 0 就判红，并拒绝低于登记地板的数量。

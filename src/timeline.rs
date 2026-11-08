@@ -1,4 +1,5 @@
 use super::*;
+use crate::utils::c_string_prefix;
 use std::time::Duration;
 
 pub struct Timeline {
@@ -78,7 +79,7 @@ impl Timeline {
             return;
         }
 
-        let description = CString::new(description).unwrap();
+        let description = c_string_prefix(description);
 
         unsafe {
             sys::SteamAPI_ISteamTimeline_SetTimelineTooltip(
@@ -117,9 +118,9 @@ impl Timeline {
             return;
         }
 
-        let icon = CString::new(icon).unwrap();
-        let title = CString::new(title).unwrap();
-        let description = CString::new(description).unwrap();
+        let icon = c_string_prefix(icon);
+        let title = c_string_prefix(title);
+        let description = c_string_prefix(description);
         let duration = duration.as_secs_f32();
 
         unsafe {

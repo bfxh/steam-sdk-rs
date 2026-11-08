@@ -381,12 +381,11 @@ impl Parties {
 }
 
 /// Reads a fixed-size char array Steam embeds in a callback struct.
-fn fixed_string(bytes: &[c_char]) -> String {
-    // Steam NUL-pads the array, so stop at the first terminator.
-    let len = bytes.iter().take_while(|c| **c != 0).count();
-    let raw = unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<u8>(), len) };
-    String::from_utf8_lossy(raw).into_owned()
-}
+///
+/// This is now the shared helper in `src/utils/strings.rs`, which is also where its tests live: two of
+/// the three call sites this file used to cover with `CStr::from_ptr` + `unwrap` could abort inside
+/// callback dispatch, and the helper is the reason they cannot any more.
+pub(crate) use crate::utils::fixed_string;
 
 /// What [`Parties::join_party`] delivers on success.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -437,18 +436,6 @@ impl_callback!(_cb: ActiveBeaconsUpdated_t => ActiveBeaconsUpdated {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn connect_string_stops_at_the_first_nul() {
-        let mut buf = [0 as c_char; 8];
-        buf[0] = b'a' as c_char;
-        buf[1] = b'b' as c_char;
-        assert_eq!(fixed_string(&buf), "ab");
-
-        // Steam pads the rest; nothing past the terminator may leak in.
-        let empty = [0 as c_char; 8];
-        assert_eq!(fixed_string(&empty), "");
-    }
 
     #[test]
     fn location_kind_round_trips_only_for_known_types() {
