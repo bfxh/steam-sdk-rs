@@ -8,6 +8,7 @@ use serial_test::serial;
 
 mod achievement_percents;
 mod achievements;
+mod current_players;
 mod global_stats;
 mod leaderboard;
 mod stats_io;

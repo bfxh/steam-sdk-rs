@@ -137,6 +137,7 @@
 # 2026-10-21 (fifth slice) +3 rows for src/remote_storage/workshop_enumerate.rs at zero debt (25 spans). It arrived with 7 unanchored spans and one WRONG line number the ruler caught: a declaration was cited at :307, which is the public-view comment; the call is :306.
 # 2026-10-21 (sixth slice) +3 rows for src/remote_storage/published_details.rs at zero debt (34 spans). It arrived with 14 unanchored spans and one quote-pairing break caused by writing an empty `""` in prose -- two quote characters to the ruler.
 # 2026-10-21 +src/video.rs cites isteamvideo.h (58 files, 608 spans, debt 0-0-0): four spans anchored verbatim, and the gate judged red on all four until the line numbers were re-read (:31 is the GetVideoURL purpose comment, :38 the STEAM_CALL_BACK annotation, :39-40 the request next to its reader).
+# 2026-11-08 +src/user_stats/current_players.rs (NumberOfCurrentPlayers_t), +AttachLeaderboardUGC phrase in leaderboard.rs.
 src/http.rs 0
 src/http.rs~unjudged 0
 src/http.rs~undeclared 0
@@ -293,6 +294,9 @@ src/user_stats/achievement_percents.rs~undeclared 0
 src/user_stats/achievements.rs 0
 src/user_stats/achievements.rs~unjudged 0
 src/user_stats/achievements.rs~undeclared 0
+src/user_stats/current_players.rs 0
+src/user_stats/current_players.rs~unjudged 0
+src/user_stats/current_players.rs~undeclared 0
 src/user_stats/leaderboard.rs 0
 src/user_stats/leaderboard.rs~unjudged 0
 src/user_stats/leaderboard.rs~undeclared 0
